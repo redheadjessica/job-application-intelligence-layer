@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(rmdir:*)",
+      "Bash(realpath:*)",
+      "Bash(pwd:*)",
+      "Bash(date:*)",
+      "Bash(python3:*)",
+      "Bash(echo:*)",
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Skill(intake)",
+      "Skill(run-batch)",
+      "Skill(vet-jobs)",
+      "Skill(tailor-jobs)",
+      "Skill(reconcile)",
+      "Workflow(run-batch)",
+      "Workflow(vet-jobs)",
+      "Workflow(tailor-jobs)",
+      "Workflow(reconcile)"
+    ],
+    "deny": [],
+    "ask": [
+      "Bash(rm:*)",
+      "Bash(pip install:*)",
+      "Bash(pip3 install:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(pip3 uninstall:*)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(brew install:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -f:*)",
+      "Bash(git clean -fd:*)"
+    ],
+    "additionalDirectories": []
+  }
+}

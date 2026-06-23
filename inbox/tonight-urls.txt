@@ -1,0 +1,1 @@
+# Drop job-posting URLs here, one per line, before running a batch.

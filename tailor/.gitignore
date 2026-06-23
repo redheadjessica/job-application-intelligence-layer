@@ -1,0 +1,11 @@
+# Session-local Claude Code settings (machine-specific, regenerated)
+.claude/settings.local.json
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/

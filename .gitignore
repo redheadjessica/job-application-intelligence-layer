@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Python
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+
+# Node
+node_modules/
+
+# Batch run outputs (keep the empty review folder, ignore generated batches)
+__READY TO REVIEW/*/
+
+# Logs / temp
+*.log
