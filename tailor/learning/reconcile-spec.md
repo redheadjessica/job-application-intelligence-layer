@@ -59,7 +59,7 @@ Categorized diffs, each a neutral observation:
 - Claims: <softened / corrected> (e.g. a claim made more precise)
 - Style: <em dash removed, verb swapped, "not just X but Y" rewritten, etc.>
 - Writing samples: <swapped / reordered>
-(Ignore pure formatting / whitespace / line-break artifacts from .pages→PDF — semantic content only.)
+(Ignore pure formatting / whitespace / line-break artifacts from the source file → PDF conversion — semantic content only.)
 
 ## 4. Inferred lessons (HYPOTHESES — labeled, never stated as fact)
 For each: **category** (routing / missed-evidence / claim-boundary / voice / skills / content) ·
@@ -137,7 +137,7 @@ When the same proposal recurs, **increment its occurrence count and add the appl
 A folder is **ready** only if all of these hold; otherwise reconcile stops, writes no durable artifact, and reports what's missing:
 - It is under the **trusted archive** (`{{your submitted-applications archive}}`), not the active `__READY TO REVIEW/` workspace.
 - It contains the **original `application_resume_output - … .md`** (the agent's first-pass recommendation).
-- It contains the **final submitted résumé PDF** (ground truth). A `.pages` without an exported PDF is **not** sufficient.
+- It contains the **final submitted résumé PDF** (ground truth). The editable source file (`.pages`/`.docx`/etc.) without an exported/submitted PDF is **not** sufficient.
 - It contains the **scraped job post `.txt`**.
 - Cover letter / application-answer files are **optional** (used if present).
 - It does **not** already contain a reconcile report (any `reconcile-report - … .md` file) — else it's already done, skip.
@@ -148,7 +148,7 @@ If the final PDF or the original output `.md` is missing, treat as **not ready**
 
 ## 6. Observed changes vs inferred lessons (the firewall)
 
-- **Observed = fact.** Anything directly visible by comparing the proposal and the final PDF (a bullet present in one and not the other; a changed word; a different base). Stated plainly, no speculation. **Ignore pure formatting noise** (whitespace, line breaks, font/layout artifacts of `.pages`→PDF) — compare *semantic content* only.
+- **Observed = fact.** Anything directly visible by comparing the proposal and the final PDF (a bullet present in one and not the other; a changed word; a different base). Stated plainly, no speculation. **Ignore pure formatting noise** (whitespace, line breaks, font/layout artifacts of the source file → PDF conversion) — compare *semantic content* only.
 - **Inferred = hypothesis.** Any statement about **intent or why** or any generalizable **lesson**. Always labeled as inference, always carries a **confidence** level, and **never** stated as fact.
 - The two never mix. Observations live in report §3; inferences in §4. This firewall is what prevents the system from "learning" a confident lesson from an ambiguous edit.
 
