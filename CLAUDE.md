@@ -62,5 +62,5 @@ A local, git-tracked workspace — routine file changes are reversible, so optim
 
 ## Known assumptions (v1)
 
-- **Resume bases** can be Word (`.docx`), PDF, plain text/Markdown, or Apple Pages — point intake at whatever you use (Google Docs: export to `.docx`/PDF first). Multi-format handling is being wired through the Tailor step; `.pages` is the most-tested path today.
+- **Resume bases** can be Word (`.docx`), PDF, plain text/Markdown, or Apple Pages — point intake at whatever you use (Google Docs: export to `.docx`/PDF first). The Tailor step reads each format with the right tool (docx/pdf skills; `.txt`/`.md` directly; `.pages` via the bullet previews in the resume index) and copies the base in its native format, keeping the original extension.
 - Python parts (`new_batch.py`, `make_rankings_xlsx.py`, `prep/`) need a local `.venv` with the deps in `requirements.txt` (notably `openpyxl` for the XLSX, and Playwright for the JS-rendered fetch fallback).

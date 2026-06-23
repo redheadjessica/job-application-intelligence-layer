@@ -52,7 +52,7 @@ The current goal is to make the resume workflow work end-to-end:
 - diagnose fit
 - detect and clarify gaps first
 - recommend the best base thoughtfully
-- copy the selected anchor `.pages` file into the new folder and rename it
+- copy the selected resume base file into the new folder and rename it (in its native format)
 - refine only what needs to change
 - preserve strong supporting content unless a real tradeoff exists
 - determine the strongest anchor-role presentation format
@@ -189,11 +189,11 @@ It is acceptable if the first run of a batch takes longer, especially if later r
 
 Do not intentionally shorten the analysis unless the candidate explicitly asks for a lighter or faster mode.
 
-## PDF Reading Rule
+## Resume-Base Reading Rule
 
-When reading prior resume PDFs to review base content, use the **Read tool directly**. Do not spawn a sub-agent for PDF reading — it adds significant latency with no benefit.
+When reading a prior resume base to review its content, use the **format-appropriate tool**: a `.docx` base via the **docx** skill, a `.pdf` base via the **pdf** skill, a `.txt`/`.md` base read directly with the Read tool, and a `.pages` base cannot be read directly (rely on the bullet previews in `02-resume-index.md`). Do not spawn a sub-agent just to read a base file — it adds significant latency with no benefit.
 
-If `02-resume-index.md` contains bullet previews for the selected anchor, reading the full PDF may be skippable. Only open a PDF when:
+If `02-resume-index.md` contains bullet previews for the selected anchor, reading the full base file may be skippable. Only open a base file when:
 - the index does not have sufficient bullet previews to confirm base selection
 - a specific bullet from that resume is needed verbatim for tailoring
 
@@ -207,7 +207,7 @@ At the beginning of every run, include a short **Read Log** section that lists:
 - which system files were opened, with approximate line count
 - which prior resume family and anchor resumes were considered during base selection
 - which base resume was chosen
-- whether a `.pages` file was found, copied, and renamed
+- whether a resume base file was found, copied, and renamed (and in what format)
 
 Keep this concise and useful.
 
@@ -364,7 +364,7 @@ Instead, provide:
 - the exact new language to use
 - the reason for the swap
 
-The goal is to reduce the candidate’s cognitive load and make editing in Pages easy.
+The goal is to reduce the candidate’s cognitive load and make editing in their own resume editor (Word, Google Docs, Pages, etc.) easy.
 
 ## Writing Rules
 
@@ -444,7 +444,7 @@ Skills generation rules:
 
 # Output Formatting and File Delivery
 
-The output must be easy for the candidate to review and easy to apply in Pages.
+The output must be easy for the candidate to review and easy to apply in their own resume editor (Word, Google Docs, Pages, etc.).
 
 ## Primary Output Format
 
@@ -803,19 +803,20 @@ The rationale should be concise, but it should be clear enough that the candidat
 
 After presenting the base recommendation, continue in the same run by preparing the working resume file.
 
-1. Locate the corresponding `.pages` resume file for the selected primary base.
-2. Copy that `.pages` file into the active job folder created in the folder-preparation step.
-3. Rename the copied `.pages` file to match the new target job using the candidate’s standard resume naming format.
+1. Locate the corresponding resume base file for the selected primary base, **in whatever format it is** (`.docx`, `.pdf`, `.pages`, `.md`, etc.).
+2. Copy that base file into the active job folder created in the folder-preparation step, **keeping its original file extension**.
+3. Rename the copied base file to match the new target job using the candidate’s standard resume naming format, **keeping the base file’s original extension**.
 
-Preferred format (Company before Role — same order as the job folder name):
+Preferred format (Company before Role — same order as the job folder name), keeping the base file’s **original extension** (`.docx`, `.pdf`, `.pages`, `.md`, etc. — do not convert it):
 
-`{{CANDIDATE_NAME}}-Resume - [Company] - [Role].pages`
+`{{CANDIDATE_NAME}}-Resume - [Company] - [Role].<original-extension>`
 
-- The `[Company] - [Role]` part must match the `Company - Role` job folder name **verbatim** — same order (company first), same words. The simplest correct approach: name the file `{{CANDIDATE_NAME}}-Resume - <job folder name>.pages`.
+- The `[Company] - [Role]` part must match the `Company - Role` job folder name **verbatim** — same order (company first), same words. The simplest correct approach: name the file `{{CANDIDATE_NAME}}-Resume - <job folder name>.<original-extension>`.
+- **Keep the base file’s original extension** — whatever format the base is in (e.g. `.docx`, `.pdf`, `.pages`, `.md`). Do not hardcode `.pages` and do not convert the file to another format.
 - Keep the **full role title**. Do NOT shorten it or drop qualifiers (keep "Consumer Mobile", "Member Growth, Benefits", "Patient Experience", etc.). The only allowed abbreviations are `Product Manager` → `PM` and `Vice President` → `VP`.
-- Example: folder `Acme - Staff PM Consumer Mobile` → `{{CANDIDATE_NAME}}-Resume - Acme - Staff PM Consumer Mobile.pages` (NOT `{{CANDIDATE_NAME}}-Resume - Staff PM - Acme.pages`).
+- Example: folder `Acme - Staff PM Consumer Mobile`, base in Word → `{{CANDIDATE_NAME}}-Resume - Acme - Staff PM Consumer Mobile.docx` (NOT `{{CANDIDATE_NAME}}-Resume - Staff PM - Acme.docx`). If the base were a `.pages` file, the copy keeps `.pages`; if a `.pdf`, it keeps `.pdf`.
 
-If a matching `.pages` file cannot be found:
+If a matching base file cannot be found:
 - flag that clearly
 - continue with the rest of the recommendation workflow
 - do not fail the whole process only because the copy step could not be completed
@@ -1039,7 +1040,7 @@ If adding headers forces the bullets to get weaker, go back to flat bullets.
 The candidate’s proof is more valuable than fancy structure.
 
 ### ⭐ Output the COMPLETE final anchor-role bullet list, in submission order
-For the anchor role specifically, do **not** present the changes as a swap/diff ("remove X, add Y") — that format does not survive the candidate's manual Pages edit and the intended bullets get lost. **Write out the full final anchor-role bullet list, top to bottom, in the order it should appear.** The candidate's real anchor-role range is **7–9 bullets** for strong roles (the agent has tended to recommend only 5–6 — plan for 7–9). This is the one section where you output the finished list rather than REPLACE/ADD/REMOVE edits.
+For the anchor role specifically, do **not** present the changes as a swap/diff ("remove X, add Y") — that format does not survive the candidate's manual edit in their editor and the intended bullets get lost. **Write out the full final anchor-role bullet list, top to bottom, in the order it should appear.** The candidate's real anchor-role range is **7–9 bullets** for strong roles (the agent has tended to recommend only 5–6 — plan for 7–9). This is the one section where you output the finished list rather than REPLACE/ADD/REMOVE edits.
 
 ### Anchor-Role Notification System (example of a verified proof point)
 
@@ -1302,7 +1303,7 @@ The output should use this structure:
 - system files opened, with approximate line count
 - anchor resumes considered
 - chosen base
-- whether the `.pages` file was copied and renamed
+- whether the resume base file was copied and renamed (and in what format)
 
 ## Job Analysis
 - structured information extracted from the job description
@@ -1333,7 +1334,7 @@ A short list of questions designed to help the candidate **remember adjacent evi
 - runner-up option (if meaningful)
 - best page 2 variant
 - whether the anchor role should be flat or grouped
-- whether the anchor `.pages` file was successfully copied and renamed into the active job folder
+- whether the resume base file was successfully copied and renamed (in its native format) into the active job folder
 - how the current venture is positioned for this role (which mode), and what was compressed or cut to make room
 - short rationale showing that the choice was made thoughtfully
 
@@ -1408,7 +1409,7 @@ Reading these one at a time is the single largest source of avoidable latency. A
 
 ## Conditional Reads (Only After the Parallel Batch)
 
-- prior resume base PDF — only if needed, and only after the core batch. Use the Read tool directly, not a sub-agent. Skip entirely if `02-resume-index.md` has sufficient bullet previews for the selected anchor.
+- prior resume base file — only if needed, and only after the core batch. Read it with the format-appropriate tool (`.docx` via the docx skill, `.pdf` via the pdf skill, `.txt`/`.md` read directly; a `.pages` base can't be read directly — rely on the bullet previews), not a sub-agent. Skip entirely if `02-resume-index.md` has sufficient bullet previews for the selected anchor.
 - `10-bio-library.md` — only when the candidate includes `[USE BIO]` or directly asks for longer-form narrative/bio support. Otherwise do not open it.
 
 **Full reference files — do not read during standard generation runs:**

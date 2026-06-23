@@ -97,13 +97,27 @@ log(`Found ${discovery.jobs.length} jobs in ${discovery.root} — scoring in par
 // Load rubric + profile ONCE and inline them into every scoring prompt, instead of
 // having all N scoring agents each re-read the same two files (N x 2 redundant reads).
 const REFS_SCHEMA = {
-  type: 'object', additionalProperties: false, required: ['rubric', 'profile'],
-  properties: { rubric: { type: 'string' }, profile: { type: 'string' } },
+  type: 'object', additionalProperties: false, required: ['rubric', 'profile', 'weights'],
+  properties: {
+    rubric: { type: 'string' },
+    profile: { type: 'string' },
+    weights: {
+      type: 'object', additionalProperties: false,
+      required: ['desire', 'market', 'style', 'practicality'],
+      description: 'The four dimension weights as PERCENTAGES parsed from the scoring card section headers, in order (1st->desire, 2nd->market, 3rd->style, 4th->practicality). Return 0 for all four if the card does not state weights.',
+      properties: {
+        desire: { type: 'number' }, market: { type: 'number' },
+        style: { type: 'number' }, practicality: { type: 'number' },
+      },
+    },
+  },
 }
 const refs = await agent(
   `Read these two files and return their FULL text verbatim (do not summarize or truncate):
 - ${RUBRIC}  -> field "rubric"
-- ${PROFILE} -> field "profile"`,
+- ${PROFILE} -> field "profile"
+
+Also extract the FOUR dimension weights from the scoring card's section headers, which look like "(weight: NN%)". Return them as raw percentages in "weights", in the order the dimensions appear: 1st -> weights.desire, 2nd -> weights.market, 3rd -> weights.style, 4th -> weights.practicality (e.g. 35, 30, 20, 15). If the card does not clearly state weights, return 0 for all four.`,
   { phase: 'Discover', model: 'haiku', schema: REFS_SCHEMA, label: 'load rubric+profile' }
 )
 const haveRefs = !!(refs && refs.rubric && refs.profile)
@@ -159,6 +173,23 @@ if (rows.length === 0) {
   return { error: 'All scoring agents returned empty.', folder: discovery.root }
 }
 
+// ---- Resolve dimension weights from the scoring card (fall back to 35/30/20/15) ----
+// The card states each dimension's weight as "(weight: NN%)"; the loader returns them above.
+// Use them when all four are positive numbers; otherwise use the default. Normalize to fractions
+// summing to 1 so the final score stays on a 0-100 scale regardless of how the percentages add up.
+const DEFAULT_WEIGHTS = { desire: 35, market: 30, style: 20, practicality: 15 }
+function resolveWeights(w) {
+  const keys = ['desire', 'market', 'style', 'practicality']
+  const ok = w && keys.every((k) => typeof w[k] === 'number' && w[k] > 0)
+  const raw = ok ? w : DEFAULT_WEIGHTS
+  const sum = keys.reduce((s, k) => s + raw[k], 0) || 100
+  const f = {}
+  for (const k of keys) f[k] = raw[k] / sum
+  return f
+}
+const W = resolveWeights(refs && refs.weights)
+log(`Weights — desire ${Math.round(W.desire * 100)} / market ${Math.round(W.market * 100)} / style ${Math.round(W.style * 100)} / practicality ${Math.round(W.practicality * 100)}`)
+
 // ---- Compute final score + status in code (deterministic) ----
 function statusFor(score) {
   if (score >= 80) return 'Apply ASAP: High Prio'
@@ -168,10 +199,10 @@ function statusFor(score) {
 }
 for (const r of rows) {
   r.final_score = Math.round(
-    r.desire_score * 0.35 +
-    r.market_perception_score * 0.30 +
-    r.company_style_score * 0.20 +
-    r.practicality_score * 0.15
+    r.desire_score * W.desire +
+    r.market_perception_score * W.market +
+    r.company_style_score * W.style +
+    r.practicality_score * W.practicality
   )
   r.status = statusFor(r.final_score)
 }
