@@ -1,9 +1,6 @@
 # Skills Quick Reference — Generation Use Only
 
-This is the fast, generation-time lookup: your canonical skills bank organized by category, the
-role-based emphasis rules, the synonyms map, and a few proven skills lines per role archetype.
-For full calibration notes, confidence scoring, and assessment history, use `06a-skills-library.md`.
-The synonyms map is maintained inline at the bottom of this file (this is its source of truth).
+This is the fast, generation-time lookup: your canonical skills bank organized by category, the role-based emphasis rules, the synonyms map, and a few proven skills lines per role archetype. For full calibration notes, confidence scoring, and assessment history, use `06a-skills-library.md`. The synonyms map is maintained inline at the bottom of this file (this is its source of truth).
 
 <!-- intake: fill this file from your own resume. Pull every distinct skill you can credibly
      defend, group them into the categories below (rename/add categories to fit your field),
@@ -11,19 +8,13 @@ The synonyms map is maintained inline at the bottom of this file (this is its so
      proven skills line for each role archetype you target. Strip the bracketed placeholders
      as you go. -->
 
-**Output format always:** single comma-separated line, Title Case, ampersands not "and".
-**Confidence labels:** R = resume-safe | S = selective (use only when the role explicitly calls for it) | C = collaborative (partner framing; avoid "deep solo specialization" language).
+**Output format always:** single comma-separated line, Title Case, ampersands not "and". **Confidence labels:** R = resume-safe | S = selective (use only when the role explicitly calls for it) | C = collaborative (partner framing; avoid "deep solo specialization" language).
 
 ## ⭐ Length & emphasis
-- **Target ~12–14 skills, not 18–20.** Frame each tailoring as **targeted swaps from your canonical
-  line, not a full rebuild.** Optimize primarily for total character length (the skills section has
-  limited space), not just item count.
-- **Default to your highest-signal breadth terms** — the handful of skills that apply across most
-  roles you target. {{LIST 6–10 DEFAULT BREADTH SKILLS — your most broadly applicable, defensible skills}}
-- **Keep a specialist cluster SELECTIVE** — niche skills that only belong on a resume when the role
-  is specifically about them. {{LIST YOUR SELECTIVE / NICHE CLUSTER — drop these for general roles}}
-- **Role-specific synonyms** — preferred phrasings to swap in when the JD uses particular language.
-  {{LIST CONFIRMED ROLE-SPECIFIC SYNONYMS as you discover them from real submissions}}
+- **Target ~12–14 skills, not 18–20.** Frame each tailoring as **targeted swaps from your canonical line, not a full rebuild.** Optimize primarily for total character length (the skills section has limited space), not just item count.
+- **Default to your highest-signal breadth terms** — the handful of skills that apply across most roles you target. {{LIST 6–10 DEFAULT BREADTH SKILLS — your most broadly applicable, defensible skills}}
+- **Keep a specialist cluster SELECTIVE** — niche skills that only belong on a resume when the role is specifically about them. {{LIST YOUR SELECTIVE / NICHE CLUSTER — drop these for general roles}}
+- **Role-specific synonyms** — preferred phrasings to swap in when the JD uses particular language. {{LIST CONFIRMED ROLE-SPECIFIC SYNONYMS as you discover them from real submissions}}
 
 ---
 
@@ -104,14 +95,10 @@ The synonyms map is maintained inline at the bottom of this file (this is its so
      comma-separated line here as a reusable starting point. One block per archetype. Keep each
      to ~12–14 items, Title Case, ampersands not "and". -->
 
-**{{ROLE ARCHETYPE A}}:**
-{{FINAL COMMA-SEPARATED SKILLS LINE}}
+**{{ROLE ARCHETYPE A}}:** {{FINAL COMMA-SEPARATED SKILLS LINE}}
 
-**{{ROLE ARCHETYPE B}}:**
-{{FINAL COMMA-SEPARATED SKILLS LINE}}
+**{{ROLE ARCHETYPE B}}:** {{FINAL COMMA-SEPARATED SKILLS LINE}}
 
-**{{ROLE ARCHETYPE C}}:**
-{{FINAL COMMA-SEPARATED SKILLS LINE}}
+**{{ROLE ARCHETYPE C}}:** {{FINAL COMMA-SEPARATED SKILLS LINE}}
 
-**{{SENIOR / LEADERSHIP SCOPE}}:**
-{{FINAL COMMA-SEPARATED SKILLS LINE}}
+**{{SENIOR / LEADERSHIP SCOPE}}:** {{FINAL COMMA-SEPARATED SKILLS LINE}}

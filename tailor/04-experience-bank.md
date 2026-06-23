@@ -12,23 +12,15 @@
      filled per user. -->
 
 ## Purpose
-This file is the structured evidence bank for {{CANDIDATE_NAME — the user's full name}}'s experience.
-It holds reusable experience themes, role-level bullet banks, story anchors, and proof-ready framing
-that can be pulled into tailored resumes, cover letters, interview prep, and application forms.
+This file is the structured evidence bank for {{CANDIDATE_NAME — the user's full name}}'s experience. It holds reusable experience themes, role-level bullet banks, story anchors, and proof-ready framing that can be pulled into tailored resumes, cover letters, interview prep, and application forms.
 
 This is not a final resume. It is the raw material behind the resume.
 
 ## ⭐ Quantitative Proof Is Precious (hard rule)
-Most candidates have **fewer** clean quantitative measures than they think, so every defensible number
-carries outsized value.
-- **Never over-trim concrete proof.** Do not drop a metric-bearing or concrete proof point for "space."
-  Swap something softer instead. This is a hard line.
-- **Lean toward including ANY number the user is comfortable stating publicly** whenever it fits: team
-  size, activation, engagement, retention, company size, user counts, growth rates, conversion, contract
-  value, etc. When unsure whether a number helps, include it.
-- **Canonize newly-approved numbers.** Any time a new concrete number is approved/used in a finalized
-  resume, record it in the **Metrics Master List** (Section 4) and the relevant role's Proof/Metrics so
-  it's reusable later. The number bank should only grow.
+Most candidates have **fewer** clean quantitative measures than they think, so every defensible number carries outsized value.
+- **Never over-trim concrete proof.** Do not drop a metric-bearing or concrete proof point for "space." Swap something softer instead. This is a hard line.
+- **Lean toward including ANY number the user is comfortable stating publicly** whenever it fits: team size, activation, engagement, retention, company size, user counts, growth rates, conversion, contract value, etc. When unsure whether a number helps, include it.
+- **Canonize newly-approved numbers.** Any time a new concrete number is approved/used in a finalized resume, record it in the **Metrics Master List** (Section 4) and the relevant role's Proof/Metrics so it's reusable later. The number bank should only grow.
 - Still factual: only numbers the user is comfortable stating publicly and can defend.
 
 ## Core Rules
@@ -46,8 +38,7 @@ carries outsized value.
 - Do not duplicate or stack too many metrics in one section unless they materially strengthen fit.
 
 ## ⭐ Title & Seniority Claims — State Precisely, Never Overclaim
-When a role's wording touches a title, ordinal, or scope claim ("first ___", "head of ___", "led the
-___ team", "founder"), state it **exactly as precisely as it is true** and no further.
+When a role's wording touches a title, ordinal, or scope claim ("first ___", "head of ___", "led the ___ team", "founder"), state it **exactly as precisely as it is true** and no further.
 <!-- intake: For any role where the user holds a notable but qualifiable claim (e.g. "first X hired",
      "founding member", "acting head of"), record the precise approved phrasing AND the bare phrasing to
      avoid, in that role's block. Pattern: keep the qualifier ("hired", "external", "acting", "interim",

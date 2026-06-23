@@ -24,15 +24,10 @@
     families; add more over time as `05a-summary-library.md` reveals new proven shapes.
 
   CRAFT RULES (keep these — they are reusable regardless of who you are)
-  - ~3 sentences. First person. Use contractions. Read it aloud: it should sound like you talking,
-    not a corporate bio.
-  - Conversational and human, not stiff or jargon-heavy. Higher-signal and warmer than the rest of
-    the resume.
-  - End on a personal-pull closer — the "what I want to build / who I want to help now" line, tuned
-    to the role's domain. This is the part you swap per job.
-  - Match the approximate length of your proven examples; the summary block has limited, roughly
-    fixed space on the page.
--->
+  - ~3 sentences. First person. Use contractions. Read it aloud: it should sound like you talking, not a corporate bio.
+  - Conversational and human, not stiff or jargon-heavy. Higher-signal and warmer than the rest of the resume.
+  - End on a personal-pull closer — the "what I want to build / who I want to help now" line, tuned to the role's domain. This is the part you swap per job.
+  - Match the approximate length of your proven examples; the summary block has limited, roughly fixed space on the page. -->
 
 **Format rules (every run):** conversational, human, not stiff or corporate | match the approximate length of proven examples | offer 2–3 options | at least 1 lightly adapted from an existing proven summary, at least 1 freshly tailored to the role.
 
@@ -43,8 +38,7 @@
      The STEM states who you are + the one proof point you anchor every summary on. Keep it stable;
      vary only the CLOSER per role. -->
 
-**Stem:**
-{{Opening line: who you are + years/level framing.}} {{Proof line: the one credential or outcome you anchor on — your highest-signal "here's why I'm credible" fact.}} {{Optional values/approach line: how you work.}} [CLOSER]
+**Stem:** {{Opening line: who you are + years/level framing.}} {{Proof line: the one credential or outcome you anchor on — your highest-signal "here's why I'm credible" fact.}} {{Optional values/approach line: how you work.}} [CLOSER]
 
 **Closers — swap the final sentence to the role's domain:**
 - {{Domain 1, e.g. "Now, I want to <verb> <domain-1 outcome>."}}
@@ -59,8 +53,7 @@
 <!-- intake: a second stem with a genuinely different emphasis from Family A (different proof point
      or different role shape), so the agent has a real choice rather than a paraphrase. -->
 
-**Stem:**
-{{Opening line tuned to this pattern's role type.}} {{Proof line emphasizing the cluster these roles care about.}} {{Approach/collaboration line.}} [CLOSER]
+**Stem:** {{Opening line tuned to this pattern's role type.}} {{Proof line emphasizing the cluster these roles care about.}} {{Approach/collaboration line.}} [CLOSER]
 
 **Closers — swap the final sentence:**
 - {{Domain 1 closer for this pattern}}
@@ -72,8 +65,7 @@
 <!-- intake: only add this family if the user genuinely applies to a third kind of role that A and B
      don't cover well. Otherwise delete this section — 2 strong families beat 3 thin ones. -->
 
-**Stem:**
-{{Opening + proof + approach tuned to this third role type.}} [CLOSER]
+**Stem:** {{Opening + proof + approach tuned to this third role type.}} [CLOSER]
 
 **Closers:**
 - {{Domain closer}}

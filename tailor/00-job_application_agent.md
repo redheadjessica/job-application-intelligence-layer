@@ -89,9 +89,7 @@ Use for:
 Used early, at base selection, before tailoring work experience, summary, or skills.
 
 ## `03-current-work-canonical.md` ← read every run
-The single source of truth for how the candidate's current venture appears on resumes. The current
-venture is now part of the candidate's **current core story** and should usually appear in
-applications going forward.
+The single source of truth for how the candidate's current venture appears on resumes. The current venture is now part of the candidate's **current core story** and should usually appear in applications going forward.
 
 Use for:
 - the approved canonical current-venture section wording (header + 2 default bullets)
@@ -132,11 +130,7 @@ Use for:
 Use `06a-skills-library.md` only for full calibration notes, assessment history, or maintenance work. Do not read it during standard generation runs.
 
 ## `10-bio-library.md`
-*Numbered `10`, not `07`, on purpose: it sits in a separate tier from the `01`–`06` core generation
-sequence — it is conditional and non-resume (bio prose for cover letters, networking, intros). The
-post-submission **learning loop** lives in its own subfolder, `tailor/learning/` (the reconcile
-spec, learning ledger, and source-update queue); those files are maintenance-only and are never read
-during a generation run.*
+*Numbered `10`, not `07`, on purpose: it sits in a separate tier from the `01`–`06` core generation sequence — it is conditional and non-resume (bio prose for cover letters, networking, intros). The post-submission **learning loop** lives in its own subfolder, `tailor/learning/` (the reconcile spec, learning ledger, and source-update queue); those files are maintenance-only and are never read during a generation run.*
 
 Do **not** read this during standard resume generation runs. It is long-form narrative context that is rarely needed for resume tailoring, and reading it "just in case" adds latency on every run.
 
@@ -172,9 +166,7 @@ When `[FAST]` is not present, run the full workflow as specified below.
 
 Do not reduce the quality of analysis just to make the run faster.
 
-**Batch size never reduces analysis.** Submitting multiple jobs together does **not** create a
-"rapid" or reduced-analysis mode. Whether the candidate submits one job or ten, each application still
-gets the full rigorous treatment:
+**Batch size never reduces analysis.** Submitting multiple jobs together does **not** create a "rapid" or reduced-analysis mode. Whether the candidate submits one job or ten, each application still gets the full rigorous treatment:
 - fit and gap assessment
 - base-resume recommendation and rationale, **with comparison against other plausible bases**
 - strongest transferable evidence and role-specific risks
@@ -185,9 +177,7 @@ gets the full rigorous treatment:
 - writing-sample recommendations
 - relevant source-file / system updates
 
-The **final selected resume content** must be concise (it has to fit the layout), but the **reasoning**
-used to reach it stays thorough. Only an explicit `[FAST]` from the candidate reduces depth — never
-batch size.
+The **final selected resume content** must be concise (it has to fit the layout), but the **reasoning** used to reach it stays thorough. Only an explicit `[FAST]` from the candidate reduces depth — never batch size.
 
 At this stage, the candidate prefers:
 - stronger analysis
@@ -201,8 +191,7 @@ Do not intentionally shorten the analysis unless the candidate explicitly asks f
 
 ## PDF Reading Rule
 
-When reading prior resume PDFs to review base content, use the **Read tool directly**.
-Do not spawn a sub-agent for PDF reading — it adds significant latency with no benefit.
+When reading prior resume PDFs to review base content, use the **Read tool directly**. Do not spawn a sub-agent for PDF reading — it adds significant latency with no benefit.
 
 If `02-resume-index.md` contains bullet previews for the selected anchor, reading the full PDF may be skippable. Only open a PDF when:
 - the index does not have sufficient bullet previews to confirm base selection
@@ -252,8 +241,7 @@ These files support system maintenance, reconciliation, and auditing, but should
 
 Do not use these files directly when building a tailored resume.
 
-(Retired to `_archive/tailor/`: `04_skills_library-from-actual-resumes.md` (v1 extraction) and
-the empty `04a-skills-reconciliation-log.md`. No longer part of the system.)
+(Retired to `_archive/tailor/`: `04_skills_library-from-actual-resumes.md` (v1 extraction) and the empty `04a-skills-reconciliation-log.md`. No longer part of the system.)
 
 ---
 
@@ -282,64 +270,40 @@ Do not suggest redesigning the layout unless you have specific and very compelli
 
 The baseline structure is:
 
-Page 1: 
+Page 1:
 - Summary at the top
 - Work Experience
   - Recent / current consulting or sabbatical role
   - Recent prior role
   - Anchor role (the most detailed page-one section)
 - Skills
-- Education
-Page 2: 
+- Education Page 2:
 - Experience Continued (with older roles)
-- Leadership & Community 
-- Selected Writing 
+- Leadership & Community
+- Selected Writing
 
 ### Selected Writing — Recommend Three, Chosen Strategically
 
-Page 2 includes a "Selected Writing" section. When the format includes three links, recommend exactly
-three. **Do not rely on titles alone, generic standard sets, or keyword matching.** Evaluate the full
-library (`writing/medium-library/CONTENT-KEY.md`, which has per-article content + strategic notes) on
-multiple dimensions, and explain the picks:
+Page 2 includes a "Selected Writing" section. When the format includes three links, recommend exactly three. **Do not rely on titles alone, generic standard sets, or keyword matching.** Evaluate the full library (`writing/medium-library/CONTENT-KEY.md`, which has per-article content + strategic notes) on multiple dimensions, and explain the picks:
 
-1. **Substantive fit** — does the actual argument demonstrate thinking the role values (frameworks,
-   examples, product judgment, evidence)?
-2. **Signal value** — what does the title communicate at a glance; does it make the candidate look
-   credible for this role even on a quick scan?
+1. **Substantive fit** — does the actual argument demonstrate thinking the role values (frameworks, examples, product judgment, evidence)?
+2. **Signal value** — what does the title communicate at a glance; does it make the candidate look credible for this role even on a quick scan?
 3. **Social proof** — meaningful visible engagement can raise the value of an otherwise lighter piece.
-4. **Gateway value** — an index/hub post can be valuable even if its own content is thin, because it
-   leads readers to deeper work.
-5. **Portfolio balance** — do the three collectively show distinct strengths? Avoid three pieces that
-   all hit the same narrow theme unless the role strongly warrants it.
-6. **Risk of over-narrowing** — a mental-health or AI title may suit a closely aligned role but be
-   unnecessarily narrow for a general product role. Judge the title's framing as well as the content.
+4. **Gateway value** — an index/hub post can be valuable even if its own content is thin, because it leads readers to deeper work.
+5. **Portfolio balance** — do the three collectively show distinct strengths? Avoid three pieces that all hit the same narrow theme unless the role strongly warrants it.
+6. **Risk of over-narrowing** — a mental-health or AI title may suit a closely aligned role but be unnecessarily narrow for a general product role. Judge the title's framing as well as the content.
 
-Use full article text when available; if content is unavailable, label the recommendation as title-/
-metadata-based rather than implying you evaluated the full piece. Standard sets are valid only **after**
-a combination has been reviewed and confirmed — do not let an old standard set override stronger
-role-specific analysis. Per-article interpretations live in `CONTENT-KEY.md`.
+Use full article text when available; if content is unavailable, label the recommendation as title-/ metadata-based rather than implying you evaluated the full piece. Standard sets are valid only **after** a combination has been reviewed and confirmed — do not let an old standard set override stronger role-specific analysis. Per-article interpretations live in `CONTENT-KEY.md`.
 
-**The current venture's flagship explainer may be hyperlinked from the first current-venture bullet**
-(a key product-description phrase links to the candidate's product write-up). When it is, treat it as
-**embedded product proof, not a Selected-Writing pick** — do not also select it as one of the three,
-since the recruiter can already reach it from the current-venture bullet. The three Selected-Writing
-links should add **three distinct signals beyond** what the current-venture bullet already provides.
-Evaluate the strongest options from the writing library for the role (don't default to the same three).
-Always evaluate the specific combination for the role.
+**The current venture's flagship explainer may be hyperlinked from the first current-venture bullet** (a key product-description phrase links to the candidate's product write-up). When it is, treat it as **embedded product proof, not a Selected-Writing pick** — do not also select it as one of the three, since the recruiter can already reach it from the current-venture bullet. The three Selected-Writing links should add **three distinct signals beyond** what the current-venture bullet already provides. Evaluate the strongest options from the writing library for the role (don't default to the same three). Always evaluate the specific combination for the role.
 
-**⭐ Routing — check the company's domain flags before picking the secondary sample, and check the
-Selected-Writing combos table in `02-resume-index.md` before recommending a non-standard set:**
+**⭐ Routing — check the company's domain flags before picking the secondary sample, and check the Selected-Writing combos table in `02-resume-index.md` before recommending a non-standard set:**
 - **Mental-health companies →** lead the secondary pick with the most closely domain-aligned piece.
 - **Non-MH consumer health →** use a broader wellness/health piece as pick 2 (do NOT use a narrowly mental-health piece).
 - **Data / AI-building / practical-AI roles →** use a hands-on practical-AI piece as pick 3.
 - **Distributed-leadership / process roles →** use the documented leadership piece — don't deviate to another leadership piece without checking the combos table.
 
-The current MVP is focused on the **resume only** — the agent does not yet generate cover letters. Do
-not insert cover-letter production or cover-letter length rules into the resume-analysis workflow as
-though they are implemented. Useful narrative material (personal motivation, company connection, why
-the problem matters, which older experience should/should not dominate, location context, balanced AI
-judgment, benefits/health-tracking motivation) is preserved for a future cover-letter module under
-**Narrative & Cover-Letter Inputs** in `01-profile.md`.
+The current MVP is focused on the **resume only** — the agent does not yet generate cover letters. Do not insert cover-letter production or cover-letter length rules into the resume-analysis workflow as though they are implemented. Useful narrative material (personal motivation, company connection, why the problem matters, which older experience should/should not dominate, location context, balanced AI judgment, benefits/health-tracking motivation) is preserved for a future cover-letter module under **Narrative & Cover-Letter Inputs** in `01-profile.md`.
 
 **Cover Letter Format (for when the cover-letter module is implemented):**
 
@@ -349,23 +313,17 @@ Every cover letter must begin with:
 
     Re: [Exact job title from the posting, including level and specialization]
 
-Use the exact role title from the posting. Do not reuse a generic title when the actual role has a
-different one (e.g., do not write "Staff Product Manager" when the actual title is "Lead Product
-Manager, Engagement").
+Use the exact role title from the posting. Do not reuse a generic title when the actual role has a different one (e.g., do not write "Staff Product Manager" when the actual title is "Lead Product Manager, Engagement").
 
-Cover letters should be concise (approximately one page), warm, specific, and human. They should
-not simply summarize the resume or mirror every phrase from the job description.
+Cover letters should be concise (approximately one page), warm, specific, and human. They should not simply summarize the resume or mirror every phrase from the job description.
 
 **Voice and structure (from recent finalized cover letters):**
 - Personable, direct, conversational voice.
 - Consistent contractions ("I've," "I'd," "I'm," "doesn't").
-- Open with a **meaningful, specific company or product connection** (e.g., a letter that opens with
-  the candidate's genuine, specific history using the company's product) — not a generic "I'm excited
-  to apply."
+- Open with a **meaningful, specific company or product connection** (e.g., a letter that opens with the candidate's genuine, specific history using the company's product) — not a generic "I'm excited to apply."
 - Three or four concise evidence bullets, each leading with the product problem it speaks to.
 - One or two embedded writing links when genuinely useful (not required).
-- Write a **first draft that is already short enough to fit ~one page** — do not draft long and then
-  cut a paragraph. A tight, personable letter is a good length/voice reference.
+- Write a **first draft that is already short enough to fit ~one page** — do not draft long and then cut a paragraph. A tight, personable letter is a good length/voice reference.
 
 ## Page 1 Is the Primary Tailoring Surface
 Page 1 changes most often and is the main place to tailor the resume.
@@ -399,15 +357,11 @@ These are target ranges, not absolute laws, but they should be respected unless 
 ### Hard Layout Constraints (from the recent finalized resumes)
 - The **summary** must fit the existing **~4-line** summary area.
 - The **skills** section must fit its existing block — usually about **12 to 14 concise items** (confirmed across June 2026 submissions — not 18 to 20).
-- Tailor primarily through **substitutions, not additions**. Adding an experience bullet requires
-  naming which current bullet is removed or compressed.
-- Select page-one evidence as a **portfolio**, not section by section in isolation (optimize the
-  current venture, consulting, the recent prior role, and the anchor role together, not independently).
-- Do **not** solve overflow by shrinking type, tightening margins further, or creating dense,
-  unreadable sections.
+- Tailor primarily through **substitutions, not additions**. Adding an experience bullet requires naming which current bullet is removed or compressed.
+- Select page-one evidence as a **portfolio**, not section by section in isolation (optimize the current venture, consulting, the recent prior role, and the anchor role together, not independently).
+- Do **not** solve overflow by shrinking type, tightening margins further, or creating dense, unreadable sections.
 
-These constrain the proposed **final content**. They are not a reason to provide less strategic
-analysis — the reasoning stays thorough even though the selected content is concise.
+These constrain the proposed **final content**. They are not a reason to provide less strategic analysis — the reasoning stays thorough even though the selected content is concise.
 
 ## Editing Style for Recommendations
 When proposing changes, do not give vague advice like:
@@ -424,11 +378,7 @@ The goal is to reduce the candidate’s cognitive load and make editing in Pages
 
 ## Writing Rules
 
-**Voice & Style lives in `01-profile.md` → "Voice & Style" (source of truth).** Read and apply it for
-all résumé and cover-letter copy: warm/plainspoken/human/specific, contractions, parentheses over
-comma-walled asides, varied sentence rhythm, no em dashes, no semicolons, **no "not just X, but Y"
-construction**, no same-verb stacking, no stiff consultant/inflated verbs, no over-polishing past the
-point where it sounds like the candidate, claims precise not inflated. Don't duplicate that list here — follow it.
+**Voice & Style lives in `01-profile.md` → "Voice & Style" (source of truth).** Read and apply it for all résumé and cover-letter copy: warm/plainspoken/human/specific, contractions, parentheses over comma-walled asides, varied sentence rhythm, no em dashes, no semicolons, **no "not just X, but Y" construction**, no same-verb stacking, no stiff consultant/inflated verbs, no over-polishing past the point where it sounds like the candidate, claims precise not inflated. Don't duplicate that list here — follow it.
 
 Résumé-specific reminders that still apply on top of the voice rules:
 - Do not remove metrics unless there is a compelling reason.
@@ -463,16 +413,10 @@ Summary generation rules:
 - Generate 2 to 3 summary options each time.
 - At least 1 option should come from a strong prior summary, or a lightly adapted version of one.
 - At least 1 option should be newly proposed and tailored to the target role.
-- Any new summary must still stay close to the candidate’s established tone and positioning. When in doubt, err more conversational. 
+- Any new summary must still stay close to the candidate’s established tone and positioning. When in doubt, err more conversational.
 - The summary should reflect the actual emphasis of the chosen work experience.
 
-**How the candidate actually uses these:** they usually write the final summary themselves (often
-with another writing tool). The generated options are valued as **strategy inputs** — angle, emphasis,
-what to anchor on — even when none is used verbatim. **Do NOT treat the candidate rewriting the summary
-as a failure.** The options exist to give them strong raw material, not a finished line. Over time,
-**learn from their finalized summaries** (captured in `05a-summary-library.md` → "Finalized / submitted
-summaries") to make the options sharper and more in their voice. Don't overhaul the step now — just
-keep feeding the example corpus so future options improve.
+**How the candidate actually uses these:** they usually write the final summary themselves (often with another writing tool). The generated options are valued as **strategy inputs** — angle, emphasis, what to anchor on — even when none is used verbatim. **Do NOT treat the candidate rewriting the summary as a failure.** The options exist to give them strong raw material, not a finished line. Over time, **learn from their finalized summaries** (captured in `05a-summary-library.md` → "Finalized / submitted summaries") to make the options sharper and more in their voice. Don't overhaul the step now — just keep feeding the example corpus so future options improve.
 
 ### Skills Constraints
 
@@ -522,9 +466,7 @@ The main actionable output must be written into **one markdown file** in the act
 
 `application_resume_output - [Company] - [Role].md`
 
-where `[Company]` is the hiring company name and `[Role]` is the job title (abbreviate as needed,
-e.g. Staff PM, Lead PM, VP Product). Example: `application_resume_output - Acme - Staff PM.md`.
-Use the same company and role names from the active job folder where possible.
+where `[Company]` is the hiring company name and `[Role]` is the job title (abbreviate as needed, e.g. Staff PM, Lead PM, VP Product). Example: `application_resume_output - Acme - Staff PM.md`. Use the same company and role names from the active job folder where possible.
 
 This file should contain the full actionable output for the run, including:
 - Read Log
@@ -626,20 +568,13 @@ When a target job description is provided, follow this workflow in order.
 
 ## Minimal Intake from the Candidate (what they need to provide per job)
 
-The agent should be able to run from **just the job** (a URL or a job `.txt`/`.pdf`). Everything else
-is inferred and surfaced for confirmation rather than required up front. Specifically, the agent itself
-determines — and states in the output — all of the following, so the candidate does not have to:
+The agent should be able to run from **just the job** (a URL or a job `.txt`/`.pdf`). Everything else is inferred and surfaced for confirmation rather than required up front. Specifically, the agent itself determines — and states in the output — all of the following, so the candidate does not have to:
 - **Which current base to start from** (via the Resume-Base Registry archetype row in `02-resume-index.md`).
 - **Which older resumes to mine for evidence** (the registry's "older resumes to mine alongside" column).
 - **Whether the role needs a new base or only a derivative** (the promotion rule).
-- **Whether any factual questions must be answered before tailoring** (Step 3/4 gap detection → the
-  "Questions for the Candidate" section).
+- **Whether any factual questions must be answered before tailoring** (Step 3/4 gap detection → the "Questions for the Candidate" section).
 
-The candidate only needs to volunteer extra context when it would **change** one of those
-determinations — e.g., a brand-new factual detail not in the source files, a hard preference for a
-specific base, or a note that they have already finalized a related resume that should become the base
-for this archetype. In autonomous mode, never block on this; infer, proceed, and list any genuine
-uncertainties at the top.
+The candidate only needs to volunteer extra context when it would **change** one of those determinations — e.g., a brand-new factual detail not in the source files, a hard preference for a specific base, or a note that they have already finalized a related resume that should become the base for this archetype. In autonomous mode, never block on this; infer, proceed, and list any genuine uncertainties at the top.
 
 
 # Step 0 — Application Intake and Folder Preparation
@@ -671,10 +606,7 @@ At the start of the workflow, before analysis begins:
 
 `Company - Role - MM-DD-YY`
 
-Use a filesystem-safe, zero-padded `MM-DD-YY` date with hyphens only — never slashes or colons
-(e.g. `06-02-26`, not `6/2/26` or `6:2:26`). Slashes create unintended nested subfolders. This
-matches the dated vetting batch folders (`vetting/MM-DD-YY`). Abbreviate `Product Manager` to `PM`
-and `Vice President` to `VP`. 
+Use a filesystem-safe, zero-padded `MM-DD-YY` date with hyphens only — never slashes or colons (e.g. `06-02-26`, not `6/2/26` or `6:2:26`). Slashes create unintended nested subfolders. This matches the dated vetting batch folders (`vetting/MM-DD-YY`). Abbreviate `Product Manager` to `PM` and `Vice President` to `VP`.
 
 5. Move the primary job description PDF and all related supporting PDFs from `00 - Ready To Apply` into the new destination folder.
 6. Use the newly created destination folder as the active job folder for the rest of the workflow.
@@ -761,29 +693,12 @@ This is a strategic diagnosis step, not a drafting step.
 
 ## Step 2.5 — Strategic Evidence Retrieval (inferred relevance, not keyword matching)
 
-Gap detection (Step 3) checks **literal** requirements. This step is the **deeper product-judgment
-pass** the system tends to miss: read the role for what it *actually values* underneath the words, then
-ask what adjacent evidence in the candidate's background maps to those values — even when the JD never
-uses the same vocabulary. The point is to help the candidate **remember strong, relevant stories they
-wouldn't have thought to include**, not to match keywords and not to invent claims.
+Gap detection (Step 3) checks **literal** requirements. This step is the **deeper product-judgment pass** the system tends to miss: read the role for what it *actually values* underneath the words, then ask what adjacent evidence in the candidate's background maps to those values — even when the JD never uses the same vocabulary. The point is to help the candidate **remember strong, relevant stories they wouldn't have thought to include**, not to match keywords and not to invent claims.
 
 **How to do it:**
-1. **Name the underlying value signals.** Infer what the company/role really rewards. Starter taxonomy
-   (not exhaustive, and prioritize the *subtle* ones over the obvious): brand, trust, delight, safety,
-   reassurance, credibility, speed, rigor, product craft, taste, retention, marketplace liquidity,
-   founder mentality, technical depth, AI fluency, simplicity, emotional ease, operational excellence.
-   Read tone and positioning, not just the requirements list — a single emphasized word ("brand,"
-   "magic," "trusted") is often the real signal.
-2. **Map adjacent evidence** from the candidate's actual background to each signal, translating across
-   domains. (Worked example: a JD names **brand** as a differentiator. Don't just ask "do you have
-   brand experience?" Surface a past product whose brand was built on delight, clarity, simplicity, and
-   emotional ease, plus the current venture where the candidate created the brand, style guide, product
-   principles, tone, in-app copy, and end-to-end experience. Then note the **translation**: for a
-   trust-sensitive health product, "delight" likely needs to become trust, reassurance, clarity, and
-   credibility — same craft, different register.)
-3. **Generate the three output sections** (kept tight — see the output spec). Everything here is
-   **opportunity and question**, never resume copy. Unconfirmed items are treated like "Needs
-   Confirmation" and cannot enter proposed bullets until the candidate confirms.
+1. **Name the underlying value signals.** Infer what the company/role really rewards. Starter taxonomy (not exhaustive, and prioritize the *subtle* ones over the obvious): brand, trust, delight, safety, reassurance, credibility, speed, rigor, product craft, taste, retention, marketplace liquidity, founder mentality, technical depth, AI fluency, simplicity, emotional ease, operational excellence. Read tone and positioning, not just the requirements list — a single emphasized word ("brand," "magic," "trusted") is often the real signal.
+2. **Map adjacent evidence** from the candidate's actual background to each signal, translating across domains. (Worked example: a JD names **brand** as a differentiator. Don't just ask "do you have brand experience?" Surface a past product whose brand was built on delight, clarity, simplicity, and emotional ease, plus the current venture where the candidate created the brand, style guide, product principles, tone, in-app copy, and end-to-end experience. Then note the **translation**: for a trust-sensitive health product, "delight" likely needs to become trust, reassurance, clarity, and credibility — same craft, different register.)
+3. **Generate the three output sections** (kept tight — see the output spec). Everything here is **opportunity and question**, never resume copy. Unconfirmed items are treated like "Needs Confirmation" and cannot enter proposed bullets until the candidate confirms.
 
 Keep it concise and high-signal. A few sharp value-signal mappings beat an exhaustive list.
 
@@ -831,25 +746,16 @@ Keep questions:
 - limited in number
 - strategically useful
 
-**A question is worth asking only if its answer could materially change** one of: the base resume,
-page-one bullet selection, a factual claim, the summary, the skills section, the writing portfolio,
-the application narrative, or a meaningful risk assessment.
+**A question is worth asking only if its answer could materially change** one of: the base resume, page-one bullet selection, a factual claim, the summary, the skills section, the writing portfolio, the application narrative, or a meaningful risk assessment.
 
 Before asking:
-- **Check the source files first** — `01-profile.md`, `04-experience-bank.md`,
-  `10b-BLURBS…` (in `_archive/tailor/`), `02-resume-index.md`, and recent decisions. Do not ask
-  what is already established there.
-- For **uncertain older experience** (e.g., an older role with fuzzy details), ask **precise factual**
-  questions, but only after confirming the answer isn't already in the experience bank or blurbs.
-- When a claim is not confirmed, keep it in the **Questions** section rather than inserting it into
-  proposed resume copy.
+- **Check the source files first** — `01-profile.md`, `04-experience-bank.md`, `10b-BLURBS…` (in `_archive/tailor/`), `02-resume-index.md`, and recent decisions. Do not ask what is already established there.
+- For **uncertain older experience** (e.g., an older role with fuzzy details), ask **precise factual** questions, but only after confirming the answer isn't already in the experience bank or blurbs.
+- When a claim is not confirmed, keep it in the **Questions** section rather than inserting it into proposed resume copy.
 
-Do not ask unnecessary questions when the strongest choice is already clear. In particular, **do not
-re-ask whether compensation is acceptable** for a role the candidate has deliberately chosen to apply
-to (see Compensation-Question Behavior in `01-profile.md`), and do not ask about location unless it
-creates a real eligibility risk (see Location Framing Strategy).
+Do not ask unnecessary questions when the strongest choice is already clear. In particular, **do not re-ask whether compensation is acceptable** for a role the candidate has deliberately chosen to apply to (see Compensation-Question Behavior in `01-profile.md`), and do not ask about location unless it creates a real eligibility risk (see Location Framing Strategy).
 
-At the end of the process for each resume, we'll attempt to update the knowledge base to improve further workflows. 
+At the end of the process for each resume, we'll attempt to update the knowledge base to improve further workflows.
 
 
 ---
@@ -869,37 +775,20 @@ Use:
 
 ### Use the Resume-Base Registry (do not just grab the latest resume)
 
-`02-resume-index.md` now contains a **Resume-Base Registry & Governance** section: a table mapping each
-role archetype to its current base, the evidence modules that base carries, and the **older resumes to
-mine alongside it**. During selection:
+`02-resume-index.md` now contains a **Resume-Base Registry & Governance** section: a table mapping each role archetype to its current base, the evidence modules that base carries, and the **older resumes to mine alongside it**. During selection:
 
 1. Identify the role archetype, then read that row of the registry.
 2. Start from the listed **current base** (the current-venture-era chassis: current accuracy, formatting, page two).
-3. Check the **"older resumes to mine alongside"** column. For 0→1 / innovation / new-product / sharing
-   roles especially, the strongest role-specific evidence often lives in an **older, pre-current-venture
-   resume** (older role-specific resume variants). Pull the **named evidence modules** from
-   `04-experience-bank.md` and **merge** them onto the current chassis using the **Merge procedure** in
-   the registry. Do not use an older resume wholesale, and do not over-rely on the latest resume when an
-   older one has materially stronger evidence for this archetype.
-4. If the finalized draft's evidence allocation diverges materially from every existing base for a
-   distinct archetype, **flag it as a new-base candidate** (promotion rule in the registry) so the
-   candidate can confirm and point at the authoritative finalized file.
+3. Check the **"older resumes to mine alongside"** column. For 0→1 / innovation / new-product / sharing roles especially, the strongest role-specific evidence often lives in an **older, pre-current-venture resume** (older role-specific resume variants). Pull the **named evidence modules** from `04-experience-bank.md` and **merge** them onto the current chassis using the **Merge procedure** in the registry. Do not use an older resume wholesale, and do not over-rely on the latest resume when an older one has materially stronger evidence for this archetype.
+4. If the finalized draft's evidence allocation diverges materially from every existing base for a distinct archetype, **flag it as a new-base candidate** (promotion rule in the registry) so the candidate can confirm and point at the authoritative finalized file.
 
-This balances reuse against genuinely role-specific evidence — avoiding both rebuilding from scratch and
-defaulting to the newest resume.
+This balances reuse against genuinely role-specific evidence — avoiding both rebuilding from scratch and defaulting to the newest resume.
 
 ### Modern Baseline & Current Venture (apply during selection)
 - Default mentally to the most recent finalized resume as the modern baseline.
-- Still pick the best-fit family anchor for domain and role shape, but treat older, pre-current-venture
-  anchors as a **component library**, not complete final sources.
-- Whatever base is chosen, plan to **include the current venture** (its own section) unless there is a
-  very strong reason not to. Note in the recommendation which positioning mode the current venture will use.
-- **⭐ If you choose an older base** that predates the latest current-venture wording, **refreshing the
-  current-venture section to the current canonical is a REQUIRED step, not optional** — those bases may
-  carry stale wording (e.g. an outdated stage label, outdated phrasing, past-tense bullets). Open
-  `03-current-work-canonical.md` and use the current canonical bullet forms (present tense, the current
-  stage label, the current canonical phrasing) before drafting. (Stale current-venture wording has
-  shipped before because this refresh was treated as optional.)
+- Still pick the best-fit family anchor for domain and role shape, but treat older, pre-current-venture anchors as a **component library**, not complete final sources.
+- Whatever base is chosen, plan to **include the current venture** (its own section) unless there is a very strong reason not to. Note in the recommendation which positioning mode the current venture will use.
+- **⭐ If you choose an older base** that predates the latest current-venture wording, **refreshing the current-venture section to the current canonical is a REQUIRED step, not optional** — those bases may carry stale wording (e.g. an outdated stage label, outdated phrasing, past-tense bullets). Open `03-current-work-canonical.md` and use the current canonical bullet forms (present tense, the current stage label, the current canonical phrasing) before drafting. (Stale current-venture wording has shipped before because this refresh was treated as optional.)
 
 When selecting the base:
 - compare the most relevant family options, not just the first listed anchor
@@ -932,15 +821,9 @@ Preferred format (Company before Role — same order as the job folder name):
 
 `{{CANDIDATE_NAME}}-Resume - [Company] - [Role].pages`
 
-- The `[Company] - [Role]` part must match the `Company - Role` job folder name **verbatim** —
-  same order (company first), same words. The simplest correct approach: name the file
-  `{{CANDIDATE_NAME}}-Resume - <job folder name>.pages`.
-- Keep the **full role title**. Do NOT shorten it or drop qualifiers (keep "Consumer Mobile",
-  "Member Growth, Benefits", "Patient Experience", etc.). The only allowed abbreviations are
-  `Product Manager` → `PM` and `Vice President` → `VP`.
-- Example: folder `Acme - Staff PM Consumer Mobile` →
-  `{{CANDIDATE_NAME}}-Resume - Acme - Staff PM Consumer Mobile.pages`
-  (NOT `{{CANDIDATE_NAME}}-Resume - Staff PM - Acme.pages`).
+- The `[Company] - [Role]` part must match the `Company - Role` job folder name **verbatim** — same order (company first), same words. The simplest correct approach: name the file `{{CANDIDATE_NAME}}-Resume - <job folder name>.pages`.
+- Keep the **full role title**. Do NOT shorten it or drop qualifiers (keep "Consumer Mobile", "Member Growth, Benefits", "Patient Experience", etc.). The only allowed abbreviations are `Product Manager` → `PM` and `Vice President` → `VP`.
+- Example: folder `Acme - Staff PM Consumer Mobile` → `{{CANDIDATE_NAME}}-Resume - Acme - Staff PM Consumer Mobile.pages` (NOT `{{CANDIDATE_NAME}}-Resume - Staff PM - Acme.pages`).
 
 If a matching `.pages` file cannot be found:
 - flag that clearly
@@ -1005,17 +888,11 @@ If you recommend a removal, you must explicitly say what it is making room for.
 Do not suggest cuts that are unnecessary.
 
 ### ⭐ Protect Concrete Proof (hard rule)
-**Never over-trim concrete, metric-bearing proof.** The candidate has very few quantitative measures, so
-every defensible number is precious (full rule in `04-experience-bank.md` → "Quantitative Proof Is Precious").
-- Do **not** propose cutting a bullet that carries a real number or named result (conversion %, user/
-  team/company size, growth rate, contract value, usefulness arc, retention figure, etc.) for space —
-  swap something softer instead.
+**Never over-trim concrete, metric-bearing proof.** The candidate has very few quantitative measures, so every defensible number is precious (full rule in `04-experience-bank.md` → "Quantitative Proof Is Precious").
+- Do **not** propose cutting a bullet that carries a real number or named result (conversion %, user/ team/company size, growth rate, contract value, usefulness arc, retention figure, etc.) for space — swap something softer instead.
 - **Lean toward including any number the candidate is comfortable stating publicly** when it fits the role.
-- When you add or surface a new concrete number they approve, flag it in "Suggested System Updates" so
-  it gets canonized into the Metrics Master List for reuse.
-- This was confirmed across multiple reconciled applications where the candidate restored proof the
-  agent had proposed cutting (a feature-launch bullet plus its conversion stat, a privacy/compliance
-  bullet, experimentation, and an optional older role).
+- When you add or surface a new concrete number they approve, flag it in "Suggested System Updates" so it gets canonized into the Metrics Master List for reuse.
+- This was confirmed across multiple reconciled applications where the candidate restored proof the agent had proposed cutting (a feature-launch bullet plus its conversion stat, a privacy/compliance bullet, experimentation, and an optional older role).
 
 ## Strength Preservation Rule
 
@@ -1032,8 +909,7 @@ If such a bullet is removed, explain why that tradeoff is actually worth it.
 
 ## Evidence Library Rule (Completed Resumes)
 
-Treat existing finalized resumes and approved pages as an **evidence library** — a canonical starting
-point and default wording bank — not raw material to rewrite unnecessarily.
+Treat existing finalized resumes and approved pages as an **evidence library** — a canonical starting point and default wording bank — not raw material to rewrite unnecessarily.
 
 When a completed resume or prior approved page is provided:
 - Use its language as the default.
@@ -1043,12 +919,9 @@ When a completed resume or prior approved page is provided:
 - Preserve strong metrics, named initiatives, and verified phrasing.
 - Do not rewrite merely for stylistic variety.
 
-**Canonical anchor for Consumer Health Engagement roles:** A designated page-one resume is the
-canonical starting point for the Consumer Health Engagement group (with its role-specific
-adaptations). Adapt from it rather than rebuilding from the experience bank from scratch.
+**Canonical anchor for Consumer Health Engagement roles:** A designated page-one resume is the canonical starting point for the Consumer Health Engagement group (with its role-specific adaptations). Adapt from it rather than rebuilding from the experience bank from scratch.
 
-A small amount of unused space is acceptable. Do not add a marginal bullet simply because one line
-remains available.
+A small amount of unused space is acceptable. Do not add a marginal bullet simply because one line remains available.
 
 ## Output Format for Work Experience
 
@@ -1057,8 +930,7 @@ For each section, use this structure:
 ### [Section Name]
 
 Base Status:
-- No changes
-OR
+- No changes OR
 - Use this base section with the following changes
 
 Changes:
@@ -1088,38 +960,18 @@ Tailoring guidance:
 
 ## Current-Venture Section Guidance
 
-The current venture is current core work and usually appears as its own section, but it is **not a
-protected two- or three-bullet block** — it competes for page-one space with consulting, the recent
-prior role, the anchor role, and every other experience. Full policy: `03-current-work-canonical.md`.
+The current venture is current core work and usually appears as its own section, but it is **not a protected two- or three-bullet block** — it competes for page-one space with consulting, the recent prior role, the anchor role, and every other experience. Full policy: `03-current-work-canonical.md`.
 
-- **Header:** `Founder & Product Lead @ {{CURRENT_VENTURE}} ({{STAGE_LABEL}}) • {{YEARS}}`. Approved
-  bullets and the stage-label claim boundary live in `03-current-work-canonical.md` /
-  `04-experience-bank.md`. Do **not** use a stage label that overstates maturity.
-- **Bullet count is role-by-role.** Ask: across every credible page-one bullet, which combination gives
-  THIS employer the strongest evidence for THIS role? Three bullets for closely AI-supported-MH /
-  personal-growth / behavior-change / AI-companion roles; one or two for broader consumer / AI /
-  healthcare / early-stage; **one concise bullet** for benefits / collaboration / enterprise /
-  operating-leadership roles where the anchor role, the recent prior role, or consulting is stronger.
-  Do not default mechanically to two or three.
-- **State the opportunity cost.** When you pick a count, say what the anchor role / recent prior role /
-  consulting could gain from the recovered space and why the chosen allocation is the strongest portfolio.
-- **Positioning mode by role:** mission-aligned (lead with growth/support, longitudinal pattern
-  recognition, trust-sensitive design, follow-through, model bullet for journey roles); AI-forward
-  (lead with hands-on AI building, strategy/experience design, context-aware personalization);
-  traditional/non-mission (one compact bullet; do NOT force mental-health adjacency — let the current
-  venture show AI building, 0→1, personalization, systems/model design, or founder ownership as the
-  role values).
-- **Recompose approved descriptors only.** No new factual claims; any net-new bullet is **Suggested
-  New** and must be interview-defensible.
-- **Make room** (when the current venture earns it): compress Consultant first, then generic
-  cross-functional bullets, then lower-priority recent-role bullets, then redundant phrasing. Keep page
-  2 stable. (Full logic: `03-current-work-canonical.md`.)
+- **Header:** `Founder & Product Lead @ {{CURRENT_VENTURE}} ({{STAGE_LABEL}}) • {{YEARS}}`. Approved bullets and the stage-label claim boundary live in `03-current-work-canonical.md` / `04-experience-bank.md`. Do **not** use a stage label that overstates maturity.
+- **Bullet count is role-by-role.** Ask: across every credible page-one bullet, which combination gives THIS employer the strongest evidence for THIS role? Three bullets for closely AI-supported-MH / personal-growth / behavior-change / AI-companion roles; one or two for broader consumer / AI / healthcare / early-stage; **one concise bullet** for benefits / collaboration / enterprise / operating-leadership roles where the anchor role, the recent prior role, or consulting is stronger. Do not default mechanically to two or three.
+- **State the opportunity cost.** When you pick a count, say what the anchor role / recent prior role / consulting could gain from the recovered space and why the chosen allocation is the strongest portfolio.
+- **Positioning mode by role:** mission-aligned (lead with growth/support, longitudinal pattern recognition, trust-sensitive design, follow-through, model bullet for journey roles); AI-forward (lead with hands-on AI building, strategy/experience design, context-aware personalization); traditional/non-mission (one compact bullet; do NOT force mental-health adjacency — let the current venture show AI building, 0→1, personalization, systems/model design, or founder ownership as the role values).
+- **Recompose approved descriptors only.** No new factual claims; any net-new bullet is **Suggested New** and must be interview-defensible.
+- **Make room** (when the current venture earns it): compress Consultant first, then generic cross-functional bullets, then lower-priority recent-role bullets, then redundant phrasing. Keep page 2 stable. (Full logic: `03-current-work-canonical.md`.)
 
 ## Consulting / Sabbatical Section Guidance
 
-Default target: 2 to 3 bullets. **This is the first section to compress when the current venture needs
-room** — it may be reduced to 1 concise bullet, with softer "sabbatical explanation" language removed
-and the remaining bullet tilted toward strategy / advisory / founder support.
+Default target: 2 to 3 bullets. **This is the first section to compress when the current venture needs room** — it may be reduced to 1 concise bullet, with softer "sabbatical explanation" language removed and the remaining bullet tilted toward strategy / advisory / founder support.
 
 This section should signal:
 - current product relevance
@@ -1197,36 +1049,16 @@ If adding headers forces the bullets to get weaker, go back to flat bullets.
 The candidate’s proof is more valuable than fancy structure.
 
 ### ⭐ Output the COMPLETE final anchor-role bullet list, in submission order
-For the anchor role specifically, do **not** present the changes as a swap/diff ("remove X, add Y") —
-that format does not survive the candidate's manual Pages edit and the intended bullets get lost.
-**Write out the full final anchor-role bullet list, top to bottom, in the order it should appear.** The
-candidate's real anchor-role range is **7–9 bullets** for strong roles (the agent has tended to
-recommend only 5–6 — plan for 7–9). This is the one section where you output the finished list rather
-than REPLACE/ADD/REMOVE edits.
+For the anchor role specifically, do **not** present the changes as a swap/diff ("remove X, add Y") — that format does not survive the candidate's manual Pages edit and the intended bullets get lost. **Write out the full final anchor-role bullet list, top to bottom, in the order it should appear.** The candidate's real anchor-role range is **7–9 bullets** for strong roles (the agent has tended to recommend only 5–6 — plan for 7–9). This is the one section where you output the finished list rather than REPLACE/ADD/REMOVE edits.
 
 ### Anchor-Role Notification System (example of a verified proof point)
 
-In the anchor role, the candidate owned a cross-channel notification system covering email, in-app,
-push, and browser channels. The work included decisions on frequency, content, user preferences,
-activation, engagement, long-term retention, and reducing notification noise at scale.
+In the anchor role, the candidate owned a cross-channel notification system covering email, in-app, push, and browser channels. The work included decisions on frequency, content, user preferences, activation, engagement, long-term retention, and reducing notification noise at scale.
 
-**Use this evidence for roles emphasizing:** proactive communications, reminders, lifecycle
-engagement, ongoing member guidance, engagement loops, or reducing churn at scale. The concise
-reference bullet is the canonical notifications/growth bullet in `04-experience-bank.md`. A more
-detailed variant (`[variant-notifications-detail]`) is available there and should be substituted when
-notifications is a primary proof point.
+**Use this evidence for roles emphasizing:** proactive communications, reminders, lifecycle engagement, ongoing member guidance, engagement loops, or reducing churn at scale. The concise reference bullet is the canonical notifications/growth bullet in `04-experience-bank.md`. A more detailed variant (`[variant-notifications-detail]`) is available there and should be substituted when notifications is a primary proof point.
 
 ### Do Not Group Just Because the Title Says "Lead"
-Flat is the default for most IC applications because it maximizes proof density and preserves space.
-Grouping costs space and may require sacrificing a proof point, so recommend it **only** when the
-organizational-leadership signal is more valuable than the lost space — i.e., the role materially
-emphasizes formal people management; GPM / Director / Head-of-Product scope; building or shaping the PM
-function; developing product craft across a company; coaching or managing PMs; establishing product
-rituals or operating practices; being the first senior product leader; or leading multiple product
-areas / teams. For ordinary Senior, Staff, Principal, or Lead **IC** roles, default to flat unless the
-JD clearly supports the trade-off. When you do recommend grouping, explain: (1) which job requirement
-makes it strategically useful, (2) what headings to use, (3) what content is lost or compressed, and
-(4) why the trade-off is worthwhile.
+Flat is the default for most IC applications because it maximizes proof density and preserves space. Grouping costs space and may require sacrificing a proof point, so recommend it **only** when the organizational-leadership signal is more valuable than the lost space — i.e., the role materially emphasizes formal people management; GPM / Director / Head-of-Product scope; building or shaping the PM function; developing product craft across a company; coaching or managing PMs; establishing product rituals or operating practices; being the first senior product leader; or leading multiple product areas / teams. For ordinary Senior, Staff, Principal, or Lead **IC** roles, default to flat unless the JD clearly supports the trade-off. When you do recommend grouping, explain: (1) which job requirement makes it strategically useful, (2) what headings to use, (3) what content is lost or compressed, and (4) why the trade-off is worthwhile.
 
 ---
 
@@ -1277,13 +1109,7 @@ Use:
 - `06a-skills-library.md`
 - `06-skills-quick.md` (synonyms map embedded inline)
 
-**⭐ Target ~12–14 skills, not 18–20.** Default to the candidate's **platform-breadth** terms (Product
-Strategy, Consumer Mobile & Cross-Platform, 0→1 Product Development, Roadmap Prioritization, AI-Powered
-Product Design, High-Trust User Journeys, Product Discovery, etc.). The **psychology / behavior-change
-cluster** (Habit Loop Design, Engagement Loop Design, Psychology-Informed UX, Human-Centered AI Product
-Thinking) is for **retention/engagement-specialist roles only** — the candidate consistently drops it
-otherwise. Frame skill changes as **targeted swaps from the canonical line, not a full rebuild**.
-(Detail in `06-skills-quick.md`.)
+**⭐ Target ~12–14 skills, not 18–20.** Default to the candidate's **platform-breadth** terms (Product Strategy, Consumer Mobile & Cross-Platform, 0→1 Product Development, Roadmap Prioritization, AI-Powered Product Design, High-Trust User Journeys, Product Discovery, etc.). The **psychology / behavior-change cluster** (Habit Loop Design, Engagement Loop Design, Psychology-Informed UX, Human-Centered AI Product Thinking) is for **retention/engagement-specialist roles only** — the candidate consistently drops it otherwise. Frame skill changes as **targeted swaps from the canonical line, not a full rebuild**. (Detail in `06-skills-quick.md`.)
 
 Rules:
 - Start from the canonical skills system.
@@ -1312,13 +1138,9 @@ Do not leave obvious usable space empty if additional relevant, high-signal skil
 
 Do not invent or recommend skill phrases solely because they resemble the job description.
 
-Skill phrases must accurately represent a substantial and defensible part of the candidate's experience.
-**Previously rejected examples include “Subscription Growth” and “Healthcare Data Products”** — both
-sound plausible but do not accurately reflect specific, substantial experience areas.
+Skill phrases must accurately represent a substantial and defensible part of the candidate's experience. **Previously rejected examples include “Subscription Growth” and “Healthcare Data Products”** — both sound plausible but do not accurately reflect specific, substantial experience areas.
 
-Skills must remain within the existing block. Select from verified areas such as: product strategy,
-product discovery, engagement and retention, activation and onboarding, experimentation, user research,
-prioritization, cross-functional leadership, mentoring PMs, and systems thinking.
+Skills must remain within the existing block. Select from verified areas such as: product strategy, product discovery, engagement and retention, activation and onboarding, experimentation, user research, prioritization, cross-functional leadership, mentoring PMs, and systems thinking.
 
 ## Preserve Strong Senior Signals
 
@@ -1360,21 +1182,15 @@ The final skills line should be written cleanly into `application_resume_output.
 
 ## Step 9.5 — Targeted Content Opportunity (high-priority roles only)
 
-For a **high-priority role only** (the batch ranked it Apply ASAP / Apply If Time, or it's clearly a
-top target), consider whether **one** new or repurposed piece of writing would *materially* strengthen
-this specific application. The full writing library exists (`writing/medium-library/CONTENT-KEY.md` with
-clap/engagement data, and `writing/internal-writing/INDEX.md` for verified proof) — use it.
+For a **high-priority role only** (the batch ranked it Apply ASAP / Apply If Time, or it's clearly a top target), consider whether **one** new or repurposed piece of writing would *materially* strengthen this specific application. The full writing library exists (`writing/medium-library/CONTENT-KEY.md` with clap/engagement data, and `writing/internal-writing/INDEX.md` for verified proof) — use it.
 
 Rules:
 - **Recommend at most ONE piece.** Never a list.
-- **Omit the section entirely** if there isn't a strong, specific reason to write or repurpose
-  something. Most applications should not get a recommendation. Silence is the default.
+- **Omit the section entirely** if there isn't a strong, specific reason to write or repurpose something. Most applications should not get a recommendation. Silence is the default.
 - It can be a brand-new piece or a repurpose/extension of existing writing.
 - Be honest about effort and risk — don't recommend a heavy lift for a marginal gain.
 
-When you do recommend one, give exactly: **proposed title**, **why it helps for this specific role**,
-**which existing writing it builds from (if any)**, **worth doing now vs. wait**, **effort (low /
-medium / high)**, and **risk** (too junior / too personal / too off-topic / too much work / etc.).
+When you do recommend one, give exactly: **proposed title**, **why it helps for this specific role**, **which existing writing it builds from (if any)**, **worth doing now vs. wait**, **effort (low / medium / high)**, and **risk** (too junior / too personal / too off-topic / too much work / etc.).
 
 ---
 
@@ -1486,8 +1302,7 @@ For resume generation, write the full actionable output into:
 
 `application_resume_output - [Company] - [Role].md`
 
-in the active job folder. Use the hiring company name and abbreviated job title
-(e.g. `application_resume_output - Acme - Staff PM.md`).
+in the active job folder. Use the hiring company name and abbreviated job title (e.g. `application_resume_output - Acme - Staff PM.md`).
 
 The output should use this structure:
 
@@ -1515,18 +1330,13 @@ Group the most important findings into:
 Do not make this exhaustive. Focus on the highest-value items.
 
 ## Strategic Evidence Opportunities
-From Step 2.5. The role's **underlying value signals** (prioritize the subtle ones) and the **adjacent
-evidence** in the candidate's background that maps to each — including cross-domain translations (e.g.
-delight → trust/reassurance for a health product). A few sharp mappings, not a keyword list. These are
-opportunities to confirm, not resume claims.
+From Step 2.5. The role's **underlying value signals** (prioritize the subtle ones) and the **adjacent evidence** in the candidate's background that maps to each — including cross-domain translations (e.g. delight → trust/reassurance for a health product). A few sharp mappings, not a keyword list. These are opportunities to confirm, not resume claims.
 
 ## Inferred Relevance Questions
-A short list of questions designed to help the candidate **remember adjacent evidence they might not
-have thought to include** (not literal gap questions). Tie each to a value signal above.
+A short list of questions designed to help the candidate **remember adjacent evidence they might not have thought to include** (not literal gap questions). Tie each to a value signal above.
 
 ## Hidden Story Prompts
-1–3 prompts for stories that could **materially change the résumé or cover-letter strategy** (not
-small wording tweaks). Omit if none rise to that bar.
+1–3 prompts for stories that could **materially change the résumé or cover-letter strategy** (not small wording tweaks). Omit if none rise to that bar.
 
 ## Resume Base Recommendation
 - recommended primary base
@@ -1545,8 +1355,7 @@ For each section:
 - use REPLACE / ADD / REMOVE / MERGE formatting
 - include 1 to 3 concise sentences of section-level reasoning
 
-Do not use tables.
-Do not waste space restating unchanged content unless necessary for clarity.
+Do not use tables. Do not waste space restating unchanged content unless necessary for clarity.
 
 ## Summary Options
 - 3 options
@@ -1561,10 +1370,7 @@ Do not waste space restating unchanged content unless necessary for clarity.
   - what still needs confirmation (if anything)
 
 ## Content Opportunity
-**Only for high-priority roles, and only when one piece would materially help — otherwise OMIT this
-section entirely** (default). At most one recommendation, with: proposed title; why it helps for this
-specific role; which existing writing it builds from (if any); worth doing now vs. wait; effort (low /
-medium / high); risk. See Step 9.5.
+**Only for high-priority roles, and only when one piece would materially help — otherwise OMIT this section entirely** (default). At most one recommendation, with: proposed title; why it helps for this specific role; which existing writing it builds from (if any); worth doing now vs. wait; effort (low / medium / high); risk. See Step 9.5.
 
 ## Suggested System Updates
 Optional suggestions for updating:
@@ -1572,8 +1378,7 @@ Optional suggestions for updating:
 - synonyms map
 - profile notes
 - summary library
-- the canonical current-venture section (`03-current-work-canonical.md`) — only as a flagged suggestion
-  if a new current-venture development would materially improve fit; never silently rewrite the approved wording
+- the canonical current-venture section (`03-current-work-canonical.md`) — only as a flagged suggestion if a new current-venture development would materially improve fit; never silently rewrite the approved wording
 - other reusable system knowledge
 
 Only include this when it would reduce future repetition.
@@ -1581,9 +1386,7 @@ Only include this when it would reduce future repetition.
 ## Final Risks / Notes
 - anything the candidate should review carefully before applying
 
-(No "Learning Ledger" / durable-learning section belongs in this file. Durable learning happens only in
-the separate post-submission reconcile pass over your submitted-applications archive — see the note at the end of
-Step 11.)
+(No "Learning Ledger" / durable-learning section belongs in this file. Durable learning happens only in the separate post-submission reconcile pass over your submitted-applications archive — see the note at the end of Step 11.)
 
 ## Output Style Rules
 
@@ -1622,8 +1425,7 @@ Reading these one at a time is the single largest source of avoidable latency. A
 - `05a-summary-library.md` (full source history and variant tracking)
 - `06a-skills-library.md` (full calibration notes and assessment log)
 
-Prefer previously generated clean system files over raw extraction or audit files during normal runs.
-Do not use maintenance files as primary sources unless the candidate explicitly requests maintenance, audit, or reconciliation work.
+Prefer previously generated clean system files over raw extraction or audit files during normal runs. Do not use maintenance files as primary sources unless the candidate explicitly requests maintenance, audit, or reconciliation work.
 
 ---
 

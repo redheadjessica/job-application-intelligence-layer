@@ -11,8 +11,7 @@
      text, or delete the variants you will not use. Keep claims interview-defensible. -->
 
 ## Purpose
-This file holds reusable bio language for cover letters, recruiter outreach, networking messages,
-application free-text fields, speaking/intro blurbs, and profile summaries.
+This file holds reusable bio language for cover letters, recruiter outreach, networking messages, application free-text fields, speaking/intro blurbs, and profile summaries.
 
 Use it to:
 - speed up first drafts
@@ -32,10 +31,7 @@ Use it to:
 
 ## How this file is used (conditional)
 <!-- intake: Keep this note. It documents why the file exists and when it gets pulled in. -->
-This file is **only** consulted during tailoring when a job is flagged `[USE BIO]` (for example, when
-a posting explicitly asks for a cover letter or a written intro). In the default flow, the pipeline
-produces a tailored resume and ignores this file. So fill it in only if you expect to want bio prose;
-otherwise it can stay blank.
+This file is **only** consulted during tailoring when a job is flagged `[USE BIO]` (for example, when a posting explicitly asks for a cover letter or a written intro). In the default flow, the pipeline produces a tailored resume and ignores this file. So fill it in only if you expect to want bio prose; otherwise it can stay blank.
 
 ---
 
@@ -54,12 +50,10 @@ A single, current snapshot of how you want to be positioned in the market right 
 - the strengths you most want emphasized
 - the standout wins you are leading with in outreach
 
-It is a positioning reference, not a verbatim resume block. Translate the strongest ideas here into
-tighter, role-relevant language (backed by the Experience Bank) when writing resumes.
+It is a positioning reference, not a verbatim resume block. Translate the strongest ideas here into tighter, role-relevant language (backed by the Experience Bank) when writing resumes.
 
 ### Current positioning (most up-to-date)
-{{POSITIONING SUMMARY — a short paragraph or two on what you do, what you're looking for, and what
-you most want to be known for. This is the freshest market-facing description of you.}}
+{{POSITIONING SUMMARY — a short paragraph or two on what you do, what you're looking for, and what you most want to be known for. This is the freshest market-facing description of you.}}
 
 #### What I'm known for
 <!-- intake: 4-8 short bullets. Each should be a strength you can defend with a concrete example. -->
@@ -74,14 +68,11 @@ you most want to be known for. This is the freshest market-facing description of
 - {{FLAGSHIP WIN 2 — what + measurable impact}}
 
 #### Connection / outreach signal
-{{OUTREACH SIGNAL — one line on who you'd like to hear from and how, e.g. "If you're building X
-(location or remote), I'd love to connect."}}
+{{OUTREACH SIGNAL — one line on who you'd like to hear from and how, e.g. "If you're building X (location or remote), I'd love to connect."}}
 
 ### Translation notes for other assets
-- **For resumes:** convert "what I'm known for" into evidence-backed strengths; use the Experience
-  Bank for proof.
-- **For cover letters:** open with the mission language plus the 1-2 "known for" themes that best
-  match the role.
+- **For resumes:** convert "what I'm known for" into evidence-backed strengths; use the Experience Bank for proof.
+- **For cover letters:** open with the mission language plus the 1-2 "known for" themes that best match the role.
 - **For recruiter outreach:** opening paragraph plus one or two flagship wins.
 - **For more formal contexts:** keep the substance, reduce any conversational phrasing or emoji.
 
@@ -145,8 +136,7 @@ Use when the audience is more specific than a standard professional introduction
 <!-- intake: OPTIONAL. Add only the audience variants you actually need; delete the others. -->
 
 ### {{AUDIENCE — e.g. Board / Nonprofit}}
-{{AUDIENCE BIO — framed for this audience: emphasize the strengths and credibility that matter to
-them. Add one personal-interest line only if appropriate for the context.}}
+{{AUDIENCE BIO — framed for this audience: emphasize the strengths and credibility that matter to them. Add one personal-interest line only if appropriate for the context.}}
 
 ### {{AUDIENCE — e.g. Community / Founder event}}
 {{AUDIENCE BIO — a warmer, event-context framing.}}
@@ -162,12 +152,10 @@ Use for messages, networking reach-outs, recruiter outreach, and repeatable appl
 <!-- intake: Reusable opening lines so you're not rewriting the same intro every time. -->
 
 ### Cover Letter Starter Framing
-{{COVER-LETTER OPENER — a strong first paragraph you can adapt per role: who you are, headline
-proof, and the through-line of your work.}}
+{{COVER-LETTER OPENER — a strong first paragraph you can adapt per role: who you are, headline proof, and the through-line of your work.}}
 
 ### Recruiter / Networking Intro
-{{RECRUITER OPENER — a compact intro for a DM or reply: role + one flagship win + what you're
-currently looking for.}}
+{{RECRUITER OPENER — a compact intro for a DM or reply: role + one flagship win + what you're currently looking for.}}
 
 ---
 

@@ -1,11 +1,8 @@
 # Resume Index
 
-This file is the **routing layer** for resume selection: it maps role archetypes → which resume base
-to start from → which evidence modules to pull, plus the governance and merge rules that keep the set
-coherent over time.
+This file is the **routing layer** for resume selection: it maps role archetypes → which resume base to start from → which evidence modules to pull, plus the governance and merge rules that keep the set coherent over time.
 
-It is a practical working index, not a perfect historical catalog. Its job is to help you choose the
-best prior resume base quickly and consistently, then know what to graft into it.
+It is a practical working index, not a perfect historical catalog. Its job is to help you choose the best prior resume base quickly and consistently, then know what to graft into it.
 
 Weight **more recent** applications more heavily than older ones. Group your bases by:
 - company type
@@ -29,25 +26,13 @@ Weight **more recent** applications more heavily than older ones. Group your bas
      it's "best for," its summary essence, and its skills lean. Keep 3-8. Evaluate the WHOLE set
      against a target role and pick the strongest strategic match — do NOT auto-default to one. -->
 
-These are your newest completed resumes and the **primary** bases. **Evaluate the whole set** against
-the role and pick the strongest strategic match — do **not** auto-default to any single one. A base is a
-**layout + positioning starting point, not a mandate to keep its bullets** — swap bullets freely to
-build the strongest portfolio. **When you choose, briefly explain why the chosen base is strongest
-versus the other anchors.**
+These are your newest completed resumes and the **primary** bases. **Evaluate the whole set** against the role and pick the strongest strategic match — do **not** auto-default to any single one. A base is a **layout + positioning starting point, not a mandate to keep its bullets** — swap bullets freely to build the strongest portfolio. **When you choose, briefly explain why the chosen base is strongest versus the other anchors.**
 
 ### {{PLACEHOLDER — anchor name, e.g. "Company A — Role/Level (date)"}}
-Base file: `{{PLACEHOLDER — path to your resume base file for this anchor}}`
-**Best for:** {{PLACEHOLDER — the role types / domains this anchor wins}}
-Summary essence: {{PLACEHOLDER — one-line gist of this resume's summary/positioning}}
-Skills lean: {{PLACEHOLDER — the skills line emphasis this base carries}}
-Evidence notes: {{PLACEHOLDER — which experience bullets/modules this base leads with, and any quirks to neutralize when reusing it for a different company}}
+Base file: `{{PLACEHOLDER — path to your resume base file for this anchor}}` **Best for:** {{PLACEHOLDER — the role types / domains this anchor wins}} Summary essence: {{PLACEHOLDER — one-line gist of this resume's summary/positioning}} Skills lean: {{PLACEHOLDER — the skills line emphasis this base carries}} Evidence notes: {{PLACEHOLDER — which experience bullets/modules this base leads with, and any quirks to neutralize when reusing it for a different company}}
 
 ### {{PLACEHOLDER — second anchor name}}
-Base file: `{{PLACEHOLDER — path to your resume base file for this anchor}}`
-**Best for:** {{PLACEHOLDER — the role types / domains this anchor wins}}
-Summary essence: {{PLACEHOLDER — one-line gist}}
-Skills lean: {{PLACEHOLDER — skills line emphasis}}
-Evidence notes: {{PLACEHOLDER — leading modules + reuse caveats}}
+Base file: `{{PLACEHOLDER — path to your resume base file for this anchor}}` **Best for:** {{PLACEHOLDER — the role types / domains this anchor wins}} Summary essence: {{PLACEHOLDER — one-line gist}} Skills lean: {{PLACEHOLDER — skills line emphasis}} Evidence notes: {{PLACEHOLDER — leading modules + reuse caveats}}
 
 <!-- intake: copy the block above for each additional anchor. -->
 
@@ -60,8 +45,7 @@ Evidence notes: {{PLACEHOLDER — leading modules + reuse caveats}}
 
 ## Resume-Base Registry & Governance
 
-This is the formal answer to "which base do I start from, what evidence does it carry, and which older
-resumes should I mine alongside it?" Read it during base selection (Step 5 of the application spec).
+This is the formal answer to "which base do I start from, what evidence does it carry, and which older resumes should I mine alongside it?" Read it during base selection (Step 5 of the application spec).
 
 ### Registry — current bases by role archetype
 
@@ -79,8 +63,7 @@ resumes should I mine alongside it?" Read it during base selection (Step 5 of th
 | **{{PLACEHOLDER — archetype 1, e.g. "0→1 / new products / incubation"}}** | {{PLACEHOLDER — base name + path}} | {{PLACEHOLDER — named modules this base carries}} | {{PLACEHOLDER — older resumes to mine for this archetype}} |
 | **{{PLACEHOLDER — archetype 2, e.g. "growth / engagement / retention"}}** | {{PLACEHOLDER — base name + path}} | {{PLACEHOLDER — named modules this base carries}} | {{PLACEHOLDER — older resumes to mine for this archetype}} |
 
-**Copy-don't-rebuild:** each base above is a finalized résumé; for a matching role, **start by copying
-its file** rather than rebuilding from scratch, then adapt.
+**Copy-don't-rebuild:** each base above is a finalized résumé; for a matching role, **start by copying its file** rather than rebuilding from scratch, then adapt.
 
 ### Canonical wording convergence
 
@@ -101,8 +84,7 @@ If you attach selected writing, links, or portfolio pieces, route them by archet
 - **{{PLACEHOLDER — archetype}}:** + {{PLACEHOLDER — the secondary pieces for that archetype}}
 - **{{PLACEHOLDER — archetype}}:** + {{PLACEHOLDER — the secondary pieces for that archetype}}
 
-Check the dominant flag of the role first when choosing the secondary picks. Still evaluate per role;
-these are observed defaults, not rules.
+Check the dominant flag of the role first when choosing the secondary picks. Still evaluate per role; these are observed defaults, not rules.
 
 ### Older evidence-rich resumes — mine for modules, do NOT use wholesale
 
@@ -111,9 +93,7 @@ these are observed defaults, not rules.
      name the specific MODULE worth pulling. Rule: pull the named module, never copy the whole resume;
      always graft onto a current chassis. -->
 
-These may predate your current framing, but they can contain **stronger role-specific evidence** than
-your newer resumes. Pull the named module; never copy the whole resume. Always graft onto a current
-chassis.
+These may predate your current framing, but they can contain **stronger role-specific evidence** than your newer resumes. Pull the named module; never copy the whole resume. Always graft onto a current chassis.
 
 - **{{PLACEHOLDER — older resume name + path}}** — {{PLACEHOLDER — the specific evidence module worth mining}}
 - **{{PLACEHOLDER — older resume name + path}}** — {{PLACEHOLDER — the specific evidence module worth mining}}
@@ -122,49 +102,28 @@ The named bullet packages for these modules should live in your experience bank 
 
 ### When a completed application becomes a new base (promotion rule)
 
-Promote a finalized application to a **base** only when its **evidence allocation differs materially**
-across your experience modules **for a distinct role archetype** — not when it merely changes the
-summary and a few bullets. The test:
+Promote a finalized application to a **base** only when its **evidence allocation differs materially** across your experience modules **for a distinct role archetype** — not when it merely changes the summary and a few bullets. The test:
 
 > Would a future role of this archetype start meaningfully better from this file than from any existing
 > base?
 
-- **Yes →** register it as the base for that archetype in the table above (point at the real file;
-  document its modules and which older resumes to mine alongside).
-- **No (same archetype, just re-skinned) →** it's an application, not a base. Leave the archetype's
-  base as-is.
+- **Yes →** register it as the base for that archetype in the table above (point at the real file; document its modules and which older resumes to mine alongside).
+- **No (same archetype, just re-skinned) →** it's an application, not a base. Leave the archetype's base as-is.
 
-**A single finalized résumé is enough** (copy-don't-rebuild): promotion is **confirmation-only**, never
-gated on recurrence. The reconcile workflow surfaces base/template candidates (see
-`learning/source-update-queue.md` → "Base / template candidates"); you confirm, then the exact
-finalized file is registered here so future similar roles copy it rather than rebuild.
+**A single finalized résumé is enough** (copy-don't-rebuild): promotion is **confirmation-only**, never gated on recurrence. The reconcile workflow surfaces base/template candidates (see `learning/source-update-queue.md` → "Base / template candidates"); you confirm, then the exact finalized file is registered here so future similar roles copy it rather than rebuild.
 
-**Detection + notify.** The authoritative version of any resume is the **finalized file** you actually
-submitted (it reflects your manual edits, which the agent's draft output does not capture). So: when a
-generated draft's evidence allocation diverges materially from existing bases, the agent should **flag
-it as a new-base candidate** in the run output. The cleanest confirming signal is a **one-line note
-from you when you finalize** ("finalized X — make it the base for archetype Y" or "just an
-application"). Agent-side detection proposes; your one-liner confirms and points at the authoritative
-file.
+**Detection + notify.** The authoritative version of any resume is the **finalized file** you actually submitted (it reflects your manual edits, which the agent's draft output does not capture). So: when a generated draft's evidence allocation diverges materially from existing bases, the agent should **flag it as a new-base candidate** in the run output. The cleanest confirming signal is a **one-line note from you when you finalize** ("finalized X — make it the base for archetype Y" or "just an application"). Agent-side detection proposes; your one-liner confirms and points at the authoritative file.
 
 ### Merge procedure (older evidence + current chassis)
 
 When the strongest evidence for a role lives in an older resume:
 
-1. **Pick the chassis.** Choose the current base for the closest archetype (layout, current
-   summary/positioning wording, factual guardrails, page-two corrections, formatting). This carries
-   current accuracy.
-2. **Identify the role archetype**, then pull the **named evidence modules** from the older resume(s)
-   via `04-experience-bank.md`.
-3. **Graft** the evidence modules into the chassis — keeping the chassis's current summary section,
-   factual guardrails, formatting, and page two.
-4. **Reconcile:** dedupe overlapping bullets, respect space (substitutions not additions), and verify
-   no older factual overreach slipped in (e.g., pre-update wording, named single tools, or stretched
-   claims on a grafted module).
+1. **Pick the chassis.** Choose the current base for the closest archetype (layout, current summary/positioning wording, factual guardrails, page-two corrections, formatting). This carries current accuracy.
+2. **Identify the role archetype**, then pull the **named evidence modules** from the older resume(s) via `04-experience-bank.md`.
+3. **Graft** the evidence modules into the chassis — keeping the chassis's current summary section, factual guardrails, formatting, and page two.
+4. **Reconcile:** dedupe overlapping bullets, respect space (substitutions not additions), and verify no older factual overreach slipped in (e.g., pre-update wording, named single tools, or stretched claims on a grafted module).
 
-The point of the merge procedure: starting only from your most recent resume can produce an
-insufficiently targeted result; the strongest version often emerges after grafting the right older
-evidence module onto a current chassis.
+The point of the merge procedure: starting only from your most recent resume can produce an insufficiently targeted result; the strongest version often emerges after grafting the right older evidence module onto a current chassis.
 
 ---
 
@@ -175,8 +134,7 @@ evidence module onto a current chassis.
      below are a reusable scaffold: replace the example family names with your own clusters, and fill
      each section from your resume history. Keep only the families relevant to your search. -->
 
-Families group your role types into clusters, each with its likely anchor resumes and framing notes.
-Use a family when a role doesn't map cleanly to a single named base in the registry above.
+Families group your role types into clusters, each with its likely anchor resumes and framing notes. Use a family when a role doesn't map cleanly to a single named base in the registry above.
 
 ### Family template (copy per family)
 
@@ -237,9 +195,7 @@ This keeps the resume index useful and flexible without making it overly complex
 
 ## Default Selection Rules
 
-Evaluate the **whole anchor set** — the Primary Named Anchors first, then the family map — and choose
-the best strategic match for the role; **explain why it is strongest versus the alternatives**. Do not
-auto-default to any single resume. A base is a starting point, not a mandate to keep its bullets.
+Evaluate the **whole anchor set** — the Primary Named Anchors first, then the family map — and choose the best strategic match for the role; **explain why it is strongest versus the alternatives**. Do not auto-default to any single resume. A base is a starting point, not a mandate to keep its bullets.
 
 If a role clearly maps to one family, use that family's anchor resume as the starting point.
 

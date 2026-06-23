@@ -1,9 +1,7 @@
 # Skills Reconciliation Rules
 
 ## Purpose
-This process governs how new skills are merged into your canonical skills library
-(`06a-skills-library.md`). It is reusable process discipline — it does not contain any
-candidate's data, only the rules for *how* skill edits get evaluated.
+This process governs how new skills are merged into your canonical skills library (`06a-skills-library.md`). It is reusable process discipline — it does not contain any candidate's data, only the rules for *how* skill edits get evaluated.
 
 ## Core Principle
 The canonical skills library prioritizes:
@@ -57,5 +55,4 @@ For each new skill candidate:
 ## Update Discipline
 - The canonical library should remain stable and intentionally edited.
 - Bulk extracted skills should always be reviewed through these rules first.
-- Prefer recording a candidate (and its disposition) over silently mutating the canonical
-  file unless explicitly instructed to modify the canonical library.
+- Prefer recording a candidate (and its disposition) over silently mutating the canonical file unless explicitly instructed to modify the canonical library.

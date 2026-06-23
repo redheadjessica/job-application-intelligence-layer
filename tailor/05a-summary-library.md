@@ -30,8 +30,7 @@ Append one row per finalized, submitted summary:
 
 - **Application** — company + role (and date), and optionally a short archetype tag for the role type.
 - **Summary** — the exact summary text you submitted.
-- **Notes** — anything worth remembering: which family/closer it adapted from, a phrasing you'd reuse,
-  domain-specific wording, or why you deviated from the menu.
+- **Notes** — anything worth remembering: which family/closer it adapted from, a phrasing you'd reuse, domain-specific wording, or why you deviated from the menu.
 
 | Application | Summary | Notes |
 |-------------|---------|-------|

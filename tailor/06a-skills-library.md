@@ -1,13 +1,8 @@
 # Skills Library — Per-Skill Calibration Notes
 
-This file is the source-of-truth reference for how *your* skills should be represented across
-resumes, cover letters, outreach, and interviews. Unlike `06-skills-quick.md` (the fast lookup
-used during generation), this file holds the longer-form **calibration notes, confidence
-scoring, and assessment history** you build up over time — the nuance about where each skill is
-best used and how strongly you can defend it.
+This file is the source-of-truth reference for how *your* skills should be represented across resumes, cover letters, outreach, and interviews. Unlike `06-skills-quick.md` (the fast lookup used during generation), this file holds the longer-form **calibration notes, confidence scoring, and assessment history** you build up over time — the nuance about where each skill is best used and how strongly you can defend it.
 
-It starts empty. You fill it in as you calibrate, so that the system stops repeating the same
-corrections and stops overstating capabilities you can't defend in an interview.
+It starts empty. You fill it in as you calibrate, so that the system stops repeating the same corrections and stops overstating capabilities you can't defend in an interview.
 
 It is designed to:
 - reduce repeated corrections
@@ -25,23 +20,18 @@ How it relates to the other skills files:
 
 ## Confidence / Placement Model
 
-Calibrate each skill on two axes: **how true / defensible it is** and **where it is best placed**.
-Record each skill into exactly one of these tiers:
+Calibrate each skill on two axes: **how true / defensible it is** and **where it is best placed**. Record each skill into exactly one of these tiers:
 
 - **Resume-Safe** — strong, credible, and appropriate to list on a resume when relevant.
 - **Selective** — real and credible, but only include when the role specifically benefits from it.
-- **Collaborative** — a real capability usually practiced with a partner (e.g. a data partner),
-  so phrasing should avoid implying solo deep specialization.
-- **Conversation-Level** — better used in a cover letter, interview, or strategic conversation
-  than as a core resume skill.
-- **Excluded / Do Not Overclaim** — do not present as direct deep expertise unless explicitly
-  documented with strong proof.
+- **Collaborative** — a real capability usually practiced with a partner (e.g. a data partner), so phrasing should avoid implying solo deep specialization.
+- **Conversation-Level** — better used in a cover letter, interview, or strategic conversation than as a core resume skill.
+- **Excluded / Do Not Overclaim** — do not present as direct deep expertise unless explicitly documented with strong proof.
 
 <!-- intake: these five tiers are referenced by 06c-skills-reconciliation-rules.md. Keep them in sync. -->
 
 ### Core Operating Rule
-Prioritize credibility over breadth. If a skill is technically adjacent but not strongly
-defensible in an interview, do not treat it like a core resume skill.
+Prioritize credibility over breadth. If a skill is technically adjacent but not strongly defensible in an interview, do not treat it like a core resume skill.
 
 ---
 
@@ -51,8 +41,7 @@ For each skill you calibrate, capture a short, consistent record:
 
 - **Skill** — the canonical skill name (match the bank in `06-skills-quick.md`).
 - **Tier** — Resume-Safe / Selective / Collaborative / Conversation-Level / Excluded.
-- **Notes** — when to use it, when to drop it, the strongest framing, and any anchor/proof it
-  depends on (e.g. "only when the JD names it AND a specific bullet supports it").
+- **Notes** — when to use it, when to drop it, the strongest framing, and any anchor/proof it depends on (e.g. "only when the JD names it AND a specific bullet supports it").
 - **Source** — resume-derived / direct calibration / new experience / role-specific positioning.
 - **Last assessed** — the date you last confirmed this calibration.
 

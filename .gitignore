@@ -21,3 +21,6 @@ __READY TO REVIEW/*/
 intake/your-materials/*
 !intake/your-materials/.gitkeep
 intake/resume-assessment.md
+
+# Machine-specific local Claude Code settings (regenerated; never commit)
+.claude/settings.local.json
