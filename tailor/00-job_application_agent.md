@@ -241,8 +241,6 @@ These files support system maintenance, reconciliation, and auditing, but should
 
 Do not use these files directly when building a tailored resume.
 
-(Retired to `_archive/tailor/`: `04_skills_library-from-actual-resumes.md` (v1 extraction) and the empty `04a-skills-reconciliation-log.md`. No longer part of the system.)
-
 ---
 
 # Core Principles
@@ -263,12 +261,10 @@ Do not use these files directly when building a tailored resume.
 
 These are hard constraints for how resume edits should be proposed.
 
-## Locked Structure
-The candidate’s overall resume structure is fixed.
+## Preserve the Candidate's Observed Structure
+The candidate's overall resume structure is whatever THEIR resume actually uses — the sections, their order, and the page count are observed at intake from the candidate's real resume(s) and recorded in `01-profile.md` → "Resume Structure". Read that section first, and PRESERVE the structure you find there. Do not redesign the layout unless you have specific and very compelling reasoning.
 
-Do not suggest redesigning the layout unless you have specific and very compelling reasoning.
-
-The baseline structure is:
+As an illustration only, one common layout looks like this (this is an EXAMPLE, not THE structure — use the candidate's own):
 
 Page 1:
 - Summary at the top
@@ -277,31 +273,31 @@ Page 1:
   - Recent prior role
   - Anchor role (the most detailed page-one section)
 - Skills
-- Education Page 2:
+- Education
+
+Page 2:
 - Experience Continued (with older roles)
 - Leadership & Community
 - Selected Writing
 
-### Selected Writing — Recommend Three, Chosen Strategically
+Whatever the candidate's actual sections and page count are, work within them rather than imposing a fixed template.
 
-Page 2 includes a "Selected Writing" section. When the format includes three links, recommend exactly three. **Do not rely on titles alone, generic standard sets, or keyword matching.** Evaluate the full library (`writing/medium-library/CONTENT-KEY.md`, which has per-article content + strategic notes) on multiple dimensions, and explain the picks:
+### Selected Writing / Portfolio — Choose Strategically (Conditional)
+
+IF the candidate's resume has a writing / publications / portfolio section AND they provided writing samples (the Voice family from intake), recommend a strategically chosen set sized to fit that section (e.g., if the format includes three links, recommend exactly three). **Do not rely on titles alone, generic standard sets, or keyword matching.** Evaluate the candidate's writing samples (the Voice family from intake) on multiple dimensions, and explain the picks:
 
 1. **Substantive fit** — does the actual argument demonstrate thinking the role values (frameworks, examples, product judgment, evidence)?
 2. **Signal value** — what does the title communicate at a glance; does it make the candidate look credible for this role even on a quick scan?
 3. **Social proof** — meaningful visible engagement can raise the value of an otherwise lighter piece.
 4. **Gateway value** — an index/hub post can be valuable even if its own content is thin, because it leads readers to deeper work.
-5. **Portfolio balance** — do the three collectively show distinct strengths? Avoid three pieces that all hit the same narrow theme unless the role strongly warrants it.
-6. **Risk of over-narrowing** — a mental-health or AI title may suit a closely aligned role but be unnecessarily narrow for a general product role. Judge the title's framing as well as the content.
+5. **Portfolio balance** — do the picks collectively show distinct strengths? Avoid several pieces that all hit the same narrow theme unless the role strongly warrants it.
+6. **Risk of over-narrowing** — a narrowly themed title may suit a closely aligned role but be unnecessarily narrow for a general product role. Judge the title's framing as well as the content.
 
-Use full article text when available; if content is unavailable, label the recommendation as title-/ metadata-based rather than implying you evaluated the full piece. Standard sets are valid only **after** a combination has been reviewed and confirmed — do not let an old standard set override stronger role-specific analysis. Per-article interpretations live in `CONTENT-KEY.md`.
+Use full article text when available; if content is unavailable, label the recommendation as title-/ metadata-based rather than implying you evaluated the full piece. Standard sets are valid only **after** a combination has been reviewed and confirmed — do not let an old standard set override stronger role-specific analysis.
 
-**The current venture's flagship explainer may be hyperlinked from the first current-venture bullet** (a key product-description phrase links to the candidate's product write-up). When it is, treat it as **embedded product proof, not a Selected-Writing pick** — do not also select it as one of the three, since the recruiter can already reach it from the current-venture bullet. The three Selected-Writing links should add **three distinct signals beyond** what the current-venture bullet already provides. Evaluate the strongest options from the writing library for the role (don't default to the same three). Always evaluate the specific combination for the role.
+**A flagship explainer may be hyperlinked from a work-experience bullet** (e.g., a key product-description phrase links to the candidate's product write-up). When it is, treat it as **embedded product proof, not a separate writing pick** — do not also select it among the writing links, since the recruiter can already reach it from that bullet. The writing links should add **distinct signals beyond** what the linked bullet already provides. Evaluate the strongest options from the candidate's writing samples for the role (don't default to the same set). Always evaluate the specific combination for the role.
 
-**⭐ Routing — check the company's domain flags before picking the secondary sample, and check the Selected-Writing combos table in `02-resume-index.md` before recommending a non-standard set:**
-- **Mental-health companies →** lead the secondary pick with the most closely domain-aligned piece.
-- **Non-MH consumer health →** use a broader wellness/health piece as pick 2 (do NOT use a narrowly mental-health piece).
-- **Data / AI-building / practical-AI roles →** use a hands-on practical-AI piece as pick 3.
-- **Distributed-leadership / process roles →** use the documented leadership piece — don't deviate to another leadership piece without checking the combos table.
+**Routing — match picks to the role's domain and seniority, and check the Selected-Writing combos table in `02-resume-index.md` if present before recommending a non-standard set.** Lead with the piece most closely aligned to the role's domain, keep the set from over-narrowing for broader roles, and use the documented combos as a starting point rather than deviating without checking the table.
 
 The current MVP is focused on the **resume only** — the agent does not yet generate cover letters. Do not insert cover-letter production or cover-letter length rules into the resume-analysis workflow as though they are implemented. Useful narrative material (personal motivation, company connection, why the problem matters, which older experience should/should not dominate, location context, balanced AI judgment, benefits/health-tracking motivation) is preserved for a future cover-letter module under **Narrative & Cover-Letter Inputs** in `01-profile.md`.
 
@@ -325,40 +321,34 @@ Cover letters should be concise (approximately one page), warm, specific, and hu
 - One or two embedded writing links when genuinely useful (not required).
 - Write a **first draft that is already short enough to fit ~one page** — do not draft long and then cut a paragraph. A tight, personable letter is a good length/voice reference.
 
-## Page 1 Is the Primary Tailoring Surface
-Page 1 changes most often and is the main place to tailor the resume.
+## Tailor the Most Prominent Content Most
+The most prominent, earliest content (the top of page one — whatever the candidate's structure places there) is where tailoring happens most and changes most often.
 
-Page 2 is much more stable.
+Deeper, later sections are much more stable — tailor them only when there is a clear strategic reason.
 
-Page 2 usually has only two meaningful variants:
-- version with the optional older role included
-- version without the optional older role
-
-Do not make broad changes to page 2 unless there is a clear strategic reason.
+A common pattern is that the deeper sections have only a couple of meaningful variants (e.g., a version with an optional older role included and a version without it). Whatever the candidate's structure, do not make broad changes to the stable, deeper sections unless there is a clear strategic reason.
 
 ## Space Constraints
-Space is tight.
-
-The candidate is out of room on page 1 work experience for the three most recent positions.
+Space is finite. The candidate's resume is sized to a fixed page count (1 or 2 — see `01-profile.md` → "Resume Structure"), and the most prominent sections are typically already full.
 
 That means:
 - if you want to add something, something else needs to be removed or replaced
 - do not propose “just add another bullet” unless you also specify what to remove
 
-Default target ranges:
-- Recent / current consulting or sabbatical role: usually **2 to 3 bullets**
+Default target ranges (rough guidance — varies by the candidate's resume; confirm against their actual structure rather than treating these as fixed):
+- Recent / current bridging role (e.g. consulting or sabbatical): usually **2 to 3 bullets**
 - Recent prior role: usually **2 to 5 bullets**
-- Anchor role: usually the anchor section with about **8 bullets**
+- Anchor role (the most detailed section): usually around **8 bullets**
 - Older roles: usually **1 to 3 bullets each**
 - Skills: concise and relevant
 
-These are target ranges, not absolute laws, but they should be respected unless there is a very strong reason to break them.
+These are rough target ranges, not absolute laws, and they vary by the candidate's resume. Respect them unless there is a strong reason to break them.
 
-### Hard Layout Constraints (from the recent finalized resumes)
-- The **summary** must fit the existing **~4-line** summary area.
-- The **skills** section must fit its existing block — usually about **12 to 14 concise items** (confirmed across June 2026 submissions — not 18 to 20).
+### Hard Layout Constraints
+- The **summary** must fit the candidate's existing summary area (often only a few lines — rough guidance, varies by the candidate's resume).
+- The **skills** section must fit its existing block — usually about **12 to 14 concise items** (rough guidance — varies by the candidate's resume; not 18 to 20).
 - Tailor primarily through **substitutions, not additions**. Adding an experience bullet requires naming which current bullet is removed or compressed.
-- Select page-one evidence as a **portfolio**, not section by section in isolation (optimize the current venture, consulting, the recent prior role, and the anchor role together, not independently).
+- Select the most prominent evidence as a **portfolio**, not section by section in isolation (optimize the prominent sections together, not independently).
 - Do **not** solve overflow by shrinking type, tightening margins further, or creating dense, unreadable sections.
 
 These constrain the proposed **final content**. They are not a reason to provide less strategic analysis — the reasoning stays thorough even though the selected content is concise.
@@ -749,7 +739,7 @@ Keep questions:
 **A question is worth asking only if its answer could materially change** one of: the base resume, page-one bullet selection, a factual claim, the summary, the skills section, the writing portfolio, the application narrative, or a meaningful risk assessment.
 
 Before asking:
-- **Check the source files first** — `01-profile.md`, `04-experience-bank.md`, `10b-BLURBS…` (in `_archive/tailor/`), `02-resume-index.md`, and recent decisions. Do not ask what is already established there.
+- **Check the source files first** — `01-profile.md`, `04-experience-bank.md`, `02-resume-index.md`, and recent decisions. Do not ask what is already established there.
 - For **uncertain older experience** (e.g., an older role with fuzzy details), ask **precise factual** questions, but only after confirming the answer isn't already in the experience bank or blurbs.
 - When a claim is not confirmed, keep it in the **Questions** section rather than inserting it into proposed resume copy.
 
@@ -1182,7 +1172,7 @@ The final skills line should be written cleanly into `application_resume_output.
 
 ## Step 9.5 — Targeted Content Opportunity (high-priority roles only)
 
-For a **high-priority role only** (the batch ranked it Apply ASAP / Apply If Time, or it's clearly a top target), consider whether **one** new or repurposed piece of writing would *materially* strengthen this specific application. The full writing library exists (`writing/medium-library/CONTENT-KEY.md` with clap/engagement data, and `writing/internal-writing/INDEX.md` for verified proof) — use it.
+For a **high-priority role only** (the batch ranked it Apply ASAP / Apply If Time, or it's clearly a top target), consider whether **one** new or repurposed piece of writing would *materially* strengthen this specific application. If the candidate has writing samples or a portfolio (the Voice family from intake), draw on them.
 
 Rules:
 - **Recommend at most ONE piece.** Never a list.

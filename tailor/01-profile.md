@@ -366,6 +366,26 @@ Job materials should sound like an experienced {{your discipline}}, not a generi
 
 ---
 
+# Resume Structure
+
+This records the candidate's *actual* resume structure — the sections, in the order they appear, and how many pages the resume runs. The tailoring agent reads this to PRESERVE the candidate's layout instead of imposing a fixed template. It is descriptive (what the resume IS), not aspirational.
+
+**Page count:** {{1 or 2}}
+<!-- intake: state the candidate's real page count. Most resumes are 1 or 2 pages. If versions differ (e.g. a 1-page short form and a 2-page long form), note each and which is the default. -->
+
+**Sections, in order:**
+1. {{first section as it appears — e.g. Summary}} — {{per-section note: what it contains, rough length/bullet range, how often it's tailored, any constraint}}
+2. {{next section — e.g. Work Experience}} — {{per-section note}}
+3. {{next section — e.g. Skills}} — {{per-section note}}
+4. {{next section — e.g. Education}} — {{per-section note}}
+5. {{continue for every section the resume actually has — e.g. Experience Continued / Leadership & Community / Selected Writing / Publications / Projects — and stop where the candidate's resume stops}}
+<!-- intake: list ONLY the sections the candidate's resume actually has, in the real top-to-bottom order, including which page each falls on if the resume is 2 pages. For each, add a short note: typical bullet count or length, whether it's a frequently-tailored surface or a stable one, and any hard space limit (e.g. "Summary fits ~4 lines", "Skills ~12-14 items"). Do not copy someone else's section set — observe this candidate's own. -->
+
+**How this section is filled and maintained:** Intake observes these sections from the candidate's *actual* resume(s) — not from a template or from this file's examples. When the candidate has more than one resume version, intake reconciles the differences across versions (which sections are shared, which are optional, which appear only in a longer variant) and records the reconciled structure here, noting any version-specific variants. Intake may also **suggest adding or dropping a section** when a role clearly warrants it (e.g. adding a Projects or Publications section, or dropping a section that no longer earns its space) — but such a change is a flagged suggestion for the candidate to approve, not a silent edit, and the default is always to preserve the candidate's observed structure.
+<!-- intake: this paragraph is generic guidance and can stay as written. The placeholders above are what you fill from the candidate's real resume(s). -->
+
+---
+
 # Positioning Guardrails
 
 When in doubt:
