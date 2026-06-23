@@ -16,3 +16,8 @@ __READY TO REVIEW/*/
 
 # Logs / temp
 *.log
+
+# Intake — a user's own materials + generated assessment (personal, never commit)
+intake/your-materials/*
+!intake/your-materials/.gitkeep
+intake/resume-assessment.md
