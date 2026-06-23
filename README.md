@@ -1,6 +1,8 @@
-# Job Pipeline — a local AI co-pilot for your job search
+# Job Application Intelligence Layer (JAIL)
 
-This is a run-it-on-your-own-computer pipeline that turns the slog of job-hunting into one smooth flow: it **ranks** job postings against *your* criteria, then **drafts a tailored resume** for the ones worth your time. You stay in control of every word — **it never submits anything for you.**
+*A local, AI-assisted workflow I built during my own job search to rank roles, tailor resumes, maximize impact, and save your sanity — without ever sacrificing truth.*
+
+Applying to jobs shouldn't feel like serving time. **JAIL** helps you review a batch of roles, rank their fit, choose the strongest resume base, and generate tailored notes you can use to finish stronger applications, faster. You stay in control of every word — **it never submits anything for you.**
 
 You run it inside **Claude Code** (Claude that can work with files on your computer). If you've only ever used Claude in a browser, that's fine — this walks you through it.
 
@@ -16,7 +18,7 @@ You run it inside **Claude Code** (Claude that can work with files on your compu
 
 Pick whichever fits you:
 - **Download ZIP** (simplest) — click the green **`Code`** button on this page → **Download ZIP**, then unzip it somewhere you'll find it (your Desktop is fine). Best if you're not into GitHub and just want to try it locally.
-- **Clone** — `git clone https://github.com/redheadjessica/job-pipeline-starter` (or use the GitHub Desktop app). Best if you're comfortable with git and want an easy way to pull future updates.
+- **Clone** — `git clone https://github.com/redheadjessica/job-application-intelligence-layer` (or use the GitHub Desktop app). Best if you're comfortable with git and want an easy way to pull future updates.
 - **Fork** — only if you want your *own* GitHub copy to customize.
 
 Whichever you pick, keep your **real job-search materials private and local** — if you ever fork publicly, don't put your actual resumes, notes, or rankings in it.

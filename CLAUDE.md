@@ -1,4 +1,4 @@
-# AI Job-Search Pipeline
+# Job Application Intelligence Layer (JAIL)
 
 An open-source, run-it-locally pipeline that turns a messy job search into one chained flow: **fetch job posts you provide → vet a batch → tailor the top few → learn from what you submit.** The pipeline does not discover or search for jobs on its own — the user supplies the job URLs/posts.
 
