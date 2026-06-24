@@ -11,16 +11,44 @@ __pycache__/
 # Node
 node_modules/
 
-# Batch run outputs (keep the empty review folder, ignore generated batches)
-__READY TO REVIEW/*/
-
 # Logs / temp
 *.log
 
-# Intake — a user's own materials + generated assessment (personal, never commit)
-intake/your-materials/*
-!intake/your-materials/.gitkeep
-intake/resume-assessment.md
-
 # Machine-specific local Claude Code settings (regenerated; never commit)
 .claude/settings.local.json
+
+# Batch run outputs (keep the empty review folder, ignore generated batches)
+__READY TO REVIEW/*/
+
+# ── Root config: generated instance (by setup/intake). Template is tracked. ──
+jail.config.json
+
+# ── Generated candidate-specific INSTANCES (by /intake or /reconcile). ───────
+#    Templates (*.template.md) are tracked; these bare-name instances are not.
+00-INTAKE/materials-inventory.md
+00-INTAKE/resume-assessment.md
+03-VETTING/01-scoring-card.md
+03-VETTING/02-candidate-profile.md
+04-TAILOR/01-profile.md
+04-TAILOR/02-resume-index.md
+04-TAILOR/03-approved-truths-and-boundary-rules.md
+04-TAILOR/04-experience-bank.md
+04-TAILOR/05-summary-quick.md
+04-TAILOR/05a-summary-library.md
+04-TAILOR/06-skills-quick.md
+04-TAILOR/06a-skills-library.md
+04-TAILOR/10-bio-library.md
+04-TAILOR/learning/learning-ledger.md
+04-TAILOR/learning/source-update-queue.md
+
+# ── Intake materials (personal). Keep the folder + its README tracked. ───────
+00-INTAKE/01-about-you/*
+!00-INTAKE/01-about-you/.gitkeep
+!00-INTAKE/01-about-you/README.md
+00-INTAKE/02-where-you-want-to-go/*
+!00-INTAKE/02-where-you-want-to-go/.gitkeep
+!00-INTAKE/02-where-you-want-to-go/README.md
+
+# ── Submitted-applications archive (personal). Keep the folder tracked. ──────
+05-SUBMITTED-APPLICATIONS/*
+!05-SUBMITTED-APPLICATIONS/.gitkeep

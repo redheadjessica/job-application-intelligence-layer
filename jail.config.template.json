@@ -1,0 +1,18 @@
+{
+  "_README": "Copy to jail.config.json (gitignored); /intake fills it. The engine reads the instance, never this template. Schema finalized in V2B.",
+  "schema_version": 1,
+  "archive": { "path": "05-SUBMITTED-APPLICATIONS", "year_subfolders": true },
+  "comp": { "currency": "USD", "target_base": null, "floor_base": null },
+  "location": {
+    "home_metro": null,
+    "arrangements": {
+      "remote": null,
+      "home_hybrid": null,
+      "home_onsite": null,
+      "other_hybrid": null,
+      "other_onsite": null
+    },
+    "relocate": null
+  },
+  "lanes": []
+}

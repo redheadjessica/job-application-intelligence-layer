@@ -2,7 +2,7 @@
 
 <!--
   TEMPLATE — the /intake skill fills this in from your resume + a few questions, then writes
-  the finished copy to:  vetting/02-candidate-profile.md  (which is what the engine reads,
+  the finished copy to:  03-VETTING/02-candidate-profile.md  (which is what the engine reads,
   alongside 01-scoring-card.md).
 
   This file tells the scorer WHO you are, so it can judge Market Perception and Company Style

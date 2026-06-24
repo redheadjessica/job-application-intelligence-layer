@@ -88,7 +88,7 @@ Use for:
 
 Used early, at base selection, before tailoring work experience, summary, or skills.
 
-## `03-current-work-canonical.md` ← read every run
+## `03-approved-truths-and-boundary-rules.md` ← read every run
 The single source of truth for how the candidate's current venture appears on resumes. The current venture is now part of the candidate's **current core story** and should usually appear in applications going forward.
 
 Use for:
@@ -130,7 +130,7 @@ Use for:
 Use `06a-skills-library.md` only for full calibration notes, assessment history, or maintenance work. Do not read it during standard generation runs.
 
 ## `10-bio-library.md`
-*Numbered `10`, not `07`, on purpose: it sits in a separate tier from the `01`–`06` core generation sequence — it is conditional and non-resume (bio prose for cover letters, networking, intros). The post-submission **learning loop** lives in its own subfolder, `tailor/learning/` (the reconcile spec, learning ledger, and source-update queue); those files are maintenance-only and are never read during a generation run.*
+*Numbered `10`, not `07`, on purpose: it sits in a separate tier from the `01`–`06` core generation sequence — it is conditional and non-resume (bio prose for cover letters, networking, intros). The post-submission **learning loop** lives in its own subfolder, `04-TAILOR/learning/` (the reconcile spec, learning ledger, and source-update queue); those files are maintenance-only and are never read during a generation run.*
 
 Do **not** read this during standard resume generation runs. It is long-form narrative context that is rarely needed for resume tailoring, and reading it "just in case" adds latency on every run.
 
@@ -372,7 +372,7 @@ The goal is to reduce the candidate’s cognitive load and make editing in their
 
 Résumé-specific reminders that still apply on top of the voice rules:
 - Do not remove metrics unless there is a compelling reason.
-- **Use the canonical adjective for the current venture's product** (defined in the profile); keep summary + current-venture bullets consistent (see `03-current-work-canonical.md`). Guardrails still apply (no scale / revenue / clinical / traction / team claims).
+- **Use the canonical adjective for the current venture's product** (defined in the profile); keep summary + current-venture bullets consistent (see `03-approved-truths-and-boundary-rules.md`). Guardrails still apply (no scale / revenue / clinical / traction / team claims).
 - Avoid invented-sounding skill phrases when standard product language is available; don't imply credentials the candidate lacks (e.g. clinical/psychology).
 - Strong tailoring should still sound like the candidate's actual career, not a rewrite of the job description.
 - Preserve proof density and direct, proof-dense bullets.
@@ -596,7 +596,7 @@ At the start of the workflow, before analysis begins:
 
 `Company - Role - MM-DD-YY`
 
-Use a filesystem-safe, zero-padded `MM-DD-YY` date with hyphens only — never slashes or colons (e.g. `06-02-26`, not `6/2/26` or `6:2:26`). Slashes create unintended nested subfolders. This matches the dated vetting batch folders (`vetting/MM-DD-YY`). Abbreviate `Product Manager` to `PM` and `Vice President` to `VP`.
+Use a filesystem-safe, zero-padded `MM-DD-YY` date with hyphens only — never slashes or colons (e.g. `06-02-26`, not `6/2/26` or `6:2:26`). Slashes create unintended nested subfolders. This matches the dated vetting batch folders (`03-VETTING/MM-DD-YY`). Abbreviate `Product Manager` to `PM` and `Vice President` to `VP`.
 
 5. Move the primary job description PDF and all related supporting PDFs from `00 - Ready To Apply` into the new destination folder.
 6. Use the newly created destination folder as the active job folder for the rest of the workflow.
@@ -665,7 +665,7 @@ Use:
 - `06a-skills-library.md`
 - `06-skills-quick.md` (synonyms map embedded inline)
 - `02-resume-index.md` (if present)
-- `03-current-work-canonical.md`
+- `03-approved-truths-and-boundary-rules.md`
 - relevant prior resume context when available
 
 Identify:
@@ -758,7 +758,7 @@ This step must be done thoughtfully, not mechanically.
 
 Use:
 - `02-resume-index.md` (if present)
-- `03-current-work-canonical.md`
+- `03-approved-truths-and-boundary-rules.md`
 - relevant prior resume context
 - the job analysis
 - the gap detection results
@@ -778,7 +778,7 @@ This balances reuse against genuinely role-specific evidence — avoiding both r
 - Default mentally to the most recent finalized resume as the modern baseline.
 - Still pick the best-fit family anchor for domain and role shape, but treat older, pre-current-venture anchors as a **component library**, not complete final sources.
 - Whatever base is chosen, plan to **include the current venture** (its own section) unless there is a very strong reason not to. Note in the recommendation which positioning mode the current venture will use.
-- **⭐ If you choose an older base** that predates the latest current-venture wording, **refreshing the current-venture section to the current canonical is a REQUIRED step, not optional** — those bases may carry stale wording (e.g. an outdated stage label, outdated phrasing, past-tense bullets). Open `03-current-work-canonical.md` and use the current canonical bullet forms (present tense, the current stage label, the current canonical phrasing) before drafting. (Stale current-venture wording has shipped before because this refresh was treated as optional.)
+- **⭐ If you choose an older base** that predates the latest current-venture wording, **refreshing the current-venture section to the current canonical is a REQUIRED step, not optional** — those bases may carry stale wording (e.g. an outdated stage label, outdated phrasing, past-tense bullets). Open `03-approved-truths-and-boundary-rules.md` and use the current canonical bullet forms (present tense, the current stage label, the current canonical phrasing) before drafting. (Stale current-venture wording has shipped before because this refresh was treated as optional.)
 
 When selecting the base:
 - compare the most relevant family options, not just the first listed anchor
@@ -951,14 +951,14 @@ Tailoring guidance:
 
 ## Current-Venture Section Guidance
 
-The current venture is current core work and usually appears as its own section, but it is **not a protected two- or three-bullet block** — it competes for page-one space with consulting, the recent prior role, the anchor role, and every other experience. Full policy: `03-current-work-canonical.md`.
+The current venture is current core work and usually appears as its own section, but it is **not a protected two- or three-bullet block** — it competes for page-one space with consulting, the recent prior role, the anchor role, and every other experience. Full policy: `03-approved-truths-and-boundary-rules.md`.
 
-- **Header:** `Founder & Product Lead @ {{CURRENT_VENTURE}} ({{STAGE_LABEL}}) • {{YEARS}}`. Approved bullets and the stage-label claim boundary live in `03-current-work-canonical.md` / `04-experience-bank.md`. Do **not** use a stage label that overstates maturity.
+- **Header:** `Founder & Product Lead @ {{CURRENT_VENTURE}} ({{STAGE_LABEL}}) • {{YEARS}}`. Approved bullets and the stage-label claim boundary live in `03-approved-truths-and-boundary-rules.md` / `04-experience-bank.md`. Do **not** use a stage label that overstates maturity.
 - **Bullet count is role-by-role.** Ask: across every credible page-one bullet, which combination gives THIS employer the strongest evidence for THIS role? Three bullets for closely AI-supported-MH / personal-growth / behavior-change / AI-companion roles; one or two for broader consumer / AI / healthcare / early-stage; **one concise bullet** for benefits / collaboration / enterprise / operating-leadership roles where the anchor role, the recent prior role, or consulting is stronger. Do not default mechanically to two or three.
 - **State the opportunity cost.** When you pick a count, say what the anchor role / recent prior role / consulting could gain from the recovered space and why the chosen allocation is the strongest portfolio.
 - **Positioning mode by role:** mission-aligned (lead with growth/support, longitudinal pattern recognition, trust-sensitive design, follow-through, model bullet for journey roles); AI-forward (lead with hands-on AI building, strategy/experience design, context-aware personalization); traditional/non-mission (one compact bullet; do NOT force mental-health adjacency — let the current venture show AI building, 0→1, personalization, systems/model design, or founder ownership as the role values).
 - **Recompose approved descriptors only.** No new factual claims; any net-new bullet is **Suggested New** and must be interview-defensible.
-- **Make room** (when the current venture earns it): compress Consultant first, then generic cross-functional bullets, then lower-priority recent-role bullets, then redundant phrasing. Keep page 2 stable. (Full logic: `03-current-work-canonical.md`.)
+- **Make room** (when the current venture earns it): compress Consultant first, then generic cross-functional bullets, then lower-priority recent-role bullets, then redundant phrasing. Keep page 2 stable. (Full logic: `03-approved-truths-and-boundary-rules.md`.)
 
 ## Consulting / Sabbatical Section Guidance
 
@@ -1236,7 +1236,7 @@ Adjust emphasis based on the target role.
 
 ## For Mental Health / Healthcare Roles
 Prioritize:
-- the current venture in mission-aligned mode (behavior change, trust-sensitive UX, AI-powered support) — see `03-current-work-canonical.md`
+- the current venture in mission-aligned mode (behavior change, trust-sensitive UX, AI-powered support) — see `03-approved-truths-and-boundary-rules.md`
 - healthcare-related experience
 - patient / provider workflows
 - trust, reliability, clarity
@@ -1276,7 +1276,7 @@ Prioritize:
 
 ## For AI / Innovation / New Product Roles
 Prioritize:
-- the current venture in AI-forward mode (hands-on AI product building, prototyping with AI tools) — see `03-current-work-canonical.md`
+- the current venture in AI-forward mode (hands-on AI product building, prototyping with AI tools) — see `03-approved-truths-and-boundary-rules.md`
 - experimentation
 - ambiguity navigation
 - 0→1 thinking
@@ -1369,7 +1369,7 @@ Optional suggestions for updating:
 - synonyms map
 - profile notes
 - summary library
-- the canonical current-venture section (`03-current-work-canonical.md`) — only as a flagged suggestion if a new current-venture development would materially improve fit; never silently rewrite the approved wording
+- the canonical current-venture section (`03-approved-truths-and-boundary-rules.md`) — only as a flagged suggestion if a new current-venture development would materially improve fit; never silently rewrite the approved wording
 - other reusable system knowledge
 
 Only include this when it would reduce future repetition.
@@ -1398,7 +1398,7 @@ At the start of every run, read these six core knowledge files in a single paral
 
 1. `01-profile.md`
 2. `02-resume-index.md`
-3. `03-current-work-canonical.md` (current-venture default-inclusion policy + canonical wording)
+3. `03-approved-truths-and-boundary-rules.md` (current-venture default-inclusion policy + canonical wording)
 4. `04-experience-bank.md`
 5. `05-summary-quick.md`
 6. `06-skills-quick.md` (synonyms map embedded inline)

@@ -31,7 +31,7 @@ The more *relevant* material they share, the better the setup. But it has to sta
 
 **The hard rule:** a job description counts as *fact* only for a role the person tells you they **held**. Every other JD is *direction only*. Confirm which is which before you use any of them — never guess, because guessing here means inventing experience.
 
-**Not part of intake:** the jobs they're vetting tonight. Those barely-looked-at links (often just a title-and-company glance) live in `inbox/tonight-urls.txt` and get *scored* by the pipeline — infer nothing about the person from them. Keep them out of intake.
+**Not part of intake:** the jobs they're vetting tonight. Those barely-looked-at links (often just a title-and-company glance) live in `01-INBOX/paste-job-urls-to-rank-here.txt` and get *scored* by the pipeline — infer nothing about the person from them. Keep them out of intake.
 
 ## Bringing it in — whatever's easiest for them
 
@@ -39,8 +39,8 @@ Offer all of these and meet them where they are; moving files around is the hard
 
 - **Paste or attach right here in the chat.** The simplest path — no files to move. Make this the default suggestion.
 - **Point me at a folder they already keep** (e.g. an existing resume folder). Read it **read-only** — never move, rename, or edit their files.
-- **Drop files into `intake/your-materials/`.**
-- **Give me URLs** for public writing or a portfolio — fetch them with the prep fetcher (`prep/prep_job_urls.py` and friends are built to pull public pages).
+- **Drop files into the intake folders:** evidence about them in `00-INTAKE/01-about-you/`; roles they're aiming for in `00-INTAKE/02-where-you-want-to-go/` (direction only).
+- **Give me URLs** for public writing or a portfolio — fetch them with the prep fetcher (`02-PREP/prep_job_urls.py` and friends are built to pull public pages).
 - **LinkedIn:** you can't reliably pull a profile (LinkedIn blocks profile scraping). So *help them export it*: on their profile, **More → Save to PDF**, or **Settings → Get a copy of your data** — then share that file. Walk them through it; don't just tell them to paste.
 
 ## Making sense of it
@@ -52,15 +52,15 @@ Offer all of these and meet them where they are; moving files around is the hard
 
 ## Files you will generate
 
-Each ships as a blank template full of `{{PLACEHOLDERS}}` and `<!-- intake: ... -->` guidance. **Read the template first, then fill it in place** — follow its structure, don't invent your own.
+Each candidate file ships as a tracked **`*.template.md`** full of `{{PLACEHOLDERS}}` and `<!-- intake: ... -->` guidance. **Read the `*.template.md`, then write the filled result to the matching instance file — the bare `.md`, which is gitignored.** Follow the template's structure (don't invent your own), and never edit the template in place. The paths listed below are the **instance** files to write.
 
-**Tier 1 (vetting):** `vetting/01-scoring-card.md` (their rubric — 4 factors + weights + 1–2 custom factors) and `vetting/02-candidate-profile.md` (who they are, priority lanes, practical constraints).
+**Tier 1 (vetting):** `03-VETTING/01-scoring-card.md` (their rubric — 4 factors + weights + 1–2 custom factors) and `03-VETTING/02-candidate-profile.md` (who they are, priority lanes, practical constraints).
 
-**Tier 2 (tailoring):** `tailor/01-profile.md` (positioning, voice, domains, strengths/gaps, claim boundaries), `tailor/02-resume-index.md` (their resume base(s) and routing), `tailor/04-experience-bank.md` (per-role proof points, bullets, metrics), and `tailor/03-current-work-canonical.md` only if they have a current venture/role to position (optional).
+**Tier 2 (tailoring):** `04-TAILOR/01-profile.md` (positioning, voice, domains, strengths/gaps, claim boundaries), `04-TAILOR/02-resume-index.md` (their resume base(s) and routing), `04-TAILOR/04-experience-bank.md` (per-role proof points, bullets, metrics), and `04-TAILOR/03-approved-truths-and-boundary-rules.md` only if they have a current venture/role to position (optional).
 
-**Leave these as-is** — they grow later (post-submission) or are generic guidance: `tailor/05-summary-quick.md`, `tailor/05a-summary-library.md`, `tailor/06-skills-quick.md`, `tailor/06a-skills-library.md`, `tailor/10-bio-library.md`, and everything in `tailor/learning/`.
+**Leave these as-is** — they grow later (post-submission) or are generic guidance: `04-TAILOR/05-summary-quick.md`, `04-TAILOR/05a-summary-library.md`, `04-TAILOR/06-skills-quick.md`, `04-TAILOR/06a-skills-library.md`, `04-TAILOR/10-bio-library.md`, and everything in `04-TAILOR/learning/`.
 
-Also write **`intake/resume-assessment.md`** — your honest read on their materials (shape at the end).
+Also write **`00-INTAKE/resume-assessment.md`** — your honest read on their materials (shape at the end).
 
 ## The flow
 
@@ -94,13 +94,13 @@ Put their self-rating next to your read and deliver it straight. **Unhappy + you
 
 ### Step 6 — Generate the Tier-1 files
 
-Read each Tier-1 template, then fill it from the synthesized picture + their answers: `vetting/01-scoring-card.md` and `vetting/02-candidate-profile.md`. Use only defensible content. Then **show them what you understood**, in plain English — their lanes, constraints, the shape of their profile — and invite corrections: "Here's how I've set you up. Fix anything that doesn't sound like you." Trust gets set here, before they ever read a ranking.
+Read each Tier-1 template, then fill it from the synthesized picture + their answers: `03-VETTING/01-scoring-card.md` and `03-VETTING/02-candidate-profile.md`. Use only defensible content. Then **show them what you understood**, in plain English — their lanes, constraints, the shape of their profile — and invite corrections: "Here's how I've set you up. Fix anything that doesn't sound like you." Trust gets set here, before they ever read a ranking.
 
-**Checkpoint:** they can now run a vetting batch (`python vetting/new_batch.py <MM-DD-YY>`, fetch some job URLs, then `run-batch {folder: ...}`). Offer to continue to Tier 2 now, or let them stop here.
+**Checkpoint:** they can now run a vetting batch (`python 03-VETTING/new_batch.py <MM-DD-YY>`, fetch some job URLs, then `run-batch {folder: ...}`). Offer to continue to Tier 2 now, or let them stop here.
 
 ### Step 7 — Tier 2: deepen and mine for proof
 
-If they continue, go deeper for tailoring. This is where the honest read becomes a better resume — **truthfully**. Build **`tailor/04-experience-bank.md`**: one block per role, with their real bullets and metrics; where a bullet lacks an outcome, **mine** for it ("You led [X] — what actually happened? Any number you'd defend in an interview?"), prioritizing the **3–4 highest-impact gaps** rather than every line — and if a number genuinely doesn't exist, leave the bullet honest and unquantified, never invented. Held-role JDs help you phrase what they really did; reaching-for JDs do not. Capture **voice** (from their writing / how they talk about their work), **claim boundaries** (anything they must NOT overclaim — a stealth startup, a title nuance, an NDA project), and their **resume structure** (the sections and order you observed, reconciled across versions — flag any section worth adding or dropping) into **`tailor/01-profile.md`**. Set up **`tailor/02-resume-index.md`** with the resume base(s) they actually have — the more they shared, the richer this is; register what exists, and over time (via the reconcile step) their best submitted resumes become new archetype bases. If they have a current venture/role worth consistent wording + claim boundaries, fill **`tailor/03-current-work-canonical.md`**; otherwise tell them it's optional and skip it.
+If they continue, go deeper for tailoring. This is where the honest read becomes a better resume — **truthfully**. Build **`04-TAILOR/04-experience-bank.md`**: one block per role, with their real bullets and metrics; where a bullet lacks an outcome, **mine** for it ("You led [X] — what actually happened? Any number you'd defend in an interview?"), prioritizing the **3–4 highest-impact gaps** rather than every line — and if a number genuinely doesn't exist, leave the bullet honest and unquantified, never invented. Held-role JDs help you phrase what they really did; reaching-for JDs do not. Capture **voice** (from their writing / how they talk about their work), **claim boundaries** (anything they must NOT overclaim — a stealth startup, a title nuance, an NDA project), and their **resume structure** (the sections and order you observed, reconciled across versions — flag any section worth adding or dropping) into **`04-TAILOR/01-profile.md`**. Set up **`04-TAILOR/02-resume-index.md`** with the resume base(s) they actually have — the more they shared, the richer this is; register what exists, and over time (via the reconcile step) their best submitted resumes become new archetype bases. If they have a current venture/role worth consistent wording + claim boundaries, fill **`04-TAILOR/03-approved-truths-and-boundary-rules.md`**; otherwise tell them it's optional and skip it.
 
 ### Step 8 — Generate the Tier-2 files and wrap
 

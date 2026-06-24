@@ -1,3 +1,5 @@
+> **V2 migration note:** this file was renamed to `03-approved-truths-and-boundary-rules.template.md` as part of the V2 folder architecture. Its contents still reflect the older "current-work-canonical" structure and will be narrowed/re-scoped — into general *approved truths & boundary rules* (what's safe to say, what needs evidence, what the model must not overstate/imply/invent or keep repeating after you correct it), not a current-venture-only file — in a later V2 unit. Until then, treat it as the claim-boundaries source it has always been.
+
 # Current Work — Canonical Narrative & Claim Boundaries
 
 > **OPTIONAL — only fill this in if you have a current company, project, or role you want the

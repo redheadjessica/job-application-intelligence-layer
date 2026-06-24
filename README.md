@@ -51,8 +51,8 @@ Type **`/intake`** and follow along. Share your resume whatever way's easiest �
 
 ### 6. Add a few jobs, then rank + tailor
 
-Open **`inbox/tonight-urls.txt`** and paste in a handful of job-posting links, one per line — even ones you've only glanced at. Then tell Claude: **"Start today's batch from my inbox and tailor my top job."**
-*(Savvy: `python vetting/new_batch.py <today as MM-DD-YY>`, run the fetch command it prints, then `/run-batch {folder: "__READY TO REVIEW/<MM-DD-YY>", tailor: true, topN: 1}`.)*
+Open **`01-INBOX/paste-job-urls-to-rank-here.txt`** and paste in a handful of job-posting links, one per line — even ones you've only glanced at. Then tell Claude: **"Start today's batch from my inbox and tailor my top job."**
+*(Savvy: `python 03-VETTING/new_batch.py <today as MM-DD-YY>`, run the fetch command it prints, then `/run-batch {folder: "__READY TO REVIEW/<MM-DD-YY>", tailor: true, topN: 1}`.)*
 
 A few minutes later, open **`__READY TO REVIEW/<today's date>/`**:
 - **`1 - Rankings/`** — your jobs scored and sorted, with the reasons why.

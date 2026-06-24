@@ -1,6 +1,6 @@
 export const meta = {
   name: 'reconcile',
-  description: 'Post-application learning: reconcile completed submitted applications (compare the agent\'s recommendation vs the finalized submitted resume), write a per-folder reconcile report, and merge candidate lessons into the learning ledger + source-update queue (tailor/learning/). Never edits canonical generation files. Implements tailor/learning/reconcile-spec.md.',
+  description: 'Post-application learning: reconcile completed submitted applications (compare the agent\'s recommendation vs the finalized submitted resume), write a per-folder reconcile report, and merge candidate lessons into the learning ledger + source-update queue (04-TAILOR/learning/). Never edits canonical generation files. Implements 04-TAILOR/learning/reconcile-spec.md.',
   whenToUse: 'After applications are submitted and moved to your submitted-applications archive. Pass {folders:[...]} for an explicit set, or {archive, limit} to scan for unreconciled folders. Vet/tailor is unrelated.',
   phases: [
     { title: 'Discover', detail: 'find ready, unreconciled submitted-application folders', model: 'haiku' },
@@ -17,10 +17,10 @@ const ARCHIVE = A.archive || ''
 if (!ARCHIVE) throw new Error('Pass {archive: "<path to your submitted-applications folder>"} (optionally with {folders:[...]} or {limit:N}).')
 const FOLDERS = Array.isArray(A.folders) ? A.folders : null   // explicit list (names or abs paths)
 const LIMIT = Number.isInteger(A.limit) ? A.limit : null      // cap when scanning
-const REPO_APP = 'tailor'                                      // learning files live in tailor/learning/ (repo-relative)
+const REPO_APP = '04-TAILOR'                                   // learning files live in 04-TAILOR/learning/ (repo-relative)
 
 // Condensed reconcile rules, inlined so per-folder agents don't each re-read the 200-line spec.
-const RULES = `RECONCILE RULES (condensed from tailor/learning/reconcile-spec.md):
+const RULES = `RECONCILE RULES (condensed from 04-TAILOR/learning/reconcile-spec.md):
 - OBSERVED = fact from comparing the agent's recommendation (.md) vs the FINAL submitted PDF (ground truth): a bullet present in one not the other, a changed word, a different base, a softened/corrected claim, a style edit. State plainly. IGNORE pure formatting / .pages->PDF noise (whitespace, line breaks, glyph/ligature extraction) — semantic content only.
 - INFERRED = a hypothesis about WHY, or a generalizable lesson. ALWAYS label category (routing | missed-evidence | claim-boundary | voice | skills | content) + confidence (high|med|low). NEVER state intent as fact. Observed and inferred never mix.
 - Classification: everything starts as an observation. It becomes a QUESTION when the "why" is ambiguous and the answer changes whether it's a lesson. It becomes a CANDIDATE LEDGER entry when there's a plausible lesson (low bar). It becomes a PROPOSED SOURCE-UPDATE only at the HIGH bar: a specific, named-file edit AND (confirmed by the candidate OR recurs >=2 apps). One-offs are observations/questions, NOT proposed updates.
@@ -158,7 +158,7 @@ const scopeLine = FOLDERS
   : `Scan the archive "${ARCHIVE}" for application folders.${LIMIT ? ` Limit to the ${LIMIT} most recent ready folders.` : ''}`
 
 const discovery = await agent(
-  `You are the discovery step of the reconcile workflow (tailor/learning/reconcile-spec.md §5 readiness).
+  `You are the discovery step of the reconcile workflow (04-TAILOR/learning/reconcile-spec.md §5 readiness).
 
 ${scopeLine}
 
@@ -199,7 +199,7 @@ Read these (all inside that folder; quote paths — they contain spaces/&/parens
 - Agent recommendation: "${f.output_md}"
 - FINAL submitted resume PDF (ground truth): "${f.final_pdf}"
 ${extras}
-You MAY read tailor/02-resume-index.md to identify which resume base was used vs recommended.
+You MAY read 04-TAILOR/02-resume-index.md to identify which resume base was used vs recommended.
 
 Do:
 1. Compare what the agent RECOMMENDED vs what was SUBMITTED, per the rules above (observed vs inferred; ignore formatting noise; check confounds).
@@ -236,7 +236,7 @@ Do, carefully:
 3. Update the ledger's PATTERNS TRACKER: for each recurring lesson, count occurrences across BOTH the new results and existing entries; mark status. A lesson is queue-ready only at >=2 occurrences OR the candidate confirmation (§9).
 4. Update the queue: add or increment proposed source-update items. If a proposal recurs, increment its occurrence count and add the application rather than duplicating. New single-occurrence items go to the queue's watch list. CRITICAL (§9a): the watch list is a DURABLE record, not a holding pen — never drop or treat a single-occurrence item as moot. Frame each as "preserved; promotable now on the candidate's confirmation, or auto-surfaced at a 2nd occurrence." Nothing here is auto-applied; everything awaits human review.
 5. BASE / TEMPLATE CANDIDATES (§9a): collect every result with base_template_candidate.is_candidate=true into the returned base_template_candidates list, and record them in the queue's "Base / template candidates" subsection (copy-don't-rebuild; archetype + recommendation). These are confirmation-only registry additions and are NOT subject to the >=2 gate — surface them clearly for the candidate even at one occurrence.
-6. Do NOT edit any canonical generation file (01-06, resume index, experience bank, summary/skills libraries). Your only writes are the ledger and queue (in tailor/learning/). For the finalized summaries, DO NOT write 05a — instead assemble a ready-to-paste markdown block (one entry per folder, role-archetype labeled, verbatim summary) and return it as new_finalized_summaries_block for human review.
+6. Do NOT edit any canonical generation file (01-06, resume index, experience bank, summary/skills libraries). Your only writes are the ledger and queue (in 04-TAILOR/learning/). For the finalized summaries, DO NOT write 05a — instead assemble a ready-to-paste markdown block (one entry per folder, role-archetype labeled, verbatim summary) and return it as new_finalized_summaries_block for human review.
 7. Keep the ledger and queue tight and honest; flag confounds explicitly.
 
 Write the updated ledger and queue, then return the structured summary.`,

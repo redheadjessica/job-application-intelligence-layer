@@ -79,7 +79,7 @@ occurrence** (§9). One-offs do not appear here.
 
 ---
 
-## 3. `tailor/learning/learning-ledger.md` (global, in the repo)
+## 3. `04-TAILOR/learning/learning-ledger.md` (global, in the repo)
 
 The durable, append-only record of lessons from completed applications. **Keyed by application folder name** so re-runs are idempotent (never double-append the same folder).
 
@@ -109,7 +109,7 @@ Never written from a tailoring draft — only from an archive reconcile. Human-r
 
 ---
 
-## 4. `tailor/learning/source-update-queue.md` (global, in the repo)
+## 4. `04-TAILOR/learning/source-update-queue.md` (global, in the repo)
 
 Proposed canonical edits awaiting human review. **Never auto-applied.**
 

@@ -13,8 +13,8 @@ Every file a run produces lands inside that one dated folder, in three tiers:
 Run this FIRST, then fetch into the source folder, then run the vetting front door.
 It prints the exact next commands to copy-paste.
 
-    python vetting/new_batch.py            # uses today's date
-    python vetting/new_batch.py 06-04-26   # explicit MM-DD-YY
+    python 03-VETTING/new_batch.py            # uses today's date
+    python 03-VETTING/new_batch.py 06-04-26   # explicit MM-DD-YY
 """
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ def main() -> None:
         (review_root / tier).mkdir(parents=True, exist_ok=True)
 
     # Snapshot tonight's URLs from the inbox into the batch (don't clobber an existing snapshot).
-    inbox = REPO_ROOT / "inbox" / "tonight-urls.txt"
+    inbox = REPO_ROOT / "01-INBOX" / "paste-job-urls-to-rank-here.txt"
     urls_dest = review_root / "3 - Source Material" / f"Submitted URLs - {batch}.txt"
     if urls_dest.exists():
         print(f"Note: {urls_dest.name} already present — left as-is.")
@@ -67,9 +67,9 @@ def main() -> None:
     urls_rel = urls_dest.relative_to(REPO_ROOT)
     print("\nNext steps (run from the repo root):")
     print("  # 1) Fetch the job posts into the source folder:")
-    print(f'  .venv/bin/python3 prep/prep_job_urls.py "{src_rel}" --input "{urls_rel}"')
+    print(f'  .venv/bin/python3 02-PREP/prep_job_urls.py "{src_rel}" --input "{urls_rel}"')
     print("  # 2) Re-fetch any that came back nearly empty, with Playwright:")
-    print(f'  .venv/bin/python3 prep/prep_job_urls_playwright.py "{src_rel}" --input "{urls_rel}"')
+    print(f'  .venv/bin/python3 02-PREP/prep_job_urls_playwright.py "{src_rel}" --input "{urls_rel}"')
     print("  # 3) Vet + tailor the top 3:")
     print(f'  run-batch {{folder: "__READY TO REVIEW/{batch}", tailor: true, topN: 3}}')
 

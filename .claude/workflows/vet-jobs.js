@@ -1,7 +1,7 @@
 export const meta = {
   name: 'vet-jobs',
   description: 'Score a dated batch folder of job descriptions in parallel (one agent per job), then assemble CSV + Markdown rankings into that same folder',
-  whenToUse: 'Run a job-vetting batch fast. Pass the batch folder path as args, e.g. {folder: "vetting/06-02-26"}.',
+  whenToUse: 'Run a job-vetting batch fast. Pass the batch folder path as args, e.g. {folder: "03-VETTING/06-02-26"}.',
   phases: [
     { title: 'Discover', detail: 'list job files in the batch folder', model: 'haiku' },
     { title: 'Score', detail: 'one agent per job, scored concurrently', model: 'sonnet' },
@@ -15,16 +15,16 @@ let A = args
 if (typeof A === 'string') { try { A = JSON.parse(A) } catch (_) { /* leave as raw string */ } }
 const FOLDER = (A && typeof A === 'object' && A.folder) ? A.folder : A
 if (!FOLDER || typeof FOLDER !== 'string') {
-  throw new Error('Pass the batch folder path as args, e.g. {folder: "vetting/06-02-26"} or just "vetting/Old Runs/04-09-26".')
+  throw new Error('Pass the batch folder path as args, e.g. {folder: "03-VETTING/06-02-26"} or just "03-VETTING/Old Runs/04-09-26".')
 }
 // Optional: write the rankings somewhere OTHER than the scored folder (e.g. a sibling
 // "1 - Rankings/" tier), and name them after the batch rather than the source subfolder.
 const OUT_DIR = (A && typeof A === 'object' && A.outDir) ? A.outDir : null
 const BATCH_NAME = (A && typeof A === 'object' && A.batchName) ? A.batchName : null
 
-// Rubric + profile live in the vetting/ subfolder of the merged project.
-const RUBRIC = 'vetting/01-scoring-card.md'
-const PROFILE = 'vetting/02-candidate-profile.md'
+// Rubric + profile live in the 03-VETTING/ subfolder of the merged project.
+const RUBRIC = '03-VETTING/01-scoring-card.md'
+const PROFILE = '03-VETTING/02-candidate-profile.md'
 
 // ---- Schemas ----
 const DISCOVER_SCHEMA = {
@@ -120,9 +120,17 @@ const refs = await agent(
 Also extract the FOUR dimension weights from the scoring card's section headers, which look like "(weight: NN%)". Return them as raw percentages in "weights", in the order the dimensions appear: 1st -> weights.desire, 2nd -> weights.market, 3rd -> weights.style, 4th -> weights.practicality (e.g. 35, 30, 20, 15). If the card does not clearly state weights, return 0 for all four.`,
   { phase: 'Discover', model: 'haiku', schema: REFS_SCHEMA, label: 'load rubric+profile' }
 )
+// Required-file guard (V2 template/instance split): the rubric + profile are GENERATED
+// instances produced by /intake, not tracked templates. If they're missing/empty, stop with
+// an actionable message rather than scoring against nothing.
 const haveRefs = !!(refs && refs.rubric && refs.profile)
-const refsBlock = haveRefs
-  ? `Use this rubric and profile (already loaded — do NOT open any other files for these):
+if (!haveRefs) {
+  return {
+    error: "I can't vet yet — your scoring card and candidate profile haven't been generated. They're created when you run /intake. Run /intake first to produce 03-VETTING/01-scoring-card.md and 03-VETTING/02-candidate-profile.md, then re-run this batch.",
+    missing: [RUBRIC, PROFILE].filter((p, i) => !(i === 0 ? (refs && refs.rubric) : (refs && refs.profile))),
+  }
+}
+const refsBlock = `Use this rubric and profile (already loaded — do NOT open any other files for these):
 
 <scoring-card>
 ${refs.rubric}
@@ -131,9 +139,6 @@ ${refs.rubric}
 <profile>
 ${refs.profile}
 </profile>`
-  : `First read these two files (rubric + profile):
-- ${RUBRIC}
-- ${PROFILE}`
 
 // ---- Phase 2: score each job concurrently ----
 phase('Score')
@@ -282,7 +287,7 @@ const XLSX_SCHEMA = {
 const xlsxRes = await agent(
   `Run this EXACT shell command from the project root to build the formatted spreadsheet (it uses the project venv if present, else python3):
 
-PY=".venv/bin/python"; [ -x "$PY" ] || PY="python3"; "$PY" vetting/make_rankings_xlsx.py "${csvPath}" "${xlsxPath}"
+PY=".venv/bin/python"; [ -x "$PY" ] || PY="python3"; "$PY" 03-VETTING/make_rankings_xlsx.py "${csvPath}" "${xlsxPath}"
 
 Do not edit the script. Return ok:true if it printed a "Wrote ..." line with no Python traceback; otherwise ok:false with the error text in message.`,
   { phase: 'Assemble', model: 'haiku', schema: XLSX_SCHEMA, label: 'build xlsx' }

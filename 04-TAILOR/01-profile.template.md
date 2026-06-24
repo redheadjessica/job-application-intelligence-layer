@@ -1,7 +1,7 @@
 # Master Profile
 
 Central source of truth for positioning {{YOUR NAME}} in tailored resumes: role fit, positioning, tone, factual boundaries, and writing constraints.
-<!-- intake: this file is the single source of truth the tailoring agent reads before writing any resume. Fill every placeholder below from your resume, LinkedIn, and your own sense of how you want to come across. The other tailor/ files (experience bank, summary library, any canonical product wording) hold the detail; this file holds the rules. -->
+<!-- intake: this file is the single source of truth the tailoring agent reads before writing any resume. Fill every placeholder below from your resume, LinkedIn, and your own sense of how you want to come across. The other 04-TAILOR/ files (experience bank, summary library, any canonical product wording) hold the detail; this file holds the rules. -->
 
 ---
 
@@ -86,7 +86,7 @@ These are not the default lane but are viable when the company, mission, and sco
 ## Lower-Fit Role Shapes
 - {{a role shape that's a weak fit and usually not worth pursuing}}
 - {{a role shape that's a weak fit}}
-<!-- intake: be honest about what isn't your lane. This keeps the vetting/tailoring from overreaching. -->
+<!-- intake: be honest about what isn't your lane. This keeps the 03-VETTING/tailoring from overreaching. -->
 
 ---
 
