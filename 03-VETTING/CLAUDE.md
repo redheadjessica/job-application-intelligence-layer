@@ -17,5 +17,10 @@ Help the candidate decide which jobs are worth applying to before moving anythin
 - Weight mission/role/craft fit and likely market perception per the scoring card's weights
 - Optimize for high-leverage applications, not maximum volume
 
+## Prep handoff (read before ranking)
+Ranking reads **only** usable job posts from `3 - Source Material/All Job Posts (full text)/`. Prep quarantines thin/questionable fetches into `3 - Source Material/Needs Review/` and failed fetches into `3 - Source Material/Failed/` (siblings, not under the usable folder), so they are **never ranked by default**.
+
+After running prep, read `0 - Prep Report/prep-report.md` and tell the user in plain language: how many usable posts are ready, what was skipped (duplicates), what needs review (thin/failed), where the report is, and whether it's safe to rank now. The machine-readable `0 - Prep Report/prep-manifest.json` is a cross-check, not a ranking dependency. To recover thin/failed posts, re-run the same prep command (it skips already-usable URLs and retries the rest).
+
 ## Personalization
 Everything candidate-specific — lanes, comp floor, location, dealbreakers, strengths/gaps — lives in `02-candidate-profile.md`, with the high/low scoring signals in `01-scoring-card.md`. Both are produced by `/intake`. Keep this file generic: do not hardcode any one person's preferences here.

@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Scaffold a fresh review batch under __READY TO REVIEW/<MM-DD-YY>/.
 
-Every file a run produces lands inside that one dated folder, in three tiers:
+Every file a run produces lands inside that one dated folder:
 
     __READY TO REVIEW/<batch>/
+      0 - Prep Report/                   <- prep-report.md + prep-manifest.json
       1 - Rankings/                      <- vet-jobs writes the CSV/MD/XLSX here
       2 - Tailored Resumes/              <- one folder per tailored job
       3 - Source Material/
-        All Job Posts (full text)/       <- fetch the job .txt files into here
-        Submitted URLs - <batch>.txt     <- snapshot of the night's inbox URLs
+        All Job Posts (full text)/       <- USABLE job posts (ranking reads here)
+        Needs Review/                    <- thin/questionable fetches (quarantined)
+        Failed/                          <- failed-fetch stubs
+        Submitted URLs - <batch>.txt     <- snapshot of the inbox URLs
 
 Run this FIRST, then fetch into the source folder, then run the vetting front door.
 It prints the exact next commands to copy-paste.
@@ -26,7 +29,15 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SRC_SUBPATH = "3 - Source Material/All Job Posts (full text)"
-TIERS = ("1 - Rankings", "2 - Tailored Resumes", "3 - Source Material", SRC_SUBPATH)
+TIERS = (
+    "0 - Prep Report",
+    "1 - Rankings",
+    "2 - Tailored Resumes",
+    "3 - Source Material",
+    SRC_SUBPATH,
+    "3 - Source Material/Needs Review",
+    "3 - Source Material/Failed",
+)
 
 
 def resolve_batch(arg: str | None) -> str:
@@ -66,12 +77,14 @@ def main() -> None:
     src_rel = src.relative_to(REPO_ROOT)
     urls_rel = urls_dest.relative_to(REPO_ROOT)
     print("\nNext steps (run from the repo root):")
-    print("  # 1) Fetch the job posts into the source folder:")
+    print("  # 1) Fetch the job posts (dedupes, quarantines thin/failed, writes a prep report):")
     print(f'  .venv/bin/python3 02-PREP/prep_job_urls.py "{src_rel}" --input "{urls_rel}"')
-    print("  # 2) Re-fetch any that came back nearly empty, with Playwright:")
-    print(f'  .venv/bin/python3 02-PREP/prep_job_urls_playwright.py "{src_rel}" --input "{urls_rel}"')
-    print("  # 3) Vet + tailor the top 3:")
+    print('  #    then read "0 - Prep Report/prep-report.md" for a plain-English summary.')
+    print('  #    Re-run the same command anytime to retry thin/failed posts (usable ones are skipped).')
+    print("  # 2) Vet + tailor the top 3:")
     print(f'  run-batch {{folder: "__READY TO REVIEW/{batch}", tailor: true, topN: 3}}')
+    print("\n  (Advanced) For stubborn JS-rendered pages that came back thin, retry with the renderer:")
+    print(f'  .venv/bin/python3 02-PREP/prep_job_urls_playwright.py "{src_rel}" --input "{urls_rel}"')
 
 
 if __name__ == "__main__":

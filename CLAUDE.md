@@ -55,7 +55,7 @@ Tailoring always runs the `job-applier` agent in autonomous mode: it never block
 
 ### Where a run writes
 
-Everything a run produces lands in one place: **`__READY TO REVIEW/<batch>/`**, in numbered tiers so the review order is top-down by importance — `0 - Prep Report/` (when there are fetch issues), `1 - Rankings/`, `2 - Tailored Resumes/` (one `Company - Role` folder per tailored job), and `3 - Source Material/` (the fetched job `.txt` files + a snapshot of that batch's URLs). The leading `__` pins the folder to the top of the repo. Nothing is moved after the fact; `02-PREP/`, `03-VETTING/`, `04-TAILOR/` hold only engine code + templates, never run outputs.
+Everything a run produces lands in one place: **`__READY TO REVIEW/<batch>/`**, in numbered tiers so the review order is top-down by importance — `0 - Prep Report/` (prep's `prep-report.md` + `prep-manifest.json`), `1 - Rankings/`, `2 - Tailored Resumes/` (one `Company - Role` folder per tailored job), and `3 - Source Material/` (usable job posts in `All Job Posts (full text)/`; thin/failed quarantined in sibling `Needs Review/` and `Failed/`; plus a snapshot of that batch's URLs). The leading `__` pins the folder to the top of the repo. Nothing is moved after the fact; `02-PREP/`, `03-VETTING/`, `04-TAILOR/` hold only engine code + templates, never run outputs.
 
 ---
 

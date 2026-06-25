@@ -25,7 +25,10 @@ import re
 from typing import Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
-import requests
+try:
+    import requests
+except ImportError:  # the pure URL helpers (ids, company, normalization) don't need it; fetching does
+    requests = None
 
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
