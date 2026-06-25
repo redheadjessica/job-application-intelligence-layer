@@ -114,7 +114,7 @@ Judge the **evidence** against concrete signals: **Positioning · Proof · Burie
 Ask the one-or-several lanes question; infer from their direction materials and confirm. Draft the lane taxonomy (fields above).
 
 ### Step 5 — Ask (sharp, batched)
-Lead with: **"Before I tell you what I see — how do you feel about your resume right now?"** Then batch the Tier-1 gaps the materials can't answer, preferring choices over essays: **priority lanes** (confirm/reorder) · **comp** (target + floor) · **location/workstyle** (remote / city / hybrid; relocate?; hard nos) · **custom factors** (1–2 idiosyncratic must-haves) · **weights** (default 35/30/20/15 across Want-it / Fit / Culture / Practicality). These answers also feed `jail.config.json`.
+Lead with: **"Before I tell you what I see — how do you feel about your resume right now?"** Then batch the Tier-1 gaps the materials can't answer, preferring choices over essays: **priority lanes** (confirm/reorder) · **comp** (target + floor) · **location/workstyle** (home metro + aliases; rate each setup — remote / hybrid-near / onsite-near / hybrid-elsewhere / onsite-elsewhere — as preferred/ok/stretch/no; relocate?; hard nos) · **custom factors** (1–2 idiosyncratic must-haves) · **weights** (default 35/30/20/15 across Want-it / Fit / Culture / Practicality). These answers also feed `jail.config.json`.
 
 ### Step 6 — STAGE the review folder (do NOT write canonical instances yet)
 Create `__READY TO REVIEW/<MM-DD-YY> - Intake Review/` (folder via `date +%m-%d-%y`). Instantiate the review files **from the tracked skeletons in `.claude/skills/intake/review-templates/`** — copy each, then fill it with the actual proposed content for the person. Write all of:
@@ -179,7 +179,7 @@ Generate the instance from `jail.config.template.json`, filling what you learned
 - `approved`: today (`date +%Y-%m-%d`)
 - `archive.path`: where submitted applications will live — default `"05-SUBMITTED-APPLICATIONS"`; ask if they want elsewhere (e.g. a cloud-synced folder). `year_subfolders: true`.
 - `comp`: `currency`, `target_base`, `floor_base` (numbers in thousands; `null` if they won't say).
-- `location`: `home_metro`, `relocate` (`"never"|"exceptional"|"yes"`). Leave `arrangements` ratings `null` (a later unit consumes them) unless the person volunteers them.
+- `location`: `home_metro` (their city) + `home_metro_aliases` (other names for it — e.g. "NYC", "New York", "Manhattan", "Brooklyn"), `relocate` (`"never"|"exceptional"|"yes"`), and the **`arrangements` ratings**: for each of `remote`, `home_hybrid`, `home_onsite`, `other_hybrid`, `other_onsite`, set `preferred` | `ok` | `stretch` | `no` (or `null` only if truly unknown). These drive candidate-relative location coloring in ranking — capture them from the Job Preferences review; don't leave them all null.
 - `lanes`: one `{ "id": "...", "name": "...", "priority": N }` per lane (ids are short kebab-case).
 
 It is valid JSON (no comments) and gitignored. The structured numbers here are the source of truth for later candidate-relative ranking; the prose in the scoring card is the scorer's nuance.

@@ -20,8 +20,15 @@ Every job is rated 0–100 on each, then blended. Weights add to 100.
 ## Comp (also saved to jail.config.json)
 - Target: ~{{target}}k · Floor: ~{{floor}}k {{any exception conditions}}
 
-## Location / workstyle (also saved to jail.config.json)
-- Home base: {{metro}} · Arrangement: {{remote / hybrid / on-site preference}} · Relocate: {{never / for an exceptional role / yes}}
+## Location / workstyle (saved to jail.config.json — drives location coloring in your rankings)
+- **Home metro:** {{your city}}  ·  also goes by: {{NYC, New York, Manhattan, Brooklyn}}
+- **How you feel about each setup** — mark each `preferred` / `ok` / `stretch` / `no`:
+  - Remote: {{preferred}}
+  - Hybrid near me: {{ok}}
+  - Onsite near me: {{stretch}}
+  - Hybrid elsewhere: {{no}}
+  - Onsite elsewhere: {{no}}
+- **Relocation:** {{never / exceptional only / yes}}
 
 ## Dealbreakers (hard nos)
 - {{e.g. no on-site 4+ days; no <industries>; no <role types>}}

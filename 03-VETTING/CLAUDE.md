@@ -24,3 +24,5 @@ After running prep, read `0 - Prep Report/prep-report.md` and tell the user in p
 
 ## Personalization
 Everything candidate-specific — lanes, comp floor, location, dealbreakers, strengths/gaps — lives in `02-candidate-profile.md`, with the high/low scoring signals in `01-scoring-card.md`. Both are produced by `/intake`. Keep this file generic: do not hardcode any one person's preferences here.
+
+Structured numeric preferences (comp target/floor, location arrangement ratings, lanes) live in `jail.config.json` (also from `/intake`). The scorer inlines it as `<preferences>` to sharpen `practicality_score`, and the spreadsheet colors **Comp Fit** / **Location Fit** candidate-relative from it (plus a **Lane Fit** column from the scorer). If the config is missing or partial, those colors fall back to **neutral** and the report says so — never hardcode "remote is green" or a fixed salary tier.
