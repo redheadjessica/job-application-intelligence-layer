@@ -6,8 +6,9 @@
 ## Implementation status
 
 - **Done (V2A · Unit 1 — rename + template/instance split):** numbered folder architecture; `.template.md` / `.template.json` (tracked) vs generated instance files (gitignored); all path references updated; `__READY TO REVIEW` date-shape batch guard; this doc.
-- **Next up (in order):** `05`/`06` quick-reference population through intake; de-Jessica / role-agnostic tailoring cleanup of `04-TAILOR/00-job_application_agent.md`.
-- **Later V2A/B/C units:** intake staging + approval gate; materials-inventory behavior; lane taxonomy behavior; prep reliability; candidate-relative ranking/coloring; archive + reconcile UX; README/public-page + screenshots + diagram.
+- **Done (V2A · Unit 2 — intake source-of-truth lifecycle):** `/intake` rewritten for template → staged review → approval → promotion; first-run vs update mode; materials inventory (families + statuses); basic application lanes (profile + `jail.config` mirror); `jail.config.json` population; `<!-- jail-approved: -->` marker; intake now generates the `05-summary-quick.md` / `06-skills-quick.md` quick-references (fixes the tailoring gap) and a narrow `03-approved-truths-and-boundary-rules.md` instance; tracked review-file skeletons under `.claude/skills/intake/review-templates/`.
+- **Next up (Unit 3):** de-Jessica / role-agnostic cleanup of `04-TAILOR/00-job_application_agent.md`; re-scope the `03` *template* to match the narrow instance intake now generates.
+- **Later V2A/B/C units:** prep reliability; candidate-relative ranking/coloring; archive + reconcile UX; README/public-page + screenshots + diagram.
 
 ---
 
@@ -142,14 +143,12 @@ How boundaries split: **global** career-wide boundaries live in `01-profile.md`;
 ## 12. V2 build units
 
 1. **Rename + template/instance split** (done) — folder/file architecture, tracked templates, gitignored instances, path updates, batch-parse guard, this doc.
-2. **`05`/`06` population** — intake generates the summary/skills quick references it currently expects but doesn't create.
-3. **De-personalize the tailoring brain** — make `00-job_application_agent.md` + `job-applier.md` role-agnostic (remove PM/health/founder/current-venture/person-specific assumptions); re-scope `03` to general approved-truths-and-boundary-rules.
-4. **Lane taxonomy** — one shared lane vocabulary across intake, vetting, the resume index, tailoring, and reconcile.
-5. **Intake staging + approval gate** — staged review folder, first-run/update detection, approved marker, missing-file guards.
-6. **Prep reliability** — dedupe, collision-safe filenames, thin/failed detect, quarantine, manifest, chat summary, retry.
-7. **Candidate-relative ranking** — colorizer reads `jail.config.json` (comp + location), lane-aware ranking, review copy.
-8. **Archive + reconcile UX** — archive config, move-not-copy, readiness check, PDF-missing warning, cadence, workspace-leftover warning.
-9. **Docs + public page** — README/JAIL-page copy, synthetic screenshots, workflow diagram, centralized user-message copy, cover-letter + final-review explainers.
+2. **Intake source-of-truth lifecycle** (done) — `/intake` template → staged review → approval → promotion; first-run vs update; materials inventory; basic application lanes (one shared taxonomy seeded in the profile + `jail.config` mirror); `jail.config` population; approval marker; generates `05`/`06` quick-references (fixes the tailoring gap) + a narrow `03` instance; review-file skeletons.
+3. **De-personalize the tailoring brain** — make `00-job_application_agent.md` + `job-applier.md` role-agnostic (remove PM/health/founder/current-venture/person-specific assumptions); re-scope the `03` *template* to match the narrow instance.
+4. **Prep reliability** — dedupe, collision-safe filenames, thin/failed detect, quarantine, manifest, chat summary, retry.
+5. **Candidate-relative ranking** — colorizer reads `jail.config.json` (comp + location), lane-aware ranking, review copy.
+6. **Archive + reconcile UX** — archive config, move-not-copy, readiness check, PDF-missing warning, cadence, workspace-leftover warning.
+7. **Docs + public page** — README/JAIL-page copy, synthetic screenshots, workflow diagram, centralized user-message copy, cover-letter + final-review explainers.
 
 ## 13. Future roadmap
 

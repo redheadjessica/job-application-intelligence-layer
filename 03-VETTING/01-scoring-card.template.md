@@ -44,3 +44,5 @@
 
 <!-- Scorer note: a bare "Location: <City>" line is usually the company HQ, not a relocation requirement.
      Only treat on-site as a burden when the posting actually requires it (and weigh the day count). -->
+<!-- The structured comp numbers + location/workstyle preferences ALSO live in jail.config.json (the machine-readable
+     source for later candidate-relative ranking/coloring). Intake fills both from the same answers; keep them in sync. -->

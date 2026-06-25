@@ -50,14 +50,26 @@ Use this file when assessing Market Perception and Company Style scores, and to 
 ---
 
 ## Priority Lanes
-<!-- intake: 3–5 named lanes, most-wanted first. Each job gets tagged with the closest lane (or "Outside lanes").
-     These also drive the spreadsheet's category coloring. Derive candidates from the user's domains + interests; confirm order. -->
+<!-- intake: 2–5 named lanes, most-wanted first. Each job gets tagged with the closest lane (or "Outside lanes").
+     These drive the spreadsheet's category coloring AND are the shared lane taxonomy — the id/name/priority of
+     each lane is mirrored in jail.config.json. Derive candidates from the user's domains + reaching-for roles; confirm order.
+     TRUTH FIREWALL: lanes come partly from roles the candidate WANTS — they set direction and scoring, never proof
+     of experience. Copy one block per lane; keep ids stable (jail.config.json mirrors them). -->
 
-1. {{lane 1 — most wanted}}
-2. {{lane 2}}
-3. {{lane 3}}
-4. {{lane 4 (optional)}}
-5. {{lane 5 (optional)}}
+### Lane 1 — {{name}}  ·  priority: 1  ·  id: {{kebab-id}}
+- **Target titles:** {{titles}}
+- **Target industries / company types:** {{...}}
+- **Fits:** {{the role shape / scope / stage that's a strong match}}
+- **Does not fit:** {{the role shape that isn't this lane}}
+- **Preferred resume base:** {{base, or "TBD"}}
+- **Summary / skills emphasis:** {{what to lead with for this lane}}
+- **Notes / tradeoffs:** {{anything to remember}}
+
+### Lane 2 — {{name}}  ·  priority: 2  ·  id: {{kebab-id}}
+{{same fields — copy the block above}}
+
+<!-- Add more lanes as needed (2-4 distinct lanes beat 6 thin ones). -->
+<!-- Lane id mirror for jail.config.json: [{ "id": "...", "name": "...", "priority": 1 }, ...] -->
 
 ---
 
