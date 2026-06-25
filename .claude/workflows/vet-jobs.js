@@ -1,7 +1,7 @@
 export const meta = {
   name: 'vet-jobs',
   description: 'Score a dated batch folder of job descriptions in parallel (one agent per job), then assemble CSV + Markdown rankings into that same folder',
-  whenToUse: 'Run a job-vetting batch fast. Pass the batch folder path as args, e.g. {folder: "vetting/06-02-26"}.',
+  whenToUse: 'Run a job-vetting batch fast. Pass the batch folder path as args, e.g. {folder: "03-VETTING/06-02-26"}.',
   phases: [
     { title: 'Discover', detail: 'list job files in the batch folder', model: 'haiku' },
     { title: 'Score', detail: 'one agent per job, scored concurrently', model: 'sonnet' },
@@ -15,16 +15,16 @@ let A = args
 if (typeof A === 'string') { try { A = JSON.parse(A) } catch (_) { /* leave as raw string */ } }
 const FOLDER = (A && typeof A === 'object' && A.folder) ? A.folder : A
 if (!FOLDER || typeof FOLDER !== 'string') {
-  throw new Error('Pass the batch folder path as args, e.g. {folder: "vetting/06-02-26"} or just "vetting/Old Runs/04-09-26".')
+  throw new Error('Pass the batch folder path as args, e.g. {folder: "03-VETTING/06-02-26"} or just "03-VETTING/Old Runs/04-09-26".')
 }
 // Optional: write the rankings somewhere OTHER than the scored folder (e.g. a sibling
 // "1 - Rankings/" tier), and name them after the batch rather than the source subfolder.
 const OUT_DIR = (A && typeof A === 'object' && A.outDir) ? A.outDir : null
 const BATCH_NAME = (A && typeof A === 'object' && A.batchName) ? A.batchName : null
 
-// Rubric + profile live in the vetting/ subfolder of the merged project.
-const RUBRIC = 'vetting/01-scoring-card.md'
-const PROFILE = 'vetting/02-candidate-profile.md'
+// Rubric + profile live in the 03-VETTING/ subfolder of the merged project.
+const RUBRIC = '03-VETTING/01-scoring-card.md'
+const PROFILE = '03-VETTING/02-candidate-profile.md'
 
 // ---- Schemas ----
 const DISCOVER_SCHEMA = {
@@ -46,6 +46,7 @@ const DISCOVER_SCHEMA = {
         },
       },
     },
+    quarantined: { type: 'integer', description: 'count of thin/failed posts prep quarantined and NOT ranked (sibling "Needs Review/" + "Failed/" file counts, or 0 - Prep Report/prep-manifest.json counts.thin+counts.failed); 0 if none' },
   },
 }
 
@@ -53,7 +54,7 @@ const SCORE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: [
-    'category', 'company', 'title_and_link', 'location', 'comp_range', 'lane',
+    'category', 'company', 'title_and_link', 'location', 'comp_range', 'lane', 'lane_fit',
     'desire_score', 'market_perception_score', 'company_style_score', 'practicality_score',
     'mission_fit_notes', 'scope_fit_notes', 'top_reasons', 'top_concerns',
   ],
@@ -64,6 +65,16 @@ const SCORE_SCHEMA = {
     location: { type: 'string', description: 'Normalized location. RULES: fully remote -> "Remote". Remote but restricted to certain US states -> "Remote (states: CA/NY/TX/...)". In-office/hybrid in NYC -> "IRL NYC - N days" where N is the required in-office days per week if stated, else "unknown days"; append specific days if named, e.g. "IRL NYC - 3 days (Mon/Tue/Thu standard)". In-office elsewhere -> "IRL <City> - N days". Unknown -> "Unknown". ALWAYS use "IRL" (never "Hybrid"). A bare "Location: <City>" line is usually the company HQ, NOT a relocation requirement -> only treat as in-office if the posting actually requires on-site presence; otherwise look for the real workplace type (Remote/Hybrid/On-site) and the exact required day count.' },
     comp_range: { type: 'string', description: 'lowest-highest in thousands, no $ or commas, e.g. 190-210, or ?? if unknown' },
     lane: { type: 'string', description: 'Which of the candidate’s priority lanes (from the profile), or "Outside lanes"' },
+    lane_fit: {
+      type: 'object', additionalProperties: false,
+      required: ['primary_lane', 'secondary_lane', 'confidence', 'note'],
+      properties: {
+        primary_lane: { type: 'string' },
+        secondary_lane: { type: ['string', 'null'] },
+        confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+        note: { type: 'string', description: 'one short phrase on why it fits or does not' },
+      },
+    },
     desire_score: { type: 'integer', minimum: 0, maximum: 100, description: 'How much the candidate would want this job — mission fit, role excitement, domain alignment' },
     market_perception_score: { type: 'integer', minimum: 0, maximum: 100 },
     company_style_score: { type: 'integer', minimum: 0, maximum: 100, description: 'How well the company culture, stage, and working style fit the candidate' },
@@ -85,7 +96,8 @@ Steps:
 2. Job files end in .txt, .md, or .pdf.
 3. EXCLUDE any output/config files: anything ending in "-rankings.csv" or "-rankings.md", the URL list (job_urls.txt or "Submitted URLs*"), and anything named like a rubric/header/agent file (*scoring-card*, *candidate-profile*, csv-header*, *vetting_agent*).
 4. Dedupe: if two files clearly represent the SAME job (same filename stem, differing only by extension), keep only one and prefer .txt, then .md, then .pdf.
-5. Return the absolute folder path as "root" and one entry per distinct job.`,
+5. Return the absolute folder path as "root" and one entry per distinct job.
+6. Quarantine count: if a sibling "Needs Review/" and/or "Failed/" folder exists next to this source folder (under "3 - Source Material/"), OR a "0 - Prep Report/prep-manifest.json" exists in the batch, return the number of thin+failed (quarantined) posts as "quarantined" (count the files in those two folders, or read counts.thin+counts.failed from the manifest). Return 0 if none.`,
   { phase: 'Discover', model: 'haiku', schema: DISCOVER_SCHEMA, label: 'discover files' }
 )
 
@@ -101,6 +113,7 @@ const REFS_SCHEMA = {
   properties: {
     rubric: { type: 'string' },
     profile: { type: 'string' },
+    config: { type: 'string', description: 'Full raw contents of jail.config.json (structured candidate preferences), or "" if the file does not exist' },
     weights: {
       type: 'object', additionalProperties: false,
       required: ['desire', 'market', 'style', 'practicality'],
@@ -113,16 +126,34 @@ const REFS_SCHEMA = {
   },
 }
 const refs = await agent(
-  `Read these two files and return their FULL text verbatim (do not summarize or truncate):
+  `Read these files and return their FULL text verbatim (do not summarize or truncate):
 - ${RUBRIC}  -> field "rubric"
 - ${PROFILE} -> field "profile"
+- jail.config.json -> field "config" (the candidate's structured preferences; if the file does not exist, return "" for config)
 
 Also extract the FOUR dimension weights from the scoring card's section headers, which look like "(weight: NN%)". Return them as raw percentages in "weights", in the order the dimensions appear: 1st -> weights.desire, 2nd -> weights.market, 3rd -> weights.style, 4th -> weights.practicality (e.g. 35, 30, 20, 15). If the card does not clearly state weights, return 0 for all four.`,
   { phase: 'Discover', model: 'haiku', schema: REFS_SCHEMA, label: 'load rubric+profile' }
 )
+// Required-file guard (V2 template/instance split): the rubric + profile are GENERATED
+// instances produced by /intake, not tracked templates. If they're missing/empty, stop with
+// an actionable message rather than scoring against nothing.
 const haveRefs = !!(refs && refs.rubric && refs.profile)
-const refsBlock = haveRefs
-  ? `Use this rubric and profile (already loaded — do NOT open any other files for these):
+if (!haveRefs) {
+  return {
+    error: "I can't vet yet — your scoring card and candidate profile haven't been generated. They're created when you run /intake. Run /intake first to produce 03-VETTING/01-scoring-card.md and 03-VETTING/02-candidate-profile.md, then re-run this batch.",
+    missing: [RUBRIC, PROFILE].filter((p, i) => !(i === 0 ? (refs && refs.rubric) : (refs && refs.profile))),
+  }
+}
+const prefsBlock = (refs && refs.config && refs.config.trim())
+  ? `
+
+<preferences>
+${refs.config}
+</preferences>`
+  : `
+
+<preferences>none generated yet — score comp/location from the profile prose; never invent numbers</preferences>`
+const refsBlock = `Use this rubric, profile, and preferences (already loaded — do NOT open any other files for these):
 
 <scoring-card>
 ${refs.rubric}
@@ -130,10 +161,7 @@ ${refs.rubric}
 
 <profile>
 ${refs.profile}
-</profile>`
-  : `First read these two files (rubric + profile):
-- ${RUBRIC}
-- ${PROFILE}`
+</profile>${prefsBlock}`
 
 // ---- Phase 2: score each job concurrently ----
 phase('Score')
@@ -151,7 +179,7 @@ Scoring rules:
   - desire_score: how much the candidate would want this role — mission fit, role excitement, domain alignment, personal pull.
   - market_perception_score: how strong a candidate they would appear to this employer — experience match, credibility, likely recruiter reaction.
   - company_style_score: how well the company culture, stage, and working style fit the candidate.
-  - practicality_score: how livable/practical the job is — comp relative to the candidate's targets, location/remote fit, logistics, quality of life.
+  - practicality_score: how livable/practical the job is — comp relative to the candidate's targets, location/remote fit, logistics, quality of life. Use the <preferences> block (comp target/floor, location arrangement ratings) when present to sharpen this; if preferences are absent, fall back to the profile prose. Preferences inform — they do not override the full rubric/profile.
 - Do NOT compute the final score or status — that is handled downstream. Just return the four sub-scores and the fields below.
 - Be decisive. Don't over-index on title. Reflect comp/location tradeoffs in practicality_score, not by skipping.
 - comp_range: lowest-highest base across all bands shown, in whole thousands, no $ or commas (e.g. 190-210); "??" if unknown.
@@ -159,6 +187,7 @@ Scoring rules:
 - category: most specific fit from the candidate's priority-lane taxonomy (see profile); use a broad lane only if the subcategory is unclear.
 - title_and_link: "Role Title | URL" if a URL is present, else just the title.
 - lane: which of the candidate's priority lanes it fits, or "Outside lanes".
+- lane_fit: { primary_lane, secondary_lane (or null), confidence ("high"/"medium"/"low"), note (one short phrase on why it fits or not) }. Pick from the candidate's priority lanes in the profile. If outside all lanes, primary_lane = "Outside lanes". Do NOT inflate the fit — it is surfaced for the candidate, not added to the score.
 - mission_fit_notes / scope_fit_notes: one tight phrase each.
 - top_reasons / top_concerns: semicolon-separated phrases, concise and concrete.
 - If PDF extraction is imperfect, make a best effort and note it in scope_fit_notes; do not fail.`,
@@ -213,12 +242,13 @@ function csvCell(v) {
   const s = (v === undefined || v === null) ? '' : String(v)
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
 }
-const HEADER = 'Status?,Category,Company,Job Post Title + Link,Location?,Comp Range,lane,desire_score,market_perception_score,company_style_score,practicality_score,final_score,mission_fit_notes,scope_fit_notes,top_reasons,top_concerns,job_file'
+const HEADER = 'Status?,Category,Company,Job Post Title + Link,Location?,Comp Range,lane,Lane Fit,desire_score,market_perception_score,company_style_score,practicality_score,final_score,mission_fit_notes,scope_fit_notes,top_reasons,top_concerns,job_file'
+const laneFitStr = (lf) => lf ? `${lf.primary_lane} (${lf.confidence})${lf.secondary_lane ? ' · +' + lf.secondary_lane : ''}` : ''
 const csvLines = [HEADER]
 for (const r of rows) {
   csvLines.push([
     r.status, r.category, r.company, r.title_and_link, r.location, r.comp_range,
-    r.lane, r.desire_score, r.market_perception_score, r.company_style_score, r.practicality_score,
+    r.lane, laneFitStr(r.lane_fit), r.desire_score, r.market_perception_score, r.company_style_score, r.practicality_score,
     r.final_score, r.mission_fit_notes, r.scope_fit_notes,
     r.top_reasons, r.top_concerns, r.job_file,
   ].map(csvCell).join(','))
@@ -226,13 +256,15 @@ for (const r of rows) {
 const csvContent = csvLines.join('\n') + '\n'
 
 // ---- Build Markdown (sorted desc) ----
-const mdParts = [`# Job Rankings\n\n${rows.length} jobs scored, highest priority first.\n`]
+const quarantinedN = (discovery && discovery.quarantined) || 0
+const qNote = quarantinedN > 0 ? `> Note: ${quarantinedN} thin/failed post(s) were quarantined by prep and were NOT ranked (see "0 - Prep Report/"). Only usable posts are ranked below.\n` : ''
+const mdParts = [`# Job Rankings\n\n${rows.length} jobs scored, highest priority first.\n${qNote}`]
 for (const r of rows) {
   mdParts.push(
 `## ${r.final_score} — ${r.company}: ${r.title_and_link.split(' | ')[0]}
 
 - **Status:** ${r.status}
-- **Category:** ${r.category}  |  **Lane:** ${r.lane}
+- **Category:** ${r.category}  |  **Lane:** ${r.lane}  |  **Lane fit:** ${laneFitStr(r.lane_fit)}
 - **Location:** ${r.location}  |  **Comp:** ${r.comp_range}
 - **Scores:** Desire ${r.desire_score} / Market ${r.market_perception_score} / Style ${r.company_style_score} / Practicality ${r.practicality_score} → **Final ${r.final_score}**
 - **Mission fit:** ${r.mission_fit_notes}
@@ -282,7 +314,7 @@ const XLSX_SCHEMA = {
 const xlsxRes = await agent(
   `Run this EXACT shell command from the project root to build the formatted spreadsheet (it uses the project venv if present, else python3):
 
-PY=".venv/bin/python"; [ -x "$PY" ] || PY="python3"; "$PY" vetting/make_rankings_xlsx.py "${csvPath}" "${xlsxPath}"
+PY=".venv/bin/python"; [ -x "$PY" ] || PY="python3"; "$PY" 03-VETTING/make_rankings_xlsx.py "${csvPath}" "${xlsxPath}" --config jail.config.json --quarantined ${quarantinedN}
 
 Do not edit the script. Return ok:true if it printed a "Wrote ..." line with no Python traceback; otherwise ok:false with the error text in message.`,
   { phase: 'Assemble', model: 'haiku', schema: XLSX_SCHEMA, label: 'build xlsx' }
@@ -291,6 +323,7 @@ Do not edit the script. Return ok:true if it printed a "Wrote ..." line with no 
 return {
   folder: discovery.root,
   jobs_scored: rows.length,
+  quarantined: quarantinedN,
   csv: csvPath,
   markdown: mdPath,
   xlsx: (xlsxRes && xlsxRes.ok) ? xlsxPath : null,

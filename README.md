@@ -1,86 +1,101 @@
 # Job Application Intelligence Layer (JAIL)
 
-*A local, AI-assisted workflow I built during my own job search to rank roles, tailor resumes, maximize impact, and save your sanity — without ever sacrificing truth.*
+*A local, AI-assisted workflow I built during my own job search to rank roles, tailor resumes, and save your sanity — without ever sacrificing the truth.*
 
-Applying to jobs shouldn't feel like serving time. **JAIL** helps you review a batch of roles, rank their fit, choose the strongest resume base, and generate tailored notes you can use to finish stronger applications, faster. You stay in control of every word — **it never submits anything for you.**
+Applying to jobs shouldn't feel like serving time. **JAIL** helps you rank a batch of roles by how well they actually fit you, pick the strongest resume base for each, and generate a tailored draft you can finish faster. You stay in control of every word, and **it never submits anything for you.**
 
-You run it inside **Claude Code** (Claude that can work with files on your computer). If you've only ever used Claude in a browser, that's fine — this walks you through it.
-
-**You'll need:** a Claude plan that includes Claude Code. As of this README's original authoring in June 2026, **Claude Pro is about $20/month** and is the simplest starting point. Plan on about 20–30 minutes the first time. Works on Mac and Windows.
-
-**What you'll have at the end:** a ranked spreadsheet of the jobs you gave it, and — for your top pick — a **tailored resume draft (in Markdown) plus targeting notes** (which base to start from, gaps to address, suggested bullets and summaries), waiting in one folder, `__READY TO REVIEW/`. It's a working draft to build from, **not a polished Word / Pages / Google Docs file** — you finalize the formatting and wording in your own editor.
+You run it inside **Claude Code** (Claude that can work with files on your computer). New to that? This walks you through it. Mac and Windows; plan ~20–30 minutes the first time.
 
 ---
 
-## Setup — six steps, once
+## What you get
+A ranked spreadsheet of the jobs you gave it (colored to *your* pay, location, and lane preferences), and — for the ones you pick — a **tailored resume draft plus targeting notes** (which base to start from, gaps to address, suggested bullets and summaries). It's a working draft you finish in your own editor — **not** a polished Word/Pages file.
 
-### 1. Get the code onto your computer
+## What it does NOT do
+- It doesn't **find or scrape** jobs — you bring the links.
+- It doesn't **auto-apply or submit**. Ever.
+- It doesn't write **cover letters** (out of scope for now).
+- It doesn't generate a **finished Word/Pages/Google-Docs file** — you do the final polish.
+- It doesn't **guarantee interviews**, and it won't **invent experience** to make you look better.
+- It doesn't know what you actually submitted unless you save the final file and archive it.
 
-Pick whichever fits you:
-- **Download ZIP** (simplest) — click the green **`Code`** button on this page → **Download ZIP**, then unzip it somewhere you'll find it (your Desktop is fine). Best if you're not into GitHub and just want to try it locally.
-- **Clone** — `git clone https://github.com/redheadjessica/job-application-intelligence-layer` (or use the GitHub Desktop app). Best if you're comfortable with git and want an easy way to pull future updates.
-- **Fork** — only if you want your *own* GitHub copy to customize.
+## The loop
 
-Whichever you pick, keep your **real job-search materials private and local** — if you ever fork publicly, don't put your actual resumes, notes, or rankings in it.
-<!-- TODO: Add screenshot: GitHub Code → Download ZIP -->
-
-
-### 2. Get Claude Code
-
-Easiest is the **Claude desktop app**: download it from [claude.ai/download](https://claude.ai/download), install it, and sign in with your Claude account (Pro or higher).
-*(Terminal person? Install the CLI: `curl -fsSL https://claude.ai/install.sh | bash` on Mac/Linux.)*
-
-### 3. Open this folder in Claude
-
-In the desktop app: open the **Code** tab → **Select folder** → choose the unzipped folder → pick **Local**.
-**Quick check it worked:** type `/` in the message box. You should see **`/intake`** and **`/run-batch`** in the list. If they're there, you're set — they load automatically, nothing to install or enable.
-*(Terminal: `cd` into the folder, run `claude`, then type `/`.)*
-<!-- TODO: Add screenshot: Claude Code with the folder opened and /intake visible -->
-
-
-### 4. Let Claude set up the helper scripts (one-time)
-
-A couple of steps use small Python scripts (to pull down job posts and build the spreadsheet). Easiest: just tell Claude — **"Set up the Python environment for me."** It runs the setup and asks permission to install the bits it needs; **review and approve** when it does.
-*(Savvy: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`.)*
-
-> **Before you add your real materials — a quick privacy heads-up.** A resume is usually fine to share, but a job-search *workspace* tends to hold a lot more: rough drafts, salary thinking, job rankings, private notes, who referred you, rejections, your whole application strategy. Keep all of that **local and private** — don't commit your personal job-search files to a public repo. (This repo is set up so you don't have to.)
-
-### 5. Set the pipeline up for *you* — run `/intake`
-
-Type **`/intake`** and follow along. Share your resume whatever way's easiest — **paste it right in the chat, attach it, or point Claude at a folder you already keep.** The more relevant material you share, the better the setup (intake tells you what helps). It reads everything, gives you an honest read on your resume, asks a few quick questions, and builds your personal files. About five minutes to "ready to rank jobs."
-
-### 6. Add a few jobs, then rank + tailor
-
-Open **`inbox/tonight-urls.txt`** and paste in a handful of job-posting links, one per line — even ones you've only glanced at. Then tell Claude: **"Start today's batch from my inbox and tailor my top job."**
-*(Savvy: `python vetting/new_batch.py <today as MM-DD-YY>`, run the fetch command it prints, then `/run-batch {folder: "__READY TO REVIEW/<MM-DD-YY>", tailor: true, topN: 1}`.)*
-
-A few minutes later, open **`__READY TO REVIEW/<today's date>/`**:
-- **`1 - Rankings/`** — your jobs scored and sorted, with the reasons why.
-- **`2 - Tailored Resumes/`** — your top job's **tailored draft + targeting notes**. Start here; finalize the wording in your own editor.
-- **`3 - Source Material/`** — the job posts it pulled down.
-<!-- TODO: Add screenshot: example __READY TO REVIEW/ output folder -->
-
-
-That's the whole loop. From here, run it whenever you've collected a few new postings.
+```mermaid
+flowchart TD
+  A["Add your materials to 00-INTAKE/"] --> B["Run /intake"]
+  B --> C["Review & approve the staged setup"]
+  C --> D["Paste job URLs into 01-INBOX/"]
+  D --> E["Prep + rank a batch"]
+  E --> F["Tailor the jobs you pick"]
+  F --> G["You submit (outside JAIL)"]
+  G --> H["/archive, then /reconcile when useful"]
+```
 
 ---
+
+## Quick start
+
+1. **Get the repo** — on GitHub, **`Code` → Download ZIP** (simplest) and unzip it, or `git clone https://github.com/redheadjessica/job-application-intelligence-layer`. <!-- TODO: screenshot [shot: download-zip] -->
+2. **Open it in Claude Code** — Claude desktop app → **Code** tab → **Select folder** → the unzipped folder → **Local**. Type `/` and you should see `/intake`, `/run-batch`, `/archive`, `/reconcile`. <!-- TODO: screenshot [shot: open-folder] -->
+3. **Set up the Python bits (once)** — a couple of steps use small Python scripts (fetch job posts, build the spreadsheet). Just tell Claude **"Set up the Python environment for me"** and approve the installs. *(Savvy: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`.)*
+4. **Add your materials** to the two intake folders:
+   - `00-INTAKE/01-about-you/` — **evidence**: resumes (any version), LinkedIn export, brag/wins docs, metrics, writing samples, and job descriptions for roles you've actually **held**.
+   - `00-INTAKE/02-where-you-want-to-go/` — **direction**: postings for roles you *want*. These shape your scoring and lanes; they're never treated as proof you've done that work.
+   *(You can also just paste materials into the chat.)* <!-- TODO: screenshot [shot: intake-folders] -->
+5. **Run `/intake`.** It reads your materials, gives you a straight read, asks a few questions, and puts a **review folder** together — `__READY TO REVIEW/<date> - Intake Review/`. Open `START HERE.md`, check it over, and tell Claude when it looks right. **Nothing is saved to your source-of-truth files until you approve.** <!-- TODO: screenshot [shot: intake-review] -->
+6. **Add some jobs** — paste links into `01-INBOX/paste-job-urls-to-rank-here.txt`, one per line. Then tell Claude: **"Start today's batch and tailor my top job."** *(Savvy: `python 03-VETTING/new_batch.py <MM-DD-YY>`, run the prep command it prints, then `/run-batch {folder: "__READY TO REVIEW/<MM-DD-YY>", tailor: true, topN: 1}`.)*
+7. **Review the results** in `__READY TO REVIEW/<date>/`:
+   - `0 - Prep Report/` — what was fetched, and anything skipped (duplicates, thin/failed posts).
+   - `1 - Rankings/` — your jobs scored and sorted, with the reasons why.
+   - `2 - Tailored Resumes/` — your top job's draft + notes. Start with the "Questions for the candidate" section, then finish in your own editor.
+   <!-- TODO: screenshot [shot: review-hub] -->
+8. **Submit outside JAIL**, save the final resume as a **PDF** in the job folder, then **`/archive`** it (moves it to your private archive). Later, **`/reconcile`** so JAIL can learn from what you actually submitted.
+
+That's the whole loop. Re-run it whenever you've collected a few new postings.
+
+---
+
+## Folders (plain language)
+- **`00-INTAKE/`** — your materials (the two folders above) + intake state.
+- **`01-INBOX/`** — paste active job URLs here.
+- **`02-PREP/`**, **`03-VETTING/`**, **`04-TAILOR/`** — the engine (fetch, rank, tailor) + your templates.
+- **`05-SUBMITTED-APPLICATIONS/`** — your private archive of submitted apps (gitignored).
+- **`__READY TO REVIEW/`** — the human-review hub: batches and intake/source-update reviews.
+- **`docs/`** — deeper docs (see below).
+
+## Privacy — local-first, and built for it
+This matters, so read it once:
+- The repo ships **tracked templates + workflow code** — never anyone's data. Those are safe to commit.
+- The files intake **generates from your resume** are gitignored **instances** (your real scoring card, profile, experience bank, preferences). Your **raw intake materials** are gitignored. Your **submitted-applications archive** is gitignored.
+- The **template/instance split** exists specifically to reduce accidental privacy leaks — so your private job-search data stays on your machine and out of git by default.
+- If you fork the repo, **keep the fork private** unless you really know what you're doing. Don't push your generated instances or raw materials to a public repo.
+
+(Privacy is about your *candidate data*, not the author — the project is intentionally public.)
+
+## Where you stay in charge
+JAIL speeds the work up; you keep the judgment. You review: the **intake setup** before it's saved, the **rankings** before you tailor, the **tailored draft** before you submit, the **archive** before it moves, and any **reconcile proposals** before they touch your core files. It drafts and organizes — you decide and submit.
+
+## Commands
+Mostly you just talk to Claude. The slash commands: **`/intake`** (set up / update), **`/run-batch`** (rank a batch, optionally tailor), **`/vet-jobs`** / **`/tailor-jobs`** (rank-only / tailor specific jobs), **`/archive`** (move a submitted app to your archive), **`/reconcile`** (learn from submitted apps).
 
 ## Good to know
+- **It hands you a draft, not a final.** You finish the wording/formatting in your own editor.
+- **It's honest with you.** Intake tells you straight where your resume is weak — that's the point.
+- **It's an early, local workflow** — review its outputs before relying on them. Builder-level caveats and what still needs a live test are in [`docs/testing-and-caveats.md`](docs/testing-and-caveats.md).
+- **Mind how it's billed.** Depending on your Claude Code setup it runs on your Claude subscription or API credits — worth checking which before a big batch.
 
-- **It never submits anything.** It drafts and organizes; sending an application is always your move.
-- **It hands you a draft, not a final.** You get a strong starting point plus notes — you do the final polish in your own editor (Word, Google Docs, Pages, whatever you use).
-- **It's honest with you.** Intake will tell you straight where your resume is weak. That's the point — it's here to help you get hired, not to flatter you.
-- **Your materials, your workspace.** Your real resumes, notes, job descriptions, and outputs are meant to stay in your local/private workspace, not in a public repo. Claude will process the files you point it at, so only use materials you're comfortable using with your Claude account. This repo is structured so your personal job-search materials don't need to be committed or shared.
-- **Mind how it's billed.** Depending on how your Claude Code is set up, it runs on either your Claude **subscription** or **API credits** — worth checking which *before* you kick off a big batch, since the costs add up differently. A single run is usually inexpensive.
+## Deeper docs
+- [`docs/v2-end-to-end-workflow.md`](docs/v2-end-to-end-workflow.md) — the full workflow + architecture (source of truth).
+- [`docs/final-review-and-cover-letters.md`](docs/final-review-and-cover-letters.md) — what V2 leaves to you.
+- [`docs/testing-and-caveats.md`](docs/testing-and-caveats.md) — what's verified vs. still needs a live run.
 
 ## If `/intake` doesn't show up
-
-Make sure you opened the **folder itself** (the one containing this README), not a parent folder, and that you chose **Local**. Type `/` again to refresh the list. Still stuck? Just tell Claude "I don't see the intake skill" and it can check the setup with you.
+Make sure you opened the **folder itself** (the one with this README), chose **Local**, and typed `/` to refresh. Still stuck? Tell Claude "I don't see the intake skill" and it'll check the setup with you.
 
 ---
 
 ## About
-
-Built by **Jessica Barnett**, a product leader and builder exploring practical AI workflows for job search, personal systems, and product work. No guarantees, no magic, no auto-applying — just a project I built during my own job search and decided to share.
+Built by **Jessica Barnett**, a product leader and builder exploring practical AI workflows for job search, personal systems, and product work. No guarantees, no magic, no auto-applying — a real tool I built (with AI) during my own search and decided to share.
 
 **Feedback or suggestions?** [linkedin.com/in/redheadjessica](https://www.linkedin.com/in/redheadjessica/)

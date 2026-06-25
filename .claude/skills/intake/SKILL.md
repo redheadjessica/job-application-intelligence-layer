@@ -1,11 +1,11 @@
 ---
 name: intake
-description: First-run onboarding for the job pipeline. Reads a person's resume(s) and other career materials, gives them an honest read on those materials, asks a few sharp questions, and generates their personalized vetting + tailoring files so the rest of the pipeline works for them. Run once before vetting or tailoring; re-run anytime to update.
+description: Onboarding + update for the job pipeline. Reads a person's career materials (evidence) and direction materials, tracks them in a materials inventory, gives an honest read, asks a few sharp questions, then STAGES proposed source-of-truth files in a review folder for the person to approve before promoting them to private generated instances. Handles both first run and re-runs (update mode). Run before vetting or tailoring; re-run anytime to add materials.
 ---
 
 # Intake
 
-You are setting up this job-search pipeline for a new person. When you're done, the vetting and tailoring engines will work for *them* — jobs scored against their criteria, resumes tailored from their real experience.
+You are setting up (or updating) this job-search pipeline for a person. When you're done, the vetting and tailoring engines work for *them* — jobs scored against their criteria, resumes tailored from their real experience.
 
 ## North star
 
@@ -13,107 +13,199 @@ You are setting up this job-search pipeline for a new person. When you're done, 
 
 And the rule that governs everything: **never invent.** If a resume claims an outcome with no proof, you don't fabricate a number — you ask for the real one. Everything this pipeline ever writes about them must be something they can defend, out loud, in an interview.
 
+## ⚠️ The two input folders and the truth firewall (read this first, repeat it often)
+
+There are **two** intake folders, and the wall between them is the most important rule in the whole system:
+
+- **`00-INTAKE/01-about-you/` — EVIDENCE.** The real record of what they've actually done: resumes (every version), LinkedIn export, brag/wins docs, reviews, metrics, project/launch docs, writing samples, and **job descriptions for roles they actually held**. This builds their profile and experience bank.
+- **`00-INTAKE/02-where-you-want-to-go/` — DIRECTION.** Roles they want, dream jobs, reaching-for postings, "more of this / less of this," target titles/industries/company-types, comp/location/workstyle preferences.
+
+> **The firewall, stated plainly and repeated in the review files:** materials in `02-where-you-want-to-go/` shape **direction, scoring, and target lanes. They are NOT evidence that the candidate has done those things.** Wanting a role never puts its requirements on a resume. A job description is evidence **only** for a role they tell you they **held** — every other JD is direction only. When a JD's family is unclear, **ask before using it**; never guess, because guessing here means inventing experience.
+
+There's also a third family, **voice** (writing samples, portfolio, published work) — it lives in `01-about-you/` and is used only for voice and "selected writing" credibility, never blended into factual extraction.
+
+**Not part of intake:** the jobs they're ranking tonight. Those go in `01-INBOX/paste-job-urls-to-rank-here.txt` and get *scored* by the pipeline — infer nothing about the person from them.
+
 ## How this works (and how to keep it from being exhausting)
 
-This is a **diagnostic, not a form.** The heavy lifting — reading their materials, judging quality, finding the proof, drafting the files — is *your* job. Their job is to share what they have and answer a handful of sharp questions. Infer aggressively from the materials; only ask what the materials genuinely can't tell you; batch your questions; never interrogate them line by line.
+This is a **diagnostic, not a form.** The heavy lifting — reading their materials, judging quality, finding the proof, drafting the files — is *your* job. Their job is to share what they have and answer a handful of sharp questions. Infer aggressively; only ask what the materials genuinely can't tell you; batch questions; never interrogate line by line.
 
-It runs in **two tiers**, so they get value before fatigue. **Tier 1 — Vetting-ready (~5 minutes):** enough to start ranking jobs today; produces their scoring rubric + candidate profile. **Tier 2 — Tailor-ready (deeper):** enough to draft tailored resumes; produces their experience bank, profile, and resume index. They can stop after Tier 1 and come back.
+It runs in **two tiers** so they get value before fatigue. **Tier 1 — Vetting-ready (~5 min):** scoring rubric + candidate profile, enough to rank jobs today. **Tier 2 — Tailor-ready (deeper):** experience bank, profile, resume index, summary/skills quick-references, boundary rules. They can stop after Tier 1 and come back.
 
-## What to bring — and how the pieces stay separate
+## First run vs. update (one command, two modes)
 
-The more *relevant* material they share, the better the setup. But it has to stay sorted, because mixing the wrong things is how a resume tool starts lying. There are three families, and a **hard wall** between them.
+At the very start, detect which mode you're in:
 
-**1. About you — the facts (who they are, what they've really done).** Resumes (every version — old or rough is fine), their LinkedIn experience, brag/wins docs, performance reviews. And one they might not expect: **job descriptions for roles they have actually held** — the posting for their current or a past job (even a fresh posting of that same role) describes their real work in an employer's words, which is gold for phrasing what they genuinely did. This family builds their profile and experience bank.
+- **Look for an approved intake:** check whether `00-INTAKE/materials-inventory.md` exists and whether any generated instance (e.g. `03-VETTING/01-scoring-card.md`) carries a `<!-- jail-approved: ... -->` marker.
+- **No approved instances → FIRST RUN.** Say: *"Looks like this is your first intake. I'll help you set up your source of truth."* Then run the full flow.
+- **Approved instances exist → UPDATE.** Say: *"Looks like you already have an approved intake. I'll check for new or changed materials and help you update your source of truth."* Then run **update mode** (below).
 
-**2. Where they're headed — direction (what they want, gaps and all).** Job descriptions for roles they're **genuinely reaching for**. These shape their *vetting rubric* — their lanes, what excites them, what they're stretching toward — and they let you see, honestly, where their targets run ahead of their proven experience. They are **never** treated as the person's skills or proof. Wanting a role does not put its requirements on a resume.
+**Update mode rules (important):**
+- The user does **not** start over, and you do **not** delete their old materials by default.
+- They add new materials to the right folder (`01-about-you/` or `02-where-you-want-to-go/`) — or paste in chat — and re-run `/intake`.
+- You **scan both folders**, compare against `00-INTAKE/materials-inventory.md`, and **detect what's new or changed** (new files, or files modified since their inventory `Added` date).
+- You stage **only the delta** — the new/changed materials and the instances they actually affect — not a full regeneration.
+- You ask for review, and **promote only after approval**, exactly like a first run.
 
-**3. Their voice — how they write and think.** Writing samples, a portfolio, published work. Used only for voice and as "selected writing" credibility — never blended into the factual extraction.
+## Architecture: templates → staged review → generated instances
 
-**The hard rule:** a job description counts as *fact* only for a role the person tells you they **held**. Every other JD is *direction only*. Confirm which is which before you use any of them — never guess, because guessing here means inventing experience.
+This is the mechanism that keeps the repo safe to be public and keeps you from silently overwriting the person's source of truth.
 
-**Not part of intake:** the jobs they're vetting tonight. Those barely-looked-at links (often just a title-and-company glance) live in `inbox/tonight-urls.txt` and get *scored* by the pipeline — infer nothing about the person from them. Keep them out of intake.
+1. **Tracked templates (`*.template.md` / `*.template.json`)** are blank skeletons full of `{{PLACEHOLDERS}}`. You **read** these for structure. **Never fill a template in place** — they stay committable and personal-data-free.
+2. **Staged review** lives in `__READY TO REVIEW/<MM-DD-YY> - Intake Review/` (gitignored; the Unit-1 batch guard keeps it from being treated as a job batch). You write **human-readable review files** here first. Nothing canonical is written yet.
+3. **Generated instances (the bare `.md` / `.json`, gitignored)** are the person's real source of truth. The **engine reads these.** You write them **only after the person approves**, by faithfully transcribing the reviewed content (see *Promotion discipline*).
 
-## Bringing it in — whatever's easiest for them
+If a required instance is missing, the engine tells the user to run `/intake` first — so generating these correctly is the whole point.
 
-Offer all of these and meet them where they are; moving files around is the hard part for a lot of people.
+## Bringing materials in — whatever's easiest for them
 
-- **Paste or attach right here in the chat.** The simplest path — no files to move. Make this the default suggestion.
-- **Point me at a folder they already keep** (e.g. an existing resume folder). Read it **read-only** — never move, rename, or edit their files.
-- **Drop files into `intake/your-materials/`.**
-- **Give me URLs** for public writing or a portfolio — fetch them with the prep fetcher (`prep/prep_job_urls.py` and friends are built to pull public pages).
-- **LinkedIn:** you can't reliably pull a profile (LinkedIn blocks profile scraping). So *help them export it*: on their profile, **More → Save to PDF**, or **Settings → Get a copy of your data** — then share that file. Walk them through it; don't just tell them to paste.
+Offer all of these; moving files is the hard part for many people.
+
+- **Paste or attach right here in chat.** Default suggestion. Save durable pasted facts (don't let them live only in the thread) — note them in the inventory with source `pasted-<YYYY-MM-DD>`.
+- **Point me at a folder they keep** — read it **read-only**; never move, rename, or edit their files.
+- **Drop files into the intake folders:** evidence in `00-INTAKE/01-about-you/`; direction in `00-INTAKE/02-where-you-want-to-go/`.
+- **Give me URLs** for public writing/portfolio — fetch with `02-PREP/prep_job_urls.py` and friends.
+- **LinkedIn:** can't be scraped — *help them export it* (profile → **More → Save to PDF**, or **Settings → Get a copy of your data**), then read the file.
 
 ## Making sense of it
 
-- Read everything, and place each piece in the right family above. When a job description's category isn't obvious, **ask**: "Did you hold this role, or is it one you're aiming for?" Held → facts. Reaching for → direction only.
-- Pick the **most recent / authoritative resume** from three signals together: the file's modified-time, date or version hints in the filename (`resume_2024`, `v3`), and the latest role-date *inside* the document.
-- Across the factual materials, build the **union of proof** — pull the best, most specific accomplishments from wherever they live (an old resume, a brag doc, a held-role JD), not just the newest file. Flag contradictions (a title or date that differs across versions) to confirm later.
-- Note the **resume structure** each resume uses — its sections and their order (Summary, Experience, Skills, Education, and whatever else they have) — and reconcile differences across versions. Sections vary from person to person; never assume a fixed layout. You'll preserve their structure for the tailor step, and you can suggest adding or dropping a section where one is clearly missing or weak.
+- Read everything; place each piece in the right family. When a JD's category isn't obvious, **ask**: "Did you hold this role, or is it one you're aiming for?" Held → evidence. Reaching-for → direction only.
+- Pick the **most recent / authoritative resume** from three signals together: file modified-time, date/version hints in the filename, and the latest role-date *inside* the document.
+- Across the **evidence** family, build the **union of proof** — pull the best, most specific accomplishments from wherever they live, not just the newest file. Flag contradictions to confirm.
+- Note each resume's **structure** (sections + order) and reconcile across versions.
 
-## Files you will generate
+## The materials inventory
 
-Each ships as a blank template full of `{{PLACEHOLDERS}}` and `<!-- intake: ... -->` guidance. **Read the template first, then fill it in place** — follow its structure, don't invent your own.
+Maintain `00-INTAKE/materials-inventory.md` (generated instance; copy structure from `materials-inventory.template.md`). It is the **index** of every material — not the content store. Append-only: add a row when material arrives; never delete — mark `superseded` / `excluded` instead.
 
-**Tier 1 (vetting):** `vetting/01-scoring-card.md` (their rubric — 4 factors + weights + 1–2 custom factors) and `vetting/02-candidate-profile.md` (who they are, priority lanes, practical constraints).
+Columns: **ID** (stable, e.g. `M001`) · **Source** (filename under a folder, `pasted-YYYY-MM-DD`, or URL) · **Family** · **Added** (`date +%Y-%m-%d`) · **Status** · **Fed into** (which instances it informed, or `—`) · **Notes**.
 
-**Tier 2 (tailoring):** `tailor/01-profile.md` (positioning, voice, domains, strengths/gaps, claim boundaries), `tailor/02-resume-index.md` (their resume base(s) and routing), `tailor/04-experience-bank.md` (per-role proof points, bullets, metrics), and `tailor/03-current-work-canonical.md` only if they have a current venture/role to position (optional).
+- **Family:** `about-you` · `held-role-jd` · `where-you-want-to-go` · `voice` · `unclear`.
+- **Status:** `pending` (received, not yet ingested) · `ingested` · `superseded` · `excluded` · `needs-review` (you flagged a question).
+- **Truth firewall in the inventory:** `where-you-want-to-go` and `unclear` rows can **never** be promoted as evidence. Confirm an `unclear` row's real family before using it.
 
-**Leave these as-is** — they grow later (post-submission) or are generic guidance: `tailor/05-summary-quick.md`, `tailor/05a-summary-library.md`, `tailor/06-skills-quick.md`, `tailor/06a-skills-library.md`, `tailor/10-bio-library.md`, and everything in `tailor/learning/`.
+On every run, reconcile the inventory against what's actually in the two folders + what was pasted, so nothing the user added is silently lost.
 
-Also write **`intake/resume-assessment.md`** — your honest read on their materials (shape at the end).
+## Application lanes (basic taxonomy — this unit only creates it)
+
+People rarely apply in one crisp lane. Ask, or infer-and-confirm: **"Are you targeting one main kind of role, or several different lanes?"** (e.g. *Senior IC Product / Product leadership / AI product / Health tech*, or *FP&A leadership / Strategic finance / BizOps*).
+
+For each lane capture: **name · priority · target titles · target industries/company-types · what fits · what doesn't fit · preferred resume base (if known) · summary/skills emphasis · notes/tradeoffs.**
+
+Lanes are **one shared taxonomy**: the rich human-readable definitions go in `03-VETTING/02-candidate-profile.md` (Priority Lanes), and the **id/name/priority** are mirrored in `jail.config.json` (`lanes`). Do **not** build lane-aware ranking or tailoring yet — just create the taxonomy.
+
+---
 
 ## The flow
 
-### Step 0 — Frame it
+### Step 0 — Detect mode + frame it
+Detect first-run vs update (above) and say the matching line. Then, plainly: *"Share whatever you've got — resumes (even old or rough), your LinkedIn, writing, target roles. Paste it here, point me at a folder, or drop it in the `00-INTAKE` folders. I'll make sense of it, give you a straight read, ask a few questions, then put a review folder together for you to check before anything is saved. I'd rather be useful than flattering."*
 
-Tell them, briefly and plainly: "Share whatever you've got — resumes (even old or rough ones), your LinkedIn, writing, the works. Paste it here, point me at a folder, or drop it in — whatever's easiest. I'll make sense of it, give you a straight read on where your materials stand, ask a few questions, and set this up so it works for you. I'd rather be useful than flattering."
-
-### Step 1 — Ingest the materials
-
-Invite the three families above, and the share options above. Only a resume is truly required; everything else sharpens the picture. As things come in, sort them into Facts / Direction / Voice, asking to classify any job description you're unsure about.
-
-Read what they provide: `.txt`/`.md` directly; `.pdf` via the **pdf** skill; `.docx` via the **docx** skill; `.pages` can't be read directly, so ask them to export to PDF or paste the text; public writing/portfolio **URLs** via the prep fetcher.
+### Step 1 — Ingest + inventory
+Invite materials into the two folders (or chat). Read `.txt`/`.md` directly; `.pdf` via the **pdf** skill; `.docx` via the **docx** skill; `.pages` → ask them to export to PDF or paste; public URLs via the prep fetcher. As things come in, **classify each into a family and add/update its inventory row.** In update mode, only process new/changed materials.
 
 ### Step 2 — Make sense of the mess
-
-Apply "Making sense of it" above: dedupe and order by recency, find the strongest version, flag contradictions, and build the union of proof from the **facts** family only. Let the **direction** family (reaching-for JDs) inform what they want — never what they've done.
+Dedupe + order by recency, find the strongest resume, flag contradictions, build the union of proof from the **evidence** family only. Let **direction** materials inform what they *want*, never what they've *done*.
 
 ### Step 3 — Form your own honest read
+Judge the **evidence** against concrete signals: **Positioning · Proof · Buried lead · Signal-to-noise · Recency/consistency · Defensibility**, plus the **gap** between where they're headed and what they've proven. Write this into `00-INTAKE/resume-assessment.md` (shape at the end). Be specific, not a vibe.
 
-Before you ask them anything, judge the **factual** materials yourself against concrete signals, so "weak" is specific, never a vibe: **Positioning** (can a recruiter tell in ~5 seconds what they are and at what level?), **Proof** (quantified outcomes, or a list of responsibilities?), **Buried lead** (is their best, most relevant work up top, or hidden?), **Signal-to-noise** (concrete wins, or buzzword filler?), **Recency & consistency** (current, dates clean, versions agree?), and **Defensibility** (anything that reads inflated or that they may not be able to back up?). Also note the **gap** between where they're headed and what they've proven — honestly, not harshly.
+### Step 4 — Define lanes
+Ask the one-or-several lanes question; infer from their direction materials and confirm. Draft the lane taxonomy (fields above).
 
-### Step 4 — Ask (sharp, batched)
+### Step 5 — Ask (sharp, batched)
+Lead with: **"Before I tell you what I see — how do you feel about your resume right now?"** Then batch the Tier-1 gaps the materials can't answer, preferring choices over essays: **priority lanes** (confirm/reorder) · **comp** (target + floor) · **location/workstyle** (home metro + aliases; rate each setup — remote / hybrid-near / onsite-near / hybrid-elsewhere / onsite-elsewhere — as preferred/ok/stretch/no; relocate?; hard nos) · **custom factors** (1–2 idiosyncratic must-haves) · **weights** (default 35/30/20/15 across Want-it / Fit / Culture / Practicality). These answers also feed `jail.config.json`.
 
-Lead with the self-assessment, because it primes everything: **"Before I tell you what I see — how do you feel about your resume right now?"**
+### Step 6 — STAGE the review folder (do NOT write canonical instances yet)
+Create `__READY TO REVIEW/<MM-DD-YY> - Intake Review/` (folder via `date +%m-%d-%y`). Instantiate the review files **from the tracked skeletons in `.claude/skills/intake/review-templates/`** — copy each, then fill it with the actual proposed content for the person. Write all of:
 
-Then ask the **Tier-1 gaps** the materials can't answer, using the direction family to make the questions concrete rather than cold. Batch them; prefer choices over essays. **Priority lanes:** confirm/reorder the domains you inferred from their reaching-for roles and interests. **Comp:** target and hard floor. **Location:** remote / a city / hybrid; will they relocate; any hard nos. **Custom factors:** 1–2 idiosyncratic must-haves a generic rubric would miss ("climate only", "no ad-tech", "Series A–B"). **Weights:** does anything matter far more than the rest? Default 35/30/20/15 across Want-it / Fit / Culture / Practicality if they don't care to tune.
+```
+START HERE.md
+1 - About You Review.md
+2 - Application Lanes Review.md
+3 - Experience + Resume Inventory Review.md
+4 - Approved Truths & Boundary Rules Review.md
+5 - Job Preferences + Scoring Review.md
+6 - Summary + Skills Review.md
+7 - Open Questions.md
+```
 
-### Step 5 — Reconcile, and tell them the truth
+Each review file carries the **real proposed content** (so what they review is what gets promoted) plus a short "what to check" note, and repeats the truth firewall where direction/lanes appear. **No canonical instance is written in this step.** In update mode, only include the review files affected by the delta, and say which.
 
-Put their self-rating next to your read and deliver it straight. **Unhappy + you agree it's weak:** "Agreed — here's exactly why, and here's the plan." **Happy + you think it's weak:** don't flatter — "It reads clean, but a recruiter skims in ~6 seconds and right now [specific problem]. Worth fixing, and I'll help." **Unhappy + you think it's fine:** "It's in better shape than you think. The bones are good; you need tailoring, not a rewrite." **Happy + you agree:** "Solid foundation. We'll tune per role." Where their targets outrun their proof, name it kindly and concretely. Write all of this into **`intake/resume-assessment.md`** — a real deliverable, not a throwaway.
+### Step 7 — Guide them in chat
+After staging, tell the user, clearly and warmly:
+- **Your intake review is ready** in `__READY TO REVIEW/<MM-DD-YY> - Intake Review/`.
+- **Start with `START HERE.md`**, then open the files in order.
+- Look for anything **wrong, missing, overstated, or not-you**.
+- The easiest way to give feedback is **voice-to-text right here in chat** — just talk it back to me.
+- You can also **edit the staged files directly**. If you do, **tell me when you're done** and I'll **reread them from disk before promoting**.
+- **Nothing is saved to your source of truth until you approve.**
 
-### Step 6 — Generate the Tier-1 files
+### Step 8 — Review loop (never treat silence as approval)
+If they give corrections (chat or voice), update the staged files and **show what changed**. If they edited staged files directly, **reread those files from disk** before doing anything. If they add materials, log them in the inventory and re-stage the affected files. Loop until they're happy. Then ask the explicit truth gate: **"Do you feel like this is accurate enough to start ranking jobs, or do you want to add or correct anything first?"**
 
-Read each Tier-1 template, then fill it from the synthesized picture + their answers: `vetting/01-scoring-card.md` and `vetting/02-candidate-profile.md`. Use only defensible content. Then **show them what you understood**, in plain English — their lanes, constraints, the shape of their profile — and invite corrections: "Here's how I've set you up. Fix anything that doesn't sound like you." Trust gets set here, before they ever read a ranking.
+### Step 9 — PROMOTE on approval
+Only after explicit approval: **reread every staged review file from disk**, then write the **generated instances** by faithfully transcribing the reviewed content (see *Promotion discipline* and the map below). Stamp each with the approval marker. Generate the Tier-1 instances always; Tier-2 instances if you got that far (including **`05-summary-quick.md` and `06-skills-quick.md`** — these are required by tailoring). Update the inventory's "Fed into" column.
 
-**Checkpoint:** they can now run a vetting batch (`python vetting/new_batch.py <MM-DD-YY>`, fetch some job URLs, then `run-batch {folder: ...}`). Offer to continue to Tier 2 now, or let them stop here.
+### Step 10 — Wrap
+Summarize what was promoted, what's strong, what to revisit, and the next move (add job URLs → run a batch → review rankings → tailor the top few). Remind them their instance files hold personal data and are gitignored, so they're never committed.
 
-### Step 7 — Tier 2: deepen and mine for proof
+---
 
-If they continue, go deeper for tailoring. This is where the honest read becomes a better resume — **truthfully**. Build **`tailor/04-experience-bank.md`**: one block per role, with their real bullets and metrics; where a bullet lacks an outcome, **mine** for it ("You led [X] — what actually happened? Any number you'd defend in an interview?"), prioritizing the **3–4 highest-impact gaps** rather than every line — and if a number genuinely doesn't exist, leave the bullet honest and unquantified, never invented. Held-role JDs help you phrase what they really did; reaching-for JDs do not. Capture **voice** (from their writing / how they talk about their work), **claim boundaries** (anything they must NOT overclaim — a stealth startup, a title nuance, an NDA project), and their **resume structure** (the sections and order you observed, reconciled across versions — flag any section worth adding or dropping) into **`tailor/01-profile.md`**. Set up **`tailor/02-resume-index.md`** with the resume base(s) they actually have — the more they shared, the richer this is; register what exists, and over time (via the reconcile step) their best submitted resumes become new archetype bases. If they have a current venture/role worth consistent wording + claim boundaries, fill **`tailor/03-current-work-canonical.md`**; otherwise tell them it's optional and skip it.
+## What gets generated — review file → canonical instance map
 
-### Step 8 — Generate the Tier-2 files and wrap
+Promotion assembles some instances from more than one review file. Own the sections precisely:
 
-Fill the Tier-2 templates from everything gathered. Then summarize: what you generated, what's strong, what to revisit, and the next move (source job URLs → run a batch → review rankings → tailor the top few). Remind them their filled files now contain their personal data — keep the fork private, or gitignore those files, if they ever push.
+| Review file | Promotes to (generated instances) |
+|---|---|
+| `START HERE.md`, `7 - Open Questions.md` | (not promoted — orientation / questions) |
+| `1 - About You Review.md` | `04-TAILOR/01-profile.md`; identity/background → `03-VETTING/02-candidate-profile.md` |
+| `2 - Application Lanes Review.md` | lanes → `03-VETTING/02-candidate-profile.md` (Priority Lanes) + `jail.config.json` (`lanes`) + base-per-lane hints → `04-TAILOR/02-resume-index.md` |
+| `3 - Experience + Resume Inventory Review.md` | `04-TAILOR/04-experience-bank.md`, `04-TAILOR/02-resume-index.md`, `00-INTAKE/materials-inventory.md` |
+| `4 - Approved Truths & Boundary Rules Review.md` | `04-TAILOR/03-approved-truths-and-boundary-rules.md` (narrow — see below) |
+| `5 - Job Preferences + Scoring Review.md` | `03-VETTING/01-scoring-card.md`, constraints → `03-VETTING/02-candidate-profile.md`, comp/location → `jail.config.json` |
+| `6 - Summary + Skills Review.md` | `04-TAILOR/05-summary-quick.md`, `04-TAILOR/06-skills-quick.md`, (optional) `04-TAILOR/10-bio-library.md` |
+
+**Do not generate** the learning files (`05a-summary-library.md`, `06a-skills-library.md`, `04-TAILOR/learning/*`) — those are created later by `/reconcile`, not intake.
+
+## The narrow `03-approved-truths-and-boundary-rules.md`
+
+Generate the instance from its template (`04-TAILOR/03-approved-truths-and-boundary-rules.template.md`) — read the template, fill it, write the instance, stamp the marker. Keep it **narrow**: do-not-say/do-not-imply boundaries, claims that need evidence before use, recurring overreach to watch, directional figures, and (optionally) pinned wording for a sensitive recurring item. It is **not** a profile, skills list, metrics list, summary bank, or experience bank — role/project wording, bullets, and metrics live in `04-experience-bank.md`. If the person has no such boundaries, generate a minimal instance noting "none recorded yet" rather than padding it.
+
+## `jail.config.json`
+
+Generate the instance from `jail.config.template.json`, filling what you learned. This unit populates:
+
+- `approved`: today (`date +%Y-%m-%d`)
+- `archive.path`: where submitted applications will live — default `"05-SUBMITTED-APPLICATIONS"`; ask if they want elsewhere (e.g. a cloud-synced folder). `year_subfolders: true`.
+- `comp`: `currency`, `target_base`, `floor_base` (numbers in thousands; `null` if they won't say).
+- `location`: `home_metro` (their city) + `home_metro_aliases` (other names for it — e.g. "NYC", "New York", "Manhattan", "Brooklyn"), `relocate` (`"never"|"exceptional"|"yes"`), and the **`arrangements` ratings**: for each of `remote`, `home_hybrid`, `home_onsite`, `other_hybrid`, `other_onsite`, set `preferred` | `ok` | `stretch` | `no` (or `null` only if truly unknown). These drive candidate-relative location coloring in ranking — capture them from the Job Preferences review; don't leave them all null.
+- `lanes`: one `{ "id": "...", "name": "...", "priority": N }` per lane (ids are short kebab-case).
+
+It is valid JSON (no comments) and gitignored. The structured numbers here are the source of truth for later candidate-relative ranking; the prose in the scoring card is the scorer's nuance.
+
+## Approval marker
+
+Stamp every promoted instance so the system can tell approved source-of-truth from a blank template:
+- **Markdown instances:** first line `<!-- jail-approved: YYYY-MM-DD -->` (use `date +%Y-%m-%d`).
+- **`jail.config.json`:** top-level `"approved": "YYYY-MM-DD"`.
+
+## Promotion discipline (hard rules)
+
+- **Reread staged files from disk** immediately before promoting — the person may have edited them directly.
+- **Promote faithfully.** Transcribe the reviewed content into the instances. Do **not** re-invent, re-summarize, or "improve" wording during promotion unless the person explicitly asks.
+- **Never silently overwrite an approved instance.** In update mode, changes go through the staged review + approval first.
+- **Write instances, never templates.** Targets are the bare `.md` / `.json` paths (gitignored).
+- **Only defensible content.** If something isn't backed by evidence, it stays in `7 - Open Questions.md`, not in an instance.
 
 ## Question discipline
 
-Batch related questions; don't drip them one at a time. Prefer concrete choices ("A, B, or C?") over open-ended essays where you can. Every question must either change a score or prevent an untruth — if you can infer it from the materials, infer it, then confirm rather than ask cold. Cap proof-mining at the few highest-impact gaps; respect that they're tired.
+Batch related questions; don't drip them. Prefer concrete choices over essays. Every question must either change a score or prevent an untruth — if you can infer it, infer and confirm rather than ask cold. Cap proof-mining at the few highest-impact gaps; respect that they're tired.
 
 ## Truth guardrail (non-negotiable)
 
-Never invent a metric, title, scope, or outcome. A job description is proof of experience only for a role they held — never for one they want. When proof is missing, ask; if it stays missing, the claim stays honest and modest. Record claim boundaries so the tailor step can't later drift into fiction.
+Never invent a metric, title, scope, or outcome. A job description is proof of experience only for a role they held — never one they want. When proof is missing, ask; if it stays missing, the claim stays honest and modest. Record claim boundaries (→ the narrow `03` file) so the tailor step can't drift into fiction.
 
-## `intake/resume-assessment.md` — shape
+## `00-INTAKE/resume-assessment.md` — shape
 
-A short, honest, useful document: **The straight read** (2–4 sentences on where their materials genuinely stand), **What's working** (the real strengths, specifically), **What's weak** (concrete problems with examples — buried lead, no metrics, stale), **The gap** (where their target roles run ahead of their proven experience), **What I need from you** (the specific proof/answers that would most raise their ceiling), and **The plan** (what the pipeline will do about it). Honest and encouraging-by-being-useful — not cruel, not flattering.
+A short, honest, useful document: **The straight read** (2–4 sentences) · **What's working** (real strengths, specifically) · **What's weak** (concrete problems with examples) · **The gap** (where targets outrun proof) · **What I need from you** (the proof/answers that most raise their ceiling) · **The plan** (what the pipeline will do). Honest and useful — not cruel, not flattering. (Generated instance; gitignored.)

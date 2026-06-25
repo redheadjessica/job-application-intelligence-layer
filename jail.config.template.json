@@ -1,0 +1,20 @@
+{
+  "_README": "Copy to jail.config.json (gitignored); /intake fills it. The engine reads the instance, never this template. comp.*_base are in thousands. location.arrangements ratings use the vocabulary: preferred | ok | stretch | no | null (unknown). location.relocate uses: never | exceptional | yes | null. lanes mirror the profile's priority lanes as {id, name, priority}.",
+  "schema_version": 1,
+  "approved": null,
+  "archive": { "path": "05-SUBMITTED-APPLICATIONS", "year_subfolders": true },
+  "comp": { "currency": "USD", "target_base": null, "floor_base": null },
+  "location": {
+    "home_metro": null,
+    "home_metro_aliases": [],
+    "relocate": null,
+    "arrangements": {
+      "remote": null,
+      "home_hybrid": null,
+      "home_onsite": null,
+      "other_hybrid": null,
+      "other_onsite": null
+    }
+  },
+  "lanes": []
+}
