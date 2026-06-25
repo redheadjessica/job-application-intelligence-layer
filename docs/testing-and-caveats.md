@@ -21,5 +21,11 @@ These pass their offline/structural tests but haven't been exercised end-to-end 
 
 None of these block the offline build — they're the "confirm it works against reality" pass.
 
+## How V2.1 exercises these (synthetic-first)
+
+The synthetic demo kit (`examples/jordan-lee-demo/`, persona "Jordan Lee — AI Product Marketing / GTM") doubles as a synthetic test bed. Stage its fixtures into the real (gitignored) runtime folders and run the local-deterministic caveats against synthetic data: the **xlsx render**, **/archive**, and **/reconcile** all run without network or real materials, and they also produce the committed demo artifacts.
+
+The **live job-post fetch** is the only network-bound caveat. Exercise it as a **separate, disposable real-URL smoke test**: 3–5 real public URLs, local only, **never committed and never screenshotted** — record only a dated pass / fail note here if useful. Real-URL results never feed public demo screenshots.
+
 ## Note for users
 This is an early, local workflow. **Review its outputs before relying on them** — the rankings, the tailored drafts, and especially anything it flags as a guess. It's built to make the work faster and more honest, not to be trusted blindly.

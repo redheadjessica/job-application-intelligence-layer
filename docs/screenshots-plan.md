@@ -3,14 +3,17 @@
 Real screenshots are a manual follow-up — capturing them needs a live Claude Code session. This file is the checklist + the synthetic data to use, so no real job-search materials ever appear in a shot.
 
 ## Hard rule: synthetic data only
-Use the fictional persona **Jordan Lee — strategic finance** for every screenshot and example. **Never** use a real resume, real job application, real submitted folder, real ranking, real company names from an actual search, or anything from a real job hunt.
+Use the fictional persona **Jordan Lee — AI Product Marketing / GTM Strategy** for every screenshot and example. **Never** use a real resume, real job application, real submitted folder, real ranking, real company names from an actual search, or anything from a real job hunt.
 
 ## Synthetic persona & materials to stage
-- **Persona:** "Jordan Lee," a strategic-finance / FP&A leader (~10 yrs). Lanes: Strategic Finance / FP&A leadership; BizOps.
-- **`00-INTAKE/01-about-you/`:** a one-page fake resume (e.g. Northwind — Sr FP&A Manager; Acme — Financial Analyst) and a brag-doc line or two.
-- **`00-INTAKE/02-where-you-want-to-go/`:** a fake target JD (e.g. "Director of FP&A, Meridian — Series C fintech").
-- **`01-INBOX/paste-job-urls-to-rank-here.txt`:** 3–4 obviously-fake links (`https://example.com/jobs/…`) or a note that they're placeholders.
-- **`jail.config.json`:** fake comp (target 220 / floor 180), home metro "NYC", arrangement ratings, two lanes.
+
+The full synthetic kit lives in **`examples/jordan-lee-demo/`** (committed, 100% fictional). To capture in-context shots, stage those committed fixtures into the real (gitignored) runtime folders, then clean up — see `examples/jordan-lee-demo/staging/README.md`.
+
+- **Persona:** "Jordan Lee," a Senior Product Marketing Manager (B2B SaaS / workflow-tooling). Targeting AI Product Marketing, GTM Strategy, and Lifecycle/Growth roles at AI / tooling companies. Lanes: AI Product Marketing; GTM Strategy; Lifecycle/Growth.
+- **`00-INTAKE/01-about-you/`:** a fictional PMM resume (launches, positioning, customer research, sales enablement, adoption programs; used AI tools to accelerate research/messaging/enablement) and a brag-doc line or two — fictional and internally consistent.
+- **`00-INTAKE/02-where-you-want-to-go/`:** a fictional target JD (e.g. "Senior Product Marketing Manager, AI Workflows" at a fictional company).
+- **`01-INBOX/paste-job-urls-to-rank-here.txt`:** `https://example.com/jobs/...` placeholder links only.
+- **`jail.config.json`:** fictional comp / location / lane preferences (example copy committed under `examples/jordan-lee-demo/fixtures/`).
 
 ## Shot list
 | # | Screenshot | What it should show | Placeholder label |
@@ -34,3 +37,8 @@ Use the fictional persona **Jordan Lee — strategic finance** for every screens
 
 ## Where these are used
 The README's `<!-- TODO: screenshot -->` markers and `docs/jail-public-page-copy.md`'s screenshot placeholders reference these labels.
+
+**V2.1 conventions:**
+- Captured PNGs are committed under **`docs/screenshots/`** (visible content must be synthetic Jordan Lee data only).
+- The rendered ranking **`.xlsx`** is an approved committed demo artifact (`examples/jordan-lee-demo/expected-outputs/`) — reviewers can open it.
+- Real-URL fetch smoke tests are **separate and disposable**: never committed, never screenshotted (see `docs/testing-and-caveats.md`).
