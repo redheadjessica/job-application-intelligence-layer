@@ -1,6 +1,6 @@
 # docs/screenshots/
 
-Committed screenshot PNGs for the JAIL README and the website handoff copy. All images show fictional **Jordan Lee** demo data (see [`../../examples/jordan-lee-demo/`](../../examples/jordan-lee-demo/)).
+Committed screenshot PNGs for the JAIL README and the website handoff copy. All images show fictional **Jordan Lee** demo data (see [`../examples/jordan-lee-demo/`](../examples/jordan-lee-demo/)).
 
 ## Rules
 
@@ -15,7 +15,7 @@ Committed screenshot PNGs for the JAIL README and the website handoff copy. All 
 | `hero-ranking.png` | **auto-generated** (matplotlib render of the committed `rankings.xlsx`) — the marketing hero, not the literal spreadsheet UI | ✅ added (Unit 5 Phase A) |
 | *(everything else)* | **manual capture** by the author (Finder / Claude Code / Numbers·Excel / markdown preview / browser) | ⏳ pending Phase B |
 
-The full per-shot checklist (what to open, what's visible, crop, README vs website, auto vs manual) lives in [`../../examples/jordan-lee-demo/screenshots-notes.md`](../../examples/jordan-lee-demo/screenshots-notes.md).
+The full per-shot checklist (what to open, what's visible, crop, README vs website, auto vs manual) lives in [`../examples/jordan-lee-demo/screenshots-notes.md`](../examples/jordan-lee-demo/screenshots-notes.md).
 
 ## Naming
 

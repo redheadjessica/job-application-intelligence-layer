@@ -67,7 +67,7 @@ Because it is 100% fictional, the artifacts here can be committed and shown publ
 ## Planned artifact map
 
 ```text
-examples/jordan-lee-demo/
+docs/examples/jordan-lee-demo/
   README.md                  ← you are here
   fixtures/                  ← committed synthetic INPUTS
     (Jordan's resume(s), brag doc, target JD,

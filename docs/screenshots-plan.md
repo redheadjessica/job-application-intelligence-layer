@@ -7,13 +7,13 @@ Use the fictional persona **Jordan Lee — AI Product Marketing / GTM Strategy**
 
 ## Synthetic persona & materials to stage
 
-The full synthetic kit lives in **`examples/jordan-lee-demo/`** (committed, 100% fictional). To capture in-context shots, stage those committed fixtures into the real (gitignored) runtime folders, then clean up — see `examples/jordan-lee-demo/staging/README.md`.
+The full synthetic kit lives in **`docs/examples/jordan-lee-demo/`** (committed, 100% fictional). To capture in-context shots, stage those committed fixtures into the real (gitignored) runtime folders, then clean up — see `docs/examples/jordan-lee-demo/staging/README.md`.
 
 - **Persona:** "Jordan Lee," a Senior Product Marketing Manager (B2B SaaS / workflow-tooling). Targeting AI Product Marketing, GTM Strategy, and Lifecycle/Growth roles at AI / tooling companies. Lanes: AI Product Marketing; GTM Strategy; Lifecycle/Growth.
 - **`00-INTAKE/01-about-you/`:** a fictional PMM resume (launches, positioning, customer research, sales enablement, adoption programs; used AI tools to accelerate research/messaging/enablement) and a brag-doc line or two — fictional and internally consistent.
 - **`00-INTAKE/02-where-you-want-to-go/`:** a fictional target JD (e.g. "Senior Product Marketing Manager, AI Workflows" at a fictional company).
 - **`01-INBOX/paste-job-urls-to-rank-here.txt`:** `https://example.com/jobs/...` placeholder links only.
-- **`jail.config.json`:** fictional comp / location / lane preferences (example copy committed under `examples/jordan-lee-demo/fixtures/`).
+- **`jail.config.json`:** fictional comp / location / lane preferences (example copy committed under `docs/examples/jordan-lee-demo/fixtures/`).
 
 ## Shot list
 | # | Screenshot | What it should show | Placeholder label |
@@ -40,5 +40,5 @@ The README's `<!-- TODO: screenshot -->` markers and `docs/jail-public-page-copy
 
 **V2.1 conventions:**
 - Captured PNGs are committed under **`docs/screenshots/`** (visible content must be synthetic Jordan Lee data only).
-- The rendered ranking **`.xlsx`** is an approved committed demo artifact (`examples/jordan-lee-demo/expected-outputs/`) — reviewers can open it.
+- The rendered ranking **`.xlsx`** is an approved committed demo artifact (`docs/examples/jordan-lee-demo/expected-outputs/`) — reviewers can open it.
 - Real-URL fetch smoke tests are **separate and disposable**: never committed, never screenshotted (see `docs/testing-and-caveats.md`).

@@ -30,8 +30,8 @@ The `.xlsx` is a deterministic render of `rankings.csv`. To refresh it:
 
 ```
 .venv/bin/python 03-VETTING/make_rankings_xlsx.py \
-  "examples/jordan-lee-demo/expected-outputs/rankings.csv" \
-  "examples/jordan-lee-demo/expected-outputs/rankings.xlsx" \
+  "docs/examples/jordan-lee-demo/expected-outputs/rankings.csv" \
+  "docs/examples/jordan-lee-demo/expected-outputs/rankings.xlsx" \
   --config jail.config.json --quarantined 1
 ```
 
