@@ -34,7 +34,7 @@ Append one row per finalized, submitted summary:
 
 | Application | Summary | Notes |
 |-------------|---------|-------|
-| <!-- e.g. Acme — Senior PM (consumer / retention), MM-DD-YY --> | <!-- exact submitted summary text --> | <!-- adapted from Family A · retention closer; reused "…" phrasing --> |
+| <!-- e.g. Acme — Sr Analyst (fintech), MM-DD-YY --> | <!-- exact submitted summary text --> | <!-- adapted from Family A · domain closer; reused "…" phrasing --> |
 
 <!-- Append new finalized summaries above as the reconcile (Learn) step processes more submitted
      applications. The table grows downward over time; keep the oldest examples — they show how your

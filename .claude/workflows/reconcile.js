@@ -171,7 +171,7 @@ Steps:
    - it has a scraped job post (a .txt, or a "Job Application*"/"* Job*" PDF),
    - it does NOT already contain a "reconcile-report - *.md" (else already done -> skip with reason "already reconciled"),
    - it is under your submitted-applications archive (not __READY TO REVIEW).
-4. For each READY folder, identify the exact filenames: jd_file, output_md, final_pdf, and (if present) cover_letter and answers. Derive company, role, and submitted_date from the folder name (e.g. "Acme - Senior PM - 01-15-26" -> company "Acme", role "Senior PM", date "01-15-26").
+4. For each READY folder, identify the exact filenames: jd_file, output_md, final_pdf, and (if present) cover_letter and answers. Derive company, role, and submitted_date from the folder name (e.g. "Acme - Sr Analyst - 01-15-26" -> company "Acme", role "Sr Analyst", date "01-15-26").
 Use ls and quote paths (folders contain spaces, &, parentheses). Return absolute folder_path values.`,
   { phase: 'Discover', model: 'haiku', schema: DISCOVER_SCHEMA, label: 'discover folders' }
 )

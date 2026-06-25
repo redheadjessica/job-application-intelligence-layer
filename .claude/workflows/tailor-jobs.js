@@ -59,7 +59,7 @@ for (let i = 0; i < picks.length; i++) {
 Job description file (read this exact file): ${p.abs_path}
 ${p.company ? `Company: ${p.company}\n` : ''}${p.title_and_link ? `Role/title: ${p.title_and_link}\n` : ''}
 Create the destination job folder INSIDE "${resumesDir}" using the naming convention
-"Company - Role" (NO date — the parent batch folder is already dated; abbreviate Product Manager -> PM,
+"Company - Role" (NO date — the parent batch folder is already dated; abbreviate long titles sensibly, e.g. Senior -> Sr,
 Vice President -> VP). Use mkdir -p and quote paths since they contain spaces. Copy the job file in,
 and write the output file ("application_resume_output - [Company] - [Role].md") there per your spec,
 with the "Questions for the candidate" section at the top. Do not ask questions — defer them to that section.`,

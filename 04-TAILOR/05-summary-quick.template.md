@@ -1,8 +1,9 @@
 # Summary Quick Reference — Generation Use Only
 
 <!--
-  TEMPLATE — the /intake skill fills this in from your resume + a few questions, then writes the
-  finished copy here. This is the FAST PATH the tailor agent reads at generation time to pick a
+  TEMPLATE — /intake reads this template, then writes the filled result to the gitignored instance
+  `05-summary-quick.md` (it never edits this template in place). The instance is the FAST PATH the
+  tailor agent reads at generation time to pick a
   professional-summary line for the resume.
 
   WHAT THIS FILE IS

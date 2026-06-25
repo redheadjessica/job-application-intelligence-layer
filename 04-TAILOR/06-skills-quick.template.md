@@ -2,7 +2,7 @@
 
 This is the fast, generation-time lookup: your canonical skills bank organized by category, the role-based emphasis rules, the synonyms map, and a few proven skills lines per role archetype. For full calibration notes, confidence scoring, and assessment history, use `06a-skills-library.md`. The synonyms map is maintained inline at the bottom of this file (this is its source of truth).
 
-<!-- intake: fill this file from your own resume. Pull every distinct skill you can credibly
+<!-- intake: read this template and write the filled instance `06-skills-quick.md` from your own resume. Pull every distinct skill you can credibly
      defend, group them into the categories below (rename/add categories to fit your field),
      and tag each with a confidence label. Then write your role-based emphasis rules and a
      proven skills line for each role archetype you target. Strip the bracketed placeholders

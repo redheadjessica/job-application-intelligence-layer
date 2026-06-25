@@ -168,34 +168,9 @@ Promotion assembles some instances from more than one review file. Own the secti
 
 **Do not generate** the learning files (`05a-summary-library.md`, `06a-skills-library.md`, `04-TAILOR/learning/*`) — those are created later by `/reconcile`, not intake.
 
-## The narrow `03-approved-truths-and-boundary-rules.md` (interim structure)
+## The narrow `03-approved-truths-and-boundary-rules.md`
 
-The tracked template still carries the older "current-work-canonical" shape (Unit 3 will re-scope it). For now, generate the **instance** with this **narrow** structure — important truth rules and explicit boundaries only. **Do not** turn it into a profile, skills list, metrics list, summary bank, or experience bank.
-
-```markdown
-<!-- jail-approved: YYYY-MM-DD -->
-# Approved Truths & Boundary Rules
-
-The truth rules: what's safe to say, what needs evidence, and what the model must NOT overstate,
-imply, invent, or keep repeating after you correct it. This is NOT a profile / skills / metrics /
-summary / experience bank — just the friction points where a draft tends to make you sound stronger
-than the truth.
-
-## Do not say / do not imply
-- {{e.g. "Do not imply <venture> has meaningful traction; it currently has <N> users."}}
-- {{e.g. "Do not say I managed a team; I led cross-functional work but was not a people manager."}}
-
-## Needs evidence before use
-- {{a claim that may only be stated when backed by specific, named proof}}
-
-## Recurring overreach to watch
-- {{a pattern the model keeps trying — and the truthful version to use instead}}
-
-## Directional / unverified figures (state as such, never as hard numbers)
-- {{a metric that is directional, not verified}}
-```
-
-If the person has no such boundaries, generate a minimal instance noting "none recorded yet" rather than padding it.
+Generate the instance from its template (`04-TAILOR/03-approved-truths-and-boundary-rules.template.md`) — read the template, fill it, write the instance, stamp the marker. Keep it **narrow**: do-not-say/do-not-imply boundaries, claims that need evidence before use, recurring overreach to watch, directional figures, and (optionally) pinned wording for a sensitive recurring item. It is **not** a profile, skills list, metrics list, summary bank, or experience bank — role/project wording, bullets, and metrics live in `04-experience-bank.md`. If the person has no such boundaries, generate a minimal instance noting "none recorded yet" rather than padding it.
 
 ## `jail.config.json`
 
