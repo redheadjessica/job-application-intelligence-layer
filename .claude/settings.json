@@ -22,6 +22,7 @@
       "Skill(vet-jobs)",
       "Skill(tailor-jobs)",
       "Skill(reconcile)",
+      "Skill(archive)",
       "Workflow(run-batch)",
       "Workflow(vet-jobs)",
       "Workflow(tailor-jobs)",

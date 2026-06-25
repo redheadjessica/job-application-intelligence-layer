@@ -1,7 +1,7 @@
 export const meta = {
   name: 'reconcile',
   description: 'Post-application learning: reconcile completed submitted applications (compare the agent\'s recommendation vs the finalized submitted resume), write a per-folder reconcile report, and merge candidate lessons into the learning ledger + source-update queue (04-TAILOR/learning/). Never edits canonical generation files. Implements 04-TAILOR/learning/reconcile-spec.md.',
-  whenToUse: 'After applications are submitted and moved to your submitted-applications archive. Pass {folders:[...]} for an explicit set, or {archive, limit} to scan for unreconciled folders. Vet/tailor is unrelated.',
+  whenToUse: 'After applications are submitted and moved to your submitted-applications archive (use /archive to move them). {archive} is OPTIONAL — without it, reconcile reads archive.path from jail.config.json (fallback 05-SUBMITTED-APPLICATIONS) and scans its year subfolders. Pass {folders:[...]} for an explicit set, or {limit:N} to cap. Cadence: run it after your first few applications, after a meaningfully changed final resume, when a new resume base emerges, or after repeated summary/skills corrections — less often once things stabilize. Vet/tailor is unrelated.',
   phases: [
     { title: 'Discover', detail: 'find ready, unreconciled submitted-application folders', model: 'haiku' },
     { title: 'Reconcile', detail: 'one agent per folder: diff recommendation vs final PDF, write the report', model: 'sonnet' },
@@ -13,8 +13,7 @@ export const meta = {
 let A = args
 if (typeof A === 'string') { try { A = JSON.parse(A) } catch (_) { /* leave raw */ } }
 A = (A && typeof A === 'object') ? A : {}
-const ARCHIVE = A.archive || ''
-if (!ARCHIVE) throw new Error('Pass {archive: "<path to your submitted-applications folder>"} (optionally with {folders:[...]} or {limit:N}).')
+const ARCHIVE = A.archive || ''   // empty -> discover resolves it from jail.config.json archive.path (fallback 05-SUBMITTED-APPLICATIONS)
 const FOLDERS = Array.isArray(A.folders) ? A.folders : null   // explicit list (names or abs paths)
 const LIMIT = Number.isInteger(A.limit) ? A.limit : null      // cap when scanning
 const REPO_APP = '04-TAILOR'                                   // learning files live in 04-TAILOR/learning/ (repo-relative)
@@ -61,6 +60,8 @@ const DISCOVER_SCHEMA = {
         properties: { folder: { type: 'string' }, reason: { type: 'string' } },
       },
     },
+    archive_resolved: { type: 'string', description: 'the archive path actually scanned (from {archive}, else jail.config.json archive.path, else the 05-SUBMITTED-APPLICATIONS fallback)' },
+    workspace_leftovers: { type: 'array', items: { type: 'string' }, description: 'completed-looking folders still under __READY TO REVIEW (they contain a final resume PDF) — a cleanliness warning only; NEVER moved by reconcile' },
   },
 }
 
@@ -154,8 +155,10 @@ const SYNTH_SCHEMA = {
 // ---- Phase 1: Discover ----
 phase('Discover')
 const scopeLine = FOLDERS
-  ? `Process ONLY these folders (names are relative to "${ARCHIVE}" unless already absolute):\n${FOLDERS.map((f) => '- ' + f).join('\n')}`
-  : `Scan the archive "${ARCHIVE}" for application folders.${LIMIT ? ` Limit to the ${LIMIT} most recent ready folders.` : ''}`
+  ? `Process ONLY these folders (names are relative to the archive unless already absolute):\n${FOLDERS.map((f) => '- ' + f).join('\n')}`
+  : (ARCHIVE
+      ? `Scan the archive "${ARCHIVE}" (including its year subfolders, e.g. <archive>/2026/) for application folders.${LIMIT ? ` Limit to the ${LIMIT} most recent ready folders.` : ''}`
+      : `No archive path was passed. Resolve it: read jail.config.json -> archive.path; if the file is missing or invalid, fall back to "05-SUBMITTED-APPLICATIONS" (note which you used in archive_resolved). Then scan that archive INCLUDING its year subfolders (e.g. <archive>/2026/) for application folders.${LIMIT ? ` Limit to the ${LIMIT} most recent ready folders.` : ''}`)
 
 const discovery = await agent(
   `You are the discovery step of the reconcile workflow (04-TAILOR/learning/reconcile-spec.md §5 readiness).
@@ -164,20 +167,26 @@ ${scopeLine}
 
 Steps:
 1. Run \`date +%m-%d-%y\` and return it as run_date.
-2. List the archive (or the explicit folders). An APPLICATION folder contains an "application_resume_output*.md".
+2. List the archive's application folders, INCLUDING any year subfolders ("<archive>/<YYYY>/<app folder>"). An APPLICATION folder contains an "application_resume_output*.md". (An "archive-summary.md" may also be present — it does NOT block reconcile.)
 3. READINESS (§5) — a folder is READY only if ALL hold; otherwise add it to "skipped" with a reason:
    - it has an original "application_resume_output*.md",
-   - it has a FINAL submitted resume PDF (a "*Resume*.pdf"; a .pages alone is NOT enough),
+   - it has a FINAL submitted resume PDF (a "*Resume*.pdf", or the single non-JD .pdf in the folder; a .pages alone is NOT enough),
    - it has a scraped job post (a .txt, or a "Job Application*"/"* Job*" PDF),
    - it does NOT already contain a "reconcile-report - *.md" (else already done -> skip with reason "already reconciled"),
    - it is under your submitted-applications archive (not __READY TO REVIEW).
 4. For each READY folder, identify the exact filenames: jd_file, output_md, final_pdf, and (if present) cover_letter and answers. Derive company, role, and submitted_date from the folder name (e.g. "Acme - Sr Analyst - 01-15-26" -> company "Acme", role "Sr Analyst", date "01-15-26").
+5. Return "archive_resolved" = the archive path you actually scanned (the passed archive, the jail.config.json archive.path, or the "05-SUBMITTED-APPLICATIONS" fallback).
+6. WORKSPACE LEFTOVERS (cleanliness warning — do NOT move anything): also look under "__READY TO REVIEW/*/2 - Tailored Resumes/*" for completed-looking folders (ones containing a final resume PDF — a "*Resume*.pdf" or a single non-JD .pdf). Return their folder names in "workspace_leftovers". They are NOT reconciled here; they're surfaced so the user can archive them with /archive.
 Use ls and quote paths (folders contain spaces, &, parentheses). Return absolute folder_path values.`,
   { phase: 'Discover', model: 'haiku', schema: DISCOVER_SCHEMA, label: 'discover folders' }
 )
 
+const leftovers = (discovery && discovery.workspace_leftovers) || []
+const leftoverNote = leftovers.length
+  ? ` Also: ${leftovers.length} completed-looking folder(s) still in __READY TO REVIEW — if those were submitted, archive them with /archive (${leftovers.join(', ')}).`
+  : ''
 if (!discovery || !Array.isArray(discovery.ready) || discovery.ready.length === 0) {
-  return { reconciled: 0, ready: 0, skipped: discovery ? discovery.skipped : [], note: 'No ready, unreconciled folders found.' }
+  return { reconciled: 0, ready: 0, skipped: discovery ? discovery.skipped : [], archive: discovery ? discovery.archive_resolved : '', workspace_leftovers: leftovers, note: `No ready, unreconciled folders found.${leftoverNote}` }
 }
 const RUN_DATE = discovery.run_date
 log(`Reconciling ${discovery.ready.length} folder(s); ${(discovery.skipped || []).length} skipped. Run date ${RUN_DATE}.`)
@@ -223,9 +232,12 @@ const RESULTS_JSON = JSON.stringify(results, null, 1)
 const synth = await agent(
   `You are the SINGLE writer that merges reconcile results into the global learning files. ${RULES}
 
-Inputs: the per-folder reconcile results (JSON) below, plus the CURRENT state of:
-- ${REPO_APP}/learning/learning-ledger.md      (the ledger — read it)
-- ${REPO_APP}/learning/source-update-queue.md  (the queue — read it)
+Inputs: the per-folder reconcile results (JSON) below, plus the CURRENT state of these LEARNING instances (all gitignored, append-only — read whichever already exist):
+- ${REPO_APP}/learning/learning-ledger.md      (the ledger)
+- ${REPO_APP}/learning/source-update-queue.md  (the queue)
+- ${REPO_APP}/05a-summary-library.md           (the finalized-summary corpus)
+- ${REPO_APP}/06a-skills-library.md            (the skills calibration log)
+If one of these four instances does NOT exist but its "*.template.md" sibling does, create the instance from the template's structure first, then append. NEVER create or write the primary generation files (01-06, resume index, experience bank, 05-summary-quick, 06-skills-quick).
 
 RESULTS JSON:
 ${RESULTS_JSON}
@@ -236,7 +248,7 @@ Do, carefully:
 3. Update the ledger's PATTERNS TRACKER: for each recurring lesson, count occurrences across BOTH the new results and existing entries; mark status. A lesson is queue-ready only at >=2 occurrences OR the candidate confirmation (§9).
 4. Update the queue: add or increment proposed source-update items. If a proposal recurs, increment its occurrence count and add the application rather than duplicating. New single-occurrence items go to the queue's watch list. CRITICAL (§9a): the watch list is a DURABLE record, not a holding pen — never drop or treat a single-occurrence item as moot. Frame each as "preserved; promotable now on the candidate's confirmation, or auto-surfaced at a 2nd occurrence." Nothing here is auto-applied; everything awaits human review.
 5. BASE / TEMPLATE CANDIDATES (§9a): collect every result with base_template_candidate.is_candidate=true into the returned base_template_candidates list, and record them in the queue's "Base / template candidates" subsection (copy-don't-rebuild; archetype + recommendation). These are confirmation-only registry additions and are NOT subject to the >=2 gate — surface them clearly for the candidate even at one occurrence.
-6. Do NOT edit any canonical generation file (01-06, resume index, experience bank, summary/skills libraries). Your only writes are the ledger and queue (in 04-TAILOR/learning/). For the finalized summaries, DO NOT write 05a — instead assemble a ready-to-paste markdown block (one entry per folder, role-archetype labeled, verbatim summary) and return it as new_finalized_summaries_block for human review.
+6. APPEND to the learning libraries (append-only PRIVATE instances, NOT primary source files): add each finalized, submitted summary (verbatim, role-archetype labeled, keyed by folder so re-runs don't duplicate) to 05a-summary-library.md; add any clear, reusable skills observation from this batch to 06a-skills-library.md. Create either instance from its template if missing. ALSO return the same summaries as new_finalized_summaries_block (paste-ready, for convenience). Do NOT touch the PRIMARY source-of-truth files — 01-profile.md, 02-resume-index.md, 03-approved-truths-and-boundary-rules.md, 04-experience-bank.md, 05-summary-quick.md, 06-skills-quick.md: any change to those is only a PROPOSAL in the source-update queue, gated on human review (§9).
 7. Keep the ledger and queue tight and honest; flag confounds explicitly.
 
 Write the updated ledger and queue, then return the structured summary.`,
@@ -254,5 +266,7 @@ return {
   patterns: synth ? synth.patterns : [],
   base_template_candidates: synth ? (synth.base_template_candidates || []) : [],
   finalized_summaries_for_05a: synth ? synth.new_finalized_summaries_block : '',
-  notes: synth ? synth.notes : '',
+  archive: discovery.archive_resolved || '',
+  workspace_leftovers: leftovers,
+  notes: `${synth ? synth.notes : ''}${leftoverNote}`,
 }

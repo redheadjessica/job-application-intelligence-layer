@@ -16,7 +16,7 @@ Clone this repo, run **`/intake`** once to generate your own personal files from
 - **`03-VETTING/`** — **Vet.** Triage only: score and rank which jobs are worth applying to, using your scoring card + candidate profile. Writes a ranked CSV + Markdown + a formatted XLSX. See `03-VETTING/CLAUDE.md`.
 - **`04-TAILOR/`** — **Tailor.** Resume *tailoring* only (never submitting). Writes an `application_resume_output - [Company] - [Role].md` draft: picks a resume base, flags gaps, suggests content. Engine spec: `04-TAILOR/00-job_application_agent.md`.
 - **`04-TAILOR/learning/`** — **Reconcile.** Post-submission learning loop (maintenance-only, never read during a generation run): compares what the system recommended against what you actually submitted and proposes lessons for your review. `reconcile-spec.md`, `learning-ledger.md`, `source-update-queue.md`.
-- **`05-SUBMITTED-APPLICATIONS/`** — durable archive of submitted applications (gitignored; the default archive root, configurable in `jail.config.json`).
+- **`05-SUBMITTED-APPLICATIONS/`** — durable archive of submitted applications (gitignored; the default archive root, configurable in `jail.config.json`). After you submit an application, run **`/archive`** to *move* its folder here (never copied), then **`/reconcile`** later to learn from the final submitted version.
 - **`__READY TO REVIEW/`** — the human-review hub. Holds dated **job batches** (`MM-DD-YY/`) and other **review folders** (`MM-DD-YY - Intake Review/`, `MM-DD-YY - Source Update Review/`). Only exact date-shaped folder names (`MM-DD-YY`) are treated as job batches.
 
 ---

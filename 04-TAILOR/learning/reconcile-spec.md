@@ -4,7 +4,9 @@ This defines the **post-application reconcile workflow**: how the system learns 
 
 **Core principle:** the active batch folder (`__READY TO REVIEW/<date>/`) is a **workspace** and is **never** a learning source. Your **submitted-applications archive** (`{{your submitted-applications archive}}`) is the **trusted archive**. Learning happens **only** from the archive, **only after submission**, and **only** through this reconcile pass.
 
-**Status:** implemented by `.claude/workflows/reconcile.js` (Discover → Reconcile (parallel) → Synthesize). Invoke with `{folders:[...]}` for an explicit set, or `{archive, limit}` to scan for unreconciled folders. The `learning-ledger.md` ledger and `source-update-queue.md` queue live beside this spec. The workflow writes per-folder reports + appends to the ledger / queue only; it never edits canonical generation files, and finalized summaries are returned as a paste-ready block for human review (not auto-written to the summary library). None of the canonical generation files, the resume index, or the experience bank is ever touched by reconcile (see §8).
+**Status:** implemented by `.claude/workflows/reconcile.js` (Discover → Reconcile (parallel) → Synthesize). Invoke with `{folders:[...]}` for an explicit set, or `{archive, limit}` to scan; **`{archive}` is optional** — without it, reconcile reads `archive.path` from `jail.config.json` (fallback `05-SUBMITTED-APPLICATIONS`) and scans its year subfolders. (Move completed folders into the archive first with the **`/archive`** skill — reconcile only *reads* the archive, it never moves anything.) The workflow writes per-folder reports and appends to the **append-only learning instances** — `learning-ledger.md`, `source-update-queue.md`, `05a-summary-library.md`, and `06a-skills-library.md` (each created from its template if missing) — and **never** edits the primary generation files (`01`–`06`, resume index, experience bank); changes to those are only *proposals* in the queue, gated on human review (§8, §9).
+
+**Cadence (manual, never automatic):** run reconcile after your first few applications, after a meaningfully changed final resume, when a new resume base emerges, or after repeated summary/skills corrections — less often once things stabilize. The discover step also warns when completed-looking folders are still sitting in `__READY TO REVIEW` (move them with `/archive`).
 
 The ledger and queue are **maintenance/learning files. They are NOT in the tailoring parallel-read batch and are never read during a normal résumé-generation run.**
 
@@ -137,7 +139,7 @@ When the same proposal recurs, **increment its occurrence count and add the appl
 A folder is **ready** only if all of these hold; otherwise reconcile stops, writes no durable artifact, and reports what's missing:
 - It is under the **trusted archive** (`{{your submitted-applications archive}}`), not the active `__READY TO REVIEW/` workspace.
 - It contains the **original `application_resume_output - … .md`** (the agent's first-pass recommendation).
-- It contains the **final submitted résumé PDF** (ground truth). The editable source file (`.pages`/`.docx`/etc.) without an exported/submitted PDF is **not** sufficient.
+- It contains the **final submitted résumé PDF** (ground truth) — a `*Resume*.pdf`, or the single non-JD `.pdf` in the folder (if multiple PDFs are ambiguous, discover flags it). The editable source file (`.pages`/`.docx`/etc.) without an exported/submitted PDF is **not** sufficient.
 - It contains the **scraped job post `.txt`**.
 - Cover letter / application-answer files are **optional** (used if present).
 - It does **not** already contain a reconcile report (any `reconcile-report - … .md` file) — else it's already done, skip.
@@ -167,7 +169,7 @@ Everything starts as an **observation**. It escalates only as evidence warrants:
 
 ## 8. Canonical files are never edited during reconcile (hard rule)
 
-Reconcile's only writes are: the per-folder reconcile report (`reconcile-report - … .md` in the archive folder) and appends to the ledger / queue (in the repo). It must **never** edit the canonical generation files, the resume index, the experience bank, the summary/skills libraries, or any other canonical/source file. No exceptions, automated or not.
+Reconcile's writes are: the per-folder reconcile report (`reconcile-report - … .md` in the archive folder) and appends to the **append-only learning instances** — `learning-ledger.md`, `source-update-queue.md`, `05a-summary-library.md`, `06a-skills-library.md` (created from templates if missing). It must **never** edit the **primary generation files**: `01-profile.md`, `02-resume-index.md`, `03-approved-truths-and-boundary-rules.md`, `04-experience-bank.md`, `05-summary-quick.md`, `06-skills-quick.md`. Changes to those are only *proposals* in the source-update queue, gated on human review. No exceptions, automated or not.
 
 ---
 
