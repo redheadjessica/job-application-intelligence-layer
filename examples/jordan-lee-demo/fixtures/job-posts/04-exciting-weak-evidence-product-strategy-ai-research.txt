@@ -1,0 +1,33 @@
+URL: https://example.com/jobs/lyceum-ai-product-strategy-lead
+Page Title: Product Strategy Lead, AI Research Platform - Lyceum AI
+Company: Lyceum AI
+
+--- JOB TEXT START ---
+
+Product Strategy Lead, AI Research Platform
+Lyceum AI · NYC hybrid (2 days/week) or Remote (US)
+Compensation: $205,000–$245,000 base + equity
+
+About Lyceum AI
+Lyceum AI (fictional) builds a platform for AI researchers and applied-ML teams to run, evaluate, and ship experiments. Our users are ML engineers and research scientists. This is a product-strategy role at the intersection of research and product.
+
+About the role
+This role owns product strategy and direction for the research platform. You'll set the roadmap, make build/buy/kill calls, define the technical product vision, and own how we evaluate model and platform tradeoffs. You'll work hand in hand with ML engineering and research leadership.
+
+What you'll do
+- Own product strategy and the roadmap for the AI research platform.
+- Make core product and technical tradeoff decisions (evaluation, infrastructure, modeling).
+- Define and own the product vision with research and ML engineering leaders.
+- Translate frontier ML capabilities into platform direction.
+- Lead a cross-functional team toward the strategy.
+
+What we're looking for
+- 8+ years in product, with deep ownership of technical / ML product strategy.
+- Strong technical foundation in machine learning and model evaluation.
+- Track record owning a product roadmap and making hard prioritization calls.
+- Experience leading teams and setting multi-quarter strategy.
+- Comfort operating with ML researchers and engineers as peers.
+
+Lyceum AI is an equal opportunity employer. (Fictional posting for demo purposes.)
+
+--- JOB TEXT END ---

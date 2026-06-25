@@ -1,0 +1,33 @@
+URL: https://example.com/jobs/flintlock-principal-pmm-developer-platform
+Page Title: Principal Product Marketing Manager, Developer Platform - Flintlock
+Company: Flintlock
+
+--- JOB TEXT START ---
+
+Principal Product Marketing Manager, Developer AI Platform
+Flintlock · San Francisco, CA (onsite, 5 days/week)
+Compensation: $235,000–$275,000 base + equity
+
+About Flintlock
+Flintlock (fictional) builds an AI developer platform — infrastructure and tooling for teams shipping AI features. We sell to engineering and platform teams. This role is fully onsite at our San Francisco HQ; we believe our platform team does its best work in person.
+
+About the role
+We're looking for a principal product marketer to own positioning and GTM for a developer-facing AI platform. You'll work with highly technical buyers, lead launches, and set the competitive narrative in a crowded infrastructure market.
+
+What you'll do
+- Own positioning and messaging for the developer AI platform.
+- Lead GTM for platform and API launches.
+- Build deep competitive intelligence in the AI infrastructure space.
+- Partner with developer relations and product on technical narratives.
+- Mentor other product marketers on the team.
+
+What we're looking for
+- 8+ years in product marketing, with significant time marketing to developers.
+- Deep comfort with technical products and technical buyers.
+- Track record leading launches for platform / infrastructure products.
+- Strong competitive instincts in fast-moving markets.
+
+Relocation to San Francisco is required; this role is not remote.
+Flintlock is an equal opportunity employer. (Fictional posting for demo purposes.)
+
+--- JOB TEXT END ---
