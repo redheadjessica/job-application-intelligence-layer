@@ -11,10 +11,18 @@
 - **Done (V2B · Unit 4 — prep reliability):** shared `02-PREP/prep_common.py` (URL normalization/dedupe, collision-safe filenames, thin/failed classification, manifest + report, quarantine layout); both fetchers delegate to it; exact + normalized URL dedupe; same company/title soft-flag; thin/failed quarantined into `3 - Source Material/Needs Review/` and `Failed/` (ranking reads only `All Job Posts (full text)/`); `0 - Prep Report/prep-manifest.json` + `prep-report.md`; manifest-aware re-run = retry (`--force` to refetch all); `new_batch.py` scaffolds the new folders + prints one primary prep command.
 - **Done (V2B · Unit 5 — candidate-relative ranking):** `vet-jobs` loads `jail.config.json` and inlines it as `<preferences>` to sharpen `practicality_score`, and adds a `lane_fit` schema; `make_rankings_xlsx.py` reads the config and colors **Comp Fit** (vs target/floor, top-of-range) and **Location Fit** (vs the candidate's per-arrangement ratings) candidate-relative, adds **Comp Fit / Location Fit / Lane Fit** columns, aligns `final_score` color to the Status bands, falls back to neutral + a note when config is missing, and shows a prep-quarantine note; intake now captures `arrangements` ratings + `home_metro_aliases`; `jail.config.template.json` pins the `preferred/ok/stretch/no/null` vocabulary.
 - **Done (V2C · Unit 6 — archive + reconcile UX):** new `/archive` skill (interactive, move-not-copy, readiness check, missing/ambiguous final-PDF warning, config-aware archive path + year subfolder, `archive-summary.md`, workspace-leftover mention); `reconcile.js` made config-aware (resolves `archive.path` from `jail.config.json`, fallback `05-SUBMITTED-APPLICATIONS`, scans year subfolders), now appends finalized summaries → `05a` and skills observations → `06a` (create-from-template if missing; primary files 01–06 still gated via the queue), warns about completed-looking folders left in `__READY TO REVIEW`, and carries cadence guidance.
-- **Next up (Unit 7):** README + public JAIL-page copy, beginner screenshots (synthetic), workflow diagram, centralized user messages, cover-letter + final-review explainers.
-- **Carried live caveats (need the Python venv):** Unit 4 live network fetch + Unit 5 live xlsx render still need a real-dependency sanity test.
+- **Done (V2C · Unit 7 — docs + public-page copy + onboarding):** README refreshed to V2 (tool-first quick-start, privacy/template-instance section, folder map, commands, a Mermaid loop); new docs — `jail-public-page-copy.md` (website handoff), `user-message-copy.md` (voice deck), `final-review-and-cover-letters.md`, `testing-and-caveats.md`, `screenshots-plan.md` (synthetic "Jordan Lee" persona); this doc gets the full diagram + companion-docs map. No code changes.
+- **Carried live caveats (need the Python venv):** Unit 4 live network fetch, Unit 5 live xlsx render, and Unit 6 live `/archive` + `/reconcile` still need a real-dependency sanity test — tracked in `testing-and-caveats.md`.
 
 ---
+
+## Companion docs
+- `../README.md` — beginner/user onboarding (tool-first).
+- `jail-public-page-copy.md` — suggested copy for the external `redheadjessica.com/jail` page (handoff; the website source is in another repo).
+- `user-message-copy.md` — the canonical chat voice for each step.
+- `final-review-and-cover-letters.md` — what V2 leaves to the user.
+- `testing-and-caveats.md` — what's verified offline vs. still needs a live run.
+- `screenshots-plan.md` — synthetic-persona screenshot checklist.
 
 ## 1. North star
 
@@ -66,6 +74,25 @@ Job sourcing/scouting; LLM/web-search/API sourcing (Adzuna/JSearch/etc.); auto-a
 **The loop:** source materials → intake → approved source of truth → rank jobs → tailor selected jobs → submit → move to archive → reconcile → approve source updates → better future rankings and resumes.
 
 ---
+
+## Workflow diagram
+
+```mermaid
+flowchart TD
+  P["Public page / README"] --> DL["Download the repo"]
+  DL --> M["Add materials: 00-INTAKE/01-about-you (evidence) + 02-where-you-want-to-go (direction)"]
+  M --> IN["Run /intake"]
+  IN --> SR["Staged review: __READY TO REVIEW/MM-DD-YY - Intake Review/"]
+  SR --> AP["Approve -> private generated source files"]
+  AP --> URL["Paste job URLs -> 01-INBOX/"]
+  URL --> PR["Prep: fetch, dedupe, quarantine thin/failed, report"]
+  PR --> RK["Rank: candidate-relative spreadsheet"]
+  RK --> TL["Tailor selected jobs"]
+  TL --> SUB["Submit (outside JAIL) + save final PDF"]
+  SUB --> AR["/archive -> 05-SUBMITTED-APPLICATIONS/"]
+  AR --> RC["/reconcile -> learning loop"]
+  RC -. "proposed source updates you approve" .-> AP
+```
 
 ## 6. Target folder structure
 
@@ -152,7 +179,7 @@ How boundaries split: **global** career-wide boundaries live in `01-profile.md`;
 4. **Prep reliability** (done) — `prep_common.py`; exact+normalized URL dedupe; company/title soft-flag; collision-safe filenames; thin/failed classification + quarantine (`Needs Review/`, `Failed/`); `prep-manifest.json` + `prep-report.md`; manifest-aware retry; ranking reads usable-only.
 5. **Candidate-relative ranking** (done) — `vet-jobs` inlines `jail.config.json` (sharper `practicality_score`) + `lane_fit`; colorizer reads config → candidate-relative Comp Fit / Location Fit + Lane Fit columns, status-aligned `final_score`, neutral fallback + quarantine note; intake captures arrangement ratings.
 6. **Archive + reconcile UX** (done) — `/archive` skill (move-not-copy, readiness, PDF warning, `archive-summary.md`); config-aware reconcile (jail.config archive path + year scan), `05a`/`06a` appends (primary files still gated), workspace-leftover warning, cadence.
-7. **Docs + public page** — README/JAIL-page copy, synthetic screenshots, workflow diagram, centralized user-message copy, cover-letter + final-review explainers.
+7. **Docs + public page** (done) — README refresh; `jail-public-page-copy.md`, `user-message-copy.md`, `final-review-and-cover-letters.md`, `testing-and-caveats.md`, `screenshots-plan.md`; Mermaid diagrams; companion-docs map.
 
 ## 13. Future roadmap
 
