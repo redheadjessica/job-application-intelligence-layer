@@ -12,15 +12,14 @@ Committed screenshot PNGs for the JAIL README and the website handoff copy. All 
 
 | File | Source | Status |
 |---|---|---|
-| `hero-ranking.png` | **auto-generated** (matplotlib render of the committed `rankings.xlsx`) — the marketing hero, not the literal spreadsheet UI | ✅ added (Unit 5 Phase A) |
-| *(everything else)* | **manual capture** by the author (Finder / Claude Code / Numbers·Excel / markdown preview / browser) | ⏳ pending Phase B |
+| *(all shots)* | **manual capture** by the author (Finder / Claude Code / Numbers·Excel·Sheets / markdown preview / browser). The `ranking-xlsx.png` spreadsheet shot doubles as the marketing/hero image — there is **no auto-rendered hero**. | ⏳ pending |
 
-The full per-shot checklist (what to open, what's visible, crop, README vs website, auto vs manual) lives in [`../examples/jordan-lee-demo/screenshots-notes.md`](../examples/jordan-lee-demo/screenshots-notes.md).
+The full per-shot checklist (what to open, what's visible, crop, README vs website) lives in [`../examples/jordan-lee-demo/screenshots-notes.md`](../examples/jordan-lee-demo/screenshots-notes.md).
 
 ## Naming
 
-Use the `[shot: …]` labels referenced by [`../../README.md`](../../README.md) and [`../jail-public-page-copy.md`](../jail-public-page-copy.md) (e.g. `ranking-xlsx.png`, `intake-review.png`, `folder-tree.png`, `hero-ranking.png`).
+Use the `[shot: …]` labels referenced by [`../../README.md`](../../README.md) and [`../jail-public-page-copy.md`](../jail-public-page-copy.md) (e.g. `ranking-xlsx.png`, `intake-review.png`, `folder-tree.png`).
 
 ## Status
 
-Folder scaffolded in **V2.1 Unit 1**. `hero-ranking.png` auto-generated in **V2.1 Unit 5 Phase A**. The manual captures land in **Phase B**. README/website wiring happens **after** the images are selected.
+Folder scaffolded in **V2.1 Unit 1**. The manual captures (including the spreadsheet/hero shot) land next. README/website wiring happens **after** the images are selected. *(The earlier auto-rendered `hero-ranking.png` was dropped in V2.2 — the real spreadsheet screenshot is the hero.)*

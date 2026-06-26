@@ -50,9 +50,11 @@ Use this file when assessing Market Perception and Company Style scores, and to 
 ---
 
 ## Priority Lanes
-<!-- intake: 2–5 named lanes, most-wanted first. Each job gets tagged with the closest lane (or "Outside lanes").
-     These drive the spreadsheet's category coloring AND are the shared lane taxonomy — the id/name/priority of
-     each lane is mirrored in jail.config.json. Derive candidates from the user's domains + reaching-for roles; confirm order.
+<!-- intake: 2–5 named lanes, most-wanted first. The scorer's Lane Fit maps each job to the closest lane (or "Outside lanes");
+     the matched lane's priority drives the spreadsheet's Lane stoplight coloring (p1 green / p2+ amber / Outside red) AND
+     these are the shared lane taxonomy — the id/name/priority of each lane is mirrored in jail.config.json. (Note: "Lane" in
+     the spreadsheet is the job's own category; "Lane Fit" is this candidate-relative mapping.) Derive candidates from the
+     user's domains + reaching-for roles; confirm order.
      TRUTH FIREWALL: lanes come partly from roles the candidate WANTS — they set direction and scoring, never proof
      of experience. Copy one block per lane; keep ids stable (jail.config.json mirrors them). -->
 

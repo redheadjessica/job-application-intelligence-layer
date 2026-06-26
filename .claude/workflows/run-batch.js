@@ -59,9 +59,9 @@ if (!TAILOR) {
 }
 
 // ---- Phase 2: tailor the top N (sequential, highest first) ----
-// Skip anything the rubric flagged as "Skip" — don't waste a tailor pass on a reject.
+// Skip the lowest band ("Apply Eventually: Or Skip It", score < 60) — don't waste a tailor pass on it.
 phase('Tailor')
-const picks = vet.ranked.filter((r) => r.status !== 'Skip').slice(0, TOP_N)
+const picks = vet.ranked.filter((r) => r.status !== 'Apply Eventually: Or Skip It').slice(0, TOP_N)
 if (picks.length === 0) {
   log('No top jobs above the Skip threshold — nothing to tailor.')
   return { mode: 'vet+tailor', review_folder: REVIEW_ROOT, jobs_scored: vet.jobs_scored, csv: vet.csv, markdown: vet.markdown, xlsx: vet.xlsx, tailored: [] }

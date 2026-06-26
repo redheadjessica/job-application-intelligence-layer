@@ -54,22 +54,21 @@ const SCORE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: [
-    'category', 'company', 'title_and_link', 'location', 'comp_range', 'lane', 'lane_fit',
+    'company', 'title_and_link', 'location', 'comp_range', 'lane', 'lane_fit',
     'desire_score', 'market_perception_score', 'company_style_score', 'practicality_score',
     'mission_fit_notes', 'scope_fit_notes', 'top_reasons', 'top_concerns',
   ],
   properties: {
-    category: { type: 'string' },
     company: { type: 'string' },
     title_and_link: { type: 'string', description: 'Role Title | URL, or just the title if no URL' },
     location: { type: 'string', description: 'Normalized location. RULES: fully remote -> "Remote". Remote but restricted to certain US states -> "Remote (states: CA/NY/TX/...)". In-office/hybrid in NYC -> "IRL NYC - N days" where N is the required in-office days per week if stated, else "unknown days"; append specific days if named, e.g. "IRL NYC - 3 days (Mon/Tue/Thu standard)". In-office elsewhere -> "IRL <City> - N days". Unknown -> "Unknown". ALWAYS use "IRL" (never "Hybrid"). A bare "Location: <City>" line is usually the company HQ, NOT a relocation requirement -> only treat as in-office if the posting actually requires on-site presence; otherwise look for the real workplace type (Remote/Hybrid/On-site) and the exact required day count.' },
     comp_range: { type: 'string', description: 'lowest-highest in thousands, no $ or commas, e.g. 190-210, or ?? if unknown' },
-    lane: { type: 'string', description: 'Which of the candidate’s priority lanes (from the profile), or "Outside lanes"' },
+    lane: { type: 'string', description: 'The job’s ACTUAL category/lane, in the job’s OWN terms (2-5 words) — what the role IS, independent of the candidate. Do NOT map it to the candidate’s lanes. E.g. "AI Product Marketing", "Developer Tools PM", "Product Strategy / AI Research", "Lifecycle Marketing".' },
     lane_fit: {
       type: 'object', additionalProperties: false,
       required: ['primary_lane', 'secondary_lane', 'confidence', 'note'],
       properties: {
-        primary_lane: { type: 'string' },
+        primary_lane: { type: 'string', description: 'EXACTLY one of the candidate’s priority-lane names (verbatim from the profile), or "Outside lanes" if the role fits none of them.' },
         secondary_lane: { type: ['string', 'null'] },
         confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
         note: { type: 'string', description: 'one short phrase on why it fits or does not' },
@@ -163,6 +162,11 @@ ${refs.rubric}
 ${refs.profile}
 </profile>${prefsBlock}`
 
+// Parse the structured config once — used to write candidate-relative Comp Fit / Location Fit
+// LABELS into the CSV (single source of this math; make_rankings_xlsx.py only maps label -> color).
+let CFG = {}
+try { CFG = (refs && refs.config && refs.config.trim()) ? JSON.parse(refs.config) : {} } catch (_) { CFG = {} }
+
 // ---- Phase 2: score each job concurrently ----
 phase('Score')
 const scored = await parallel(discovery.jobs.map((job) => async () => {
@@ -184,10 +188,9 @@ Scoring rules:
 - Be decisive. Don't over-index on title. Reflect comp/location tradeoffs in practicality_score, not by skipping.
 - comp_range: lowest-highest base across all bands shown, in whole thousands, no $ or commas (e.g. 190-210); "??" if unknown.
 - location: normalize per the schema rules. CAREFULLY determine the real workplace type from the posting: look for explicit Remote / Hybrid / On-site tags, the exact required in-office DAYS PER WEEK, and any US-state hiring restrictions. Use "IRL NYC - N days" with the exact day count when stated ("unknown days" if not) — NEVER just "Hybrid". Treat a bare "Location: <City>" line as the company HQ, not a relocation requirement, unless the posting actually requires on-site presence. If remote but restricted to specific US states, list them as "Remote (states: ...)".
-- category: most specific fit from the candidate's priority-lane taxonomy (see profile); use a broad lane only if the subcategory is unclear.
 - title_and_link: "Role Title | URL" if a URL is present, else just the title.
-- lane: which of the candidate's priority lanes it fits, or "Outside lanes".
-- lane_fit: { primary_lane, secondary_lane (or null), confidence ("high"/"medium"/"low"), note (one short phrase on why it fits or not) }. Pick from the candidate's priority lanes in the profile. If outside all lanes, primary_lane = "Outside lanes". Do NOT inflate the fit — it is surfaced for the candidate, not added to the score.
+- lane: the job's ACTUAL category/lane in the job's OWN terms — what the role IS, NOT mapped to the candidate's lanes. A product-management role is "Product Management" (or more specific, e.g. "Product Strategy / AI Research") even if the candidate is in marketing. 2-5 words. Descriptive, not a fit judgment.
+- lane_fit: how that job-lane maps to the CANDIDATE's priority lanes — candidate-relative and honest. { primary_lane: EXACTLY one of the candidate's priority-lane names (verbatim from the profile), or "Outside lanes" if it fits none; secondary_lane (or null); confidence ("high"/"medium"/"low"); note (one short phrase) }. If the role is not one of the candidate's lanes, primary_lane = "Outside lanes" (even when the domain sounds related). Do NOT inflate — it is surfaced for the candidate, not added to the score.
 - mission_fit_notes / scope_fit_notes: one tight phrase each.
 - top_reasons / top_concerns: semicolon-separated phrases, concise and concrete.
 - If PDF extraction is imperfect, make a best effort and note it in scope_fit_notes; do not fail.`,
@@ -219,12 +222,47 @@ function resolveWeights(w) {
 const W = resolveWeights(refs && refs.weights)
 log(`Weights — desire ${Math.round(W.desire * 100)} / market ${Math.round(W.market * 100)} / style ${Math.round(W.style * 100)} / practicality ${Math.round(W.practicality * 100)}`)
 
+// ---- Candidate-relative fit LABELS (ported from make_rankings_xlsx.py — keep in sync) ----
+// JS is the single source of this math; the .py maps these label strings -> colors only.
+function compFitLabel(text, cfg) {
+  const t = (text || '').trim()
+  const nums = (t.match(/\d+/g) || []).map(Number)
+  if (!t || t.includes('?') || nums.length === 0) return 'Unknown'
+  const comp = (cfg && cfg.comp) || {}
+  const floor = comp.floor_base, target = comp.target_base
+  if (floor == null && target == null) return 'No comp prefs'
+  const high = Math.max(...nums)
+  if (floor != null && high < floor) return 'Below floor'
+  if (target != null && high >= target) return 'Meets/above target'
+  if (target != null) return 'Near target'
+  return 'Above floor'
+}
+function locationFitLabel(text, cfg) {
+  const loc = (text || '').trim().toLowerCase()
+  const locp = (cfg && cfg.location) || {}
+  const aliases = ((locp.home_metro_aliases) || []).filter(Boolean).map((a) => a.toLowerCase())
+  const home = (locp.home_metro || '').trim().toLowerCase()
+  if (home) aliases.push(home)
+  if (!loc || loc.includes('unknown') || loc.includes('unclear')) return 'Unclear'
+  if (loc.includes('remote')) return loc.includes('state') ? 'Remote (state-restricted)' : 'Remote'
+  if (['irl', 'onsite', 'on-site', 'hybrid', 'in-office', 'in office'].some((k) => loc.includes(k))) {
+    const m = loc.match(/(\d+)\s*day/)
+    const days = m ? Number(m[1]) : null
+    const onsite = loc.includes('onsite') || loc.includes('on-site') || (days != null && days >= 5)
+    const mode = onsite ? 'onsite' : 'hybrid'
+    if (aliases.length && aliases.some((a) => loc.includes(a))) return `Home ${mode}`
+    if (aliases.length) return `Other ${mode}`
+    return `${mode.charAt(0).toUpperCase()}${mode.slice(1)} (home metro not set)`
+  }
+  return 'Unclear'
+}
+
 // ---- Compute final score + status in code (deterministic) ----
 function statusFor(score) {
   if (score >= 80) return 'Apply ASAP: High Prio'
   if (score >= 70) return 'Apply Eventually: Apply If Time'
   if (score >= 60) return 'Apply Eventually: Backup Lane'
-  return 'Skip'
+  return 'Apply Eventually: Or Skip It'
 }
 for (const r of rows) {
   r.final_score = Math.round(
@@ -234,6 +272,8 @@ for (const r of rows) {
     r.practicality_score * W.practicality
   )
   r.status = statusFor(r.final_score)
+  r._comp_fit = compFitLabel(r.comp_range, CFG)
+  r._loc_fit = locationFitLabel(r.location, CFG)
 }
 rows.sort((a, b) => b.final_score - a.final_score)
 
@@ -242,17 +282,32 @@ function csvCell(v) {
   const s = (v === undefined || v === null) ? '' : String(v)
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
 }
-const HEADER = 'Status?,Category,Company,Job Post Title + Link,Location?,Comp Range,lane,Lane Fit,desire_score,market_perception_score,company_style_score,practicality_score,final_score,mission_fit_notes,scope_fit_notes,top_reasons,top_concerns,job_file'
 const laneFitStr = (lf) => lf ? `${lf.primary_lane} (${lf.confidence})${lf.secondary_lane ? ' · +' + lf.secondary_lane : ''}` : ''
-const csvLines = [HEADER]
-for (const r of rows) {
-  csvLines.push([
-    r.status, r.category, r.company, r.title_and_link, r.location, r.comp_range,
-    r.lane, laneFitStr(r.lane_fit), r.desire_score, r.market_perception_score, r.company_style_score, r.practicality_score,
-    r.final_score, r.mission_fit_notes, r.scope_fit_notes,
-    r.top_reasons, r.top_concerns, r.job_file,
-  ].map(csvCell).join(','))
+
+// 23-column tracker layout: human-editable columns (the "? [You ...]" convention) first, AI
+// scoring/detail to the right. CSV and XLSX share this exact header set + order.
+const HEADERS = [
+  'Applied Date? [You Fill In]', 'Status? [You Change]', 'Lane', 'Company', 'Job Post Title + Link',
+  'Working Location', 'Comp Range', 'Final Score', 'Have Intro? [You Add]', 'Your Notes? [You Add]',
+  'Decline/Down Date? [You Add]', 'Desire Score', 'Market Perception Score', 'Company Style Score',
+  'Practicality Score', 'Mission Fit Notes', 'Scope Fit Notes', 'Top Reasons Notes', 'Top Concerns',
+  'Lane Fit', 'Location Fit', 'Comp Fit', 'Job File',
+]
+// The CSV is CLEAN DATA ONLY — header + one row per job, in final-score order. No section-divider
+// rows and no pre-grouping: that keeps the data sortable (no merged cells) and lets a user paste
+// rows into their own tracker without dragging along duplicate dividers. The XLSX adds a separate
+// section-color legend block + a Status dropdown; the user sorts/groups when they want.
+function dataCells(r) {
+  return [
+    '', r.status, r.lane, r.company, r.title_and_link,
+    r.location, r.comp_range, r.final_score, '', '',
+    '', r.desire_score, r.market_perception_score, r.company_style_score,
+    r.practicality_score, r.mission_fit_notes, r.scope_fit_notes, r.top_reasons, r.top_concerns,
+    laneFitStr(r.lane_fit), r._loc_fit, r._comp_fit, r.job_file,
+  ]
 }
+const csvLines = [HEADERS.map(csvCell).join(',')]
+for (const r of rows) csvLines.push(dataCells(r).map(csvCell).join(','))
 const csvContent = csvLines.join('\n') + '\n'
 
 // ---- Build Markdown (sorted desc) ----
@@ -264,7 +319,7 @@ for (const r of rows) {
 `## ${r.final_score} — ${r.company}: ${r.title_and_link.split(' | ')[0]}
 
 - **Status:** ${r.status}
-- **Category:** ${r.category}  |  **Lane:** ${r.lane}  |  **Lane fit:** ${laneFitStr(r.lane_fit)}
+- **Lane:** ${r.lane}  |  **Lane fit:** ${laneFitStr(r.lane_fit)}
 - **Location:** ${r.location}  |  **Comp:** ${r.comp_range}
 - **Scores:** Desire ${r.desire_score} / Market ${r.market_perception_score} / Style ${r.company_style_score} / Practicality ${r.practicality_score} → **Final ${r.final_score}**
 - **Mission fit:** ${r.mission_fit_notes}

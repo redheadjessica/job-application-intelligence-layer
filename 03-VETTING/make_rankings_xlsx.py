@@ -1,22 +1,30 @@
 #!/usr/bin/env python3
 """
-Build a polished, candidate-relative .xlsx from a job-vetting rankings CSV.
+Build a polished job-search TRACKER .xlsx from a job-vetting rankings CSV.
 
+The CSV (written by vet-jobs) is CLEAN DATA: a header + one row per job, in final-score order, in
+the 23-column tracker layout (human-editable columns first — headers ending "? [You ...]" — then AI
+scoring/detail). No divider rows: the data stays sortable (no merged cells) and a user can paste
+rows into their own tracker without dragging duplicate dividers.
+
+This script STYLES that data and adds tracker affordances:
+- header frozen (freeze A2), every cell wrapped + centered + top-aligned,
+- a Status dropdown (inline list, like the reference workbook — shows the arrow; applied to the job
+  rows only),
+- auto-filter on the job rows so "Sort A->Z" is one click (the legend below is outside its range),
+- candidate-relative stoplight fills for Status / Lane / Location Fit / Comp Fit,
+- Final Score / sub-score color ramps,
+- a SEPARATE section-color legend block below the jobs (merged A:J bars) — a palette you can copy a
+  bar from if you sort and want visual breaks; it is NOT mixed into the sortable data,
+- an Instructions tab.
+
+Note on "chips": the rounded colored dropdown pills are a Google Sheets-native feature configured in
+Sheets; they cannot be embedded in an .xlsx. This file gives flat cell fills + a working dropdown.
+
+Candidate-relative fit MATH lives in vet-jobs.js (single source); here we only map labels -> colors.
 Usage:
     python make_rankings_xlsx.py <input-rankings.csv> [output.xlsx] \
         [--config jail.config.json] [--quarantined N]
-
-Candidate-relative coloring (V2 Unit 5): comp and location are colored against the
-candidate's own preferences in jail.config.json (comp target/floor; per-arrangement
-location ratings), NOT hardcoded thresholds. If the config is missing or partial, those
-columns fall back to NEUTRAL (grey) with an "Unknown / no prefs" label — never a wrong
-guess. New columns make the fit legible: "Comp Fit", "Location Fit", "Lane Fit".
-
-- final_score is colored to match the Status bands (>=80 / 70-79 / 60-69 / <60).
-- The four sub-scores keep the fine-grained 0-100 bucket ramp.
-- "Job Post Title + Link" cells are real clickable hyperlinks.
-- Backward-compatible with legacy CSV field names (passion_score / quality_of_life_score).
-- --quarantined N adds a note that N thin/failed prep posts were not ranked.
 """
 import argparse
 import csv
@@ -31,96 +39,103 @@ try:
     from openpyxl.formatting.rule import CellIsRule
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.datavalidation import DataValidation
     HAVE_OPENPYXL = True
-except ImportError:  # the pure fit/config logic below is importable + testable without openpyxl
+except ImportError:  # the pure label->color/config logic below stays importable + testable
     HAVE_OPENPYXL = False
 
 FONT = "Arial"
 
-# ---- Output column layout: (header, source-CSV-header or None) ----
-# None = computed here (Comp/Location Fit) or a blank manual column.
-COLUMNS = [
-    ("Applied",                 None),
-    ("Status?",                 "Status?"),
-    ("Category",                "Category"),
-    ("Company",                 "Company"),
-    ("Job Post Title + Link",   "Job Post Title + Link"),
-    ("Location?",               "Location?"),
-    ("Location Fit",            None),   # computed from Location? + config
-    ("Comp Range",              "Comp Range"),
-    ("Comp Fit",                None),   # computed from Comp Range + config
-    ("Have Intro?",             None),
-    ("Decline/Down Date?",      None),
-    ("Notes",                   None),
-    ("lane",                    "lane"),
-    ("Lane Fit",                "Lane Fit"),   # from the scorer (vet-jobs writes it)
-    ("desire_score",            "desire_score"),
-    ("market_perception_score", "market_perception_score"),
-    ("company_style_score",     "company_style_score"),
-    ("practicality_score",      "practicality_score"),
-    ("final_score",             "final_score"),
-    ("mission_fit_notes",       "mission_fit_notes"),
-    ("scope_fit_notes",         "scope_fit_notes"),
-    ("top_reasons",             "top_reasons"),
-    ("top_concerns",            "top_concerns"),
-    ("job_file",                "job_file"),
-    ("ClaudeStatus",            None),
+# ---- The 23-column tracker layout (must match vet-jobs.js HEADERS). The CSV header row drives the
+# actual order; these names locate the columns that need special styling. ----
+H_STATUS = "Status? [You Change]"
+H_LANE = "Lane"
+H_COMPANY = "Company"
+H_TITLE = "Job Post Title + Link"
+H_WORKLOC = "Working Location"
+H_COMPRANGE = "Comp Range"
+H_FINAL = "Final Score"
+H_LANEFIT = "Lane Fit"
+H_LOCFIT = "Location Fit"
+H_COMPFIT = "Comp Fit"
+SUB_SCORE_COLS = ["Desire Score", "Market Perception Score", "Company Style Score", "Practicality Score"]
+SCORE_COLS = [H_FINAL] + SUB_SCORE_COLS
+LEGEND_MERGE_TO = 10  # section bars merge A:J (columns 1..10 — the human-facing block)
+
+# ---- Status vocabulary: the 12 dropdown values (vet-jobs statusFor outputs are a subset). ----
+STATUS_VALUES = [
+    "**Currently In Talks**",
+    "Applied: Awaiting Response",
+    "Apply Again??",
+    "Apply ASAP: High Prio",
+    "Apply Eventually: Apply If Time",
+    "Apply Eventually: Backup Lane",
+    "Apply Eventually: On Ice (Applied to Another Position at this Company)",
+    "Apply Eventually: Or Skip It",
+    "Declined (Applied, Rejected)",
+    "Down (Applied, No Response)",
+    "Down: Closed Before Applying",
+    "Interviewed: Rejected",
 ]
 
-COL_ALIASES = {
-    "desire_score":       "passion_score",
-    "practicality_score": "quality_of_life_score",
+# Section legend labels -> (fill, font) for the merged bars. Vivid palette matching the reference
+# workbook; Interviewed is brown to read distinct from the Closed/Down red.
+SECTION_COLORS = {
+    "**Currently In Talks**":        ("0000FF", "FFFFFF"),
+    "Applied: Awaiting Response":    ("00FFFF", "000000"),
+    "Apply ASAP":                    ("00FF00", "000000"),
+    "Apply Eventually":              ("FFFF00", "000000"),
+    "Closed / Not Moving Forward":   ("FF0000", "FFFFFF"),
+    "Interviewed, Rejected":         ("7B3F00", "FFFFFF"),
 }
 
-SCORE_COLS = ["desire_score", "market_perception_score", "company_style_score", "practicality_score", "final_score"]
-SUB_SCORE_COLS = ["desire_score", "market_perception_score", "company_style_score", "practicality_score"]
+# Per-status cell fills (lifecycle stoplight, sampled from the reference workbook's chips).
+STATUS_COLORS = {
+    "**Currently In Talks**":                                                ("2F5597", "FFFFFF"),
+    "Applied: Awaiting Response":                                            ("9DC3E6", "000000"),
+    "Apply Again??":                                                         ("D9D9D9", "000000"),
+    "Apply ASAP: High Prio":                                                 ("375623", "FFFFFF"),
+    "Apply Eventually: Apply If Time":                                       ("A9D08E", "000000"),
+    "Apply Eventually: Backup Lane":                                         ("FFE699", "000000"),
+    "Apply Eventually: On Ice (Applied to Another Position at this Company)": ("F4B183", "000000"),
+    "Apply Eventually: Or Skip It":                                          ("F8CBAD", "000000"),
+    "Declined (Applied, Rejected)":                                          ("A52A2A", "FFFFFF"),
+    "Down (Applied, No Response)":                                           ("A52A2A", "FFFFFF"),
+    "Down: Closed Before Applying":                                          ("A52A2A", "FFFFFF"),
+    "Interviewed: Rejected":                                                 ("7B3F00", "FFFFFF"),
+}
 
-# Sub-score 0-100 ramp (unchanged).
+# Sub-score 0-100 ramp.
 SCORE_BUCKETS = [
     ("85+", "5CE05C"), ("80-84", "88E888"), ("75-79", "D9EAD3"), ("70-74", "FCF3CE"),
     ("65-69", "FCE5D5"), ("60-64", "FAD7C0"), ("50-59", "F4D4D4"), ("<50", "ECBFBF"),
 ]
-# final_score bands aligned to Status thresholds (statusFor in vet-jobs: 80 / 70 / 60).
-FINAL_STRONG = "88E888"   # >= 80  Apply ASAP
-FINAL_MAYBE  = "D9EAD3"   # 70-79  Apply If Time
-FINAL_WEAK   = "FCF3CE"   # 60-69  Backup Lane
-FINAL_SKIP   = "ECBFBF"   # < 60   Skip
+# Final Score bands aligned to the Status thresholds (statusFor in vet-jobs: 80 / 70 / 60).
+FINAL_STRONG, FINAL_MAYBE, FINAL_WEAK, FINAL_SKIP = "88E888", "D9EAD3", "FCF3CE", "ECBFBF"
 
-# Candidate-preference -> color. The config stores the PREFERENCE word; styling lives here.
-RATING_COLORS = {
-    "preferred": "A9D08E",  # green
-    "ok":        "FFE699",  # yellow
-    "stretch":   "F4B183",  # orange
-    "no":        "F4A6A6",  # red
-    None:        "D9D9D9",  # grey / unknown
-}
 GREEN, YELLOW, RED, GREY = "A9D08E", "FFE699", "F4A6A6", "D9D9D9"
-
-CAT_PALETTE = [
-    "D9E1F2", "E2EFDA", "FCE4D6", "FFF2CC", "EAD1DC",
-    "DDEBF7", "E2F0D9", "FBE5D6", "F4CCCC", "D9D2E9",
-]
-
-WRAP_COLS = {
-    "Category", "Location?", "Location Fit", "Job Post Title + Link", "lane", "Lane Fit",
-    "Status?", "Notes", "mission_fit_notes", "scope_fit_notes", "top_reasons", "top_concerns",
+RATING_COLORS = {"preferred": "A9D08E", "ok": "FFE699", "stretch": "F4B183", "no": "F4A6A6", None: "D9D9D9"}
+COMP_LABEL_COLORS = {
+    "Below floor": RED, "Meets/above target": GREEN, "Above floor": GREEN,
+    "Near target": YELLOW, "Unknown": GREY, "No comp prefs": GREY,
 }
-CENTER_COLS = {
-    "Applied", "Have Intro?", "Decline/Down Date?", "Comp Range", "Comp Fit",
-    "desire_score", "market_perception_score", "company_style_score", "practicality_score", "final_score",
+LOC_LABEL_ARR = {
+    "Remote": "remote", "Remote (state-restricted)": "remote",
+    "Home hybrid": "home_hybrid", "Home onsite": "home_onsite",
+    "Other hybrid": "other_hybrid", "Other onsite": "other_onsite",
 }
+
 WIDTHS = {
-    "Applied": 9, "Status?": 24, "Category": 26, "Company": 20, "Job Post Title + Link": 52,
-    "Location?": 24, "Location Fit": 18, "Comp Range": 12, "Comp Fit": 16, "Have Intro?": 12,
-    "Decline/Down Date?": 16, "Notes": 28, "lane": 22, "Lane Fit": 22,
-    "desire_score": 9, "market_perception_score": 11, "company_style_score": 11,
-    "practicality_score": 11, "final_score": 10, "mission_fit_notes": 44, "scope_fit_notes": 44,
-    "top_reasons": 48, "top_concerns": 48, "job_file": 28, "ClaudeStatus": 18,
+    "Applied Date? [You Fill In]": 16, H_STATUS: 30, H_LANE: 22, H_COMPANY: 18, H_TITLE: 46,
+    H_WORKLOC: 22, H_COMPRANGE: 12, H_FINAL: 11, "Have Intro? [You Add]": 14, "Your Notes? [You Add]": 26,
+    "Decline/Down Date? [You Add]": 16, "Desire Score": 10, "Market Perception Score": 12,
+    "Company Style Score": 12, "Practicality Score": 12, "Mission Fit Notes": 40, "Scope Fit Notes": 40,
+    "Top Reasons Notes": 46, "Top Concerns": 46, H_LANEFIT: 22, H_LOCFIT: 18, H_COMPFIT: 16, "Job File": 28,
 }
 
 
 # --------------------------------------------------------------------------- #
-# Candidate-relative fit logic (pure — no openpyxl needed)
+# Config + label->color logic (pure — no openpyxl needed)
 # --------------------------------------------------------------------------- #
 def load_config(path) -> dict:
     if not path:
@@ -132,65 +147,64 @@ def load_config(path) -> dict:
         return {}
 
 
-def comp_fit(text, cfg) -> tuple:
-    """(label, color). Uses the TOP of the posted range vs the candidate's floor/target."""
-    t = (text or "").strip()
-    nums = [int(n) for n in re.findall(r"\d+", t)]
-    if not t or "?" in t or not nums:
-        return ("Unknown", GREY)
-    comp = cfg.get("comp") or {}
-    floor, target = comp.get("floor_base"), comp.get("target_base")
-    if floor is None and target is None:
-        return ("No comp prefs", GREY)
-    high = max(nums)
-    if floor is not None and high < floor:
-        return ("Below floor", RED)
-    if target is not None and high >= target:
-        return ("Meets/above target", GREEN)
-    if target is not None:
-        return ("Near target", YELLOW)   # not below floor (or no floor), but short of target
-    return ("Above floor", GREEN)         # only a floor is known and the range clears it
-
-
-def location_fit(text, cfg) -> tuple:
-    """(label, color). Maps the normalized Location? string + the candidate's home metro to
-    one arrangement, then colors it by the candidate's rating for that arrangement."""
-    loc = (text or "").strip().lower()
-    locp = cfg.get("location") or {}
-    arr = locp.get("arrangements") or {}
-    aliases = [a.lower() for a in (locp.get("home_metro_aliases") or []) if a]
-    home = (locp.get("home_metro") or "").strip().lower()
-    if home:
-        aliases.append(home)
-
-    def rc(kind):
-        return RATING_COLORS.get(arr.get(kind))  # rating word -> color; missing -> grey
-
-    if not loc or "unknown" in loc or "unclear" in loc:
-        return ("Unclear", GREY)
-    if "remote" in loc:
-        if "state" in loc:
-            return ("Remote (state-restricted)", rc("remote"))
-        return ("Remote", rc("remote"))
-    if any(k in loc for k in ("irl", "onsite", "on-site", "hybrid", "in-office", "in office")):
-        m = re.search(r"(\d+)\s*day", loc)
-        days = int(m.group(1)) if m else None
-        onsite = ("onsite" in loc or "on-site" in loc) or (days is not None and days >= 5)
-        mode = "onsite" if onsite else "hybrid"
-        if aliases and any(a in loc for a in aliases):
-            return (f"Home {mode}", rc(f"home_{mode}"))
-        if aliases:
-            return (f"Other {mode}", rc(f"other_{mode}"))
-        return (f"{mode.capitalize()} (home metro not set)", GREY)
-    return ("Unclear", GREY)
-
-
 def config_complete_enough(cfg) -> bool:
     comp = cfg.get("comp") or {}
     loc = (cfg.get("location") or {}).get("arrangements") or {}
     has_comp = comp.get("floor_base") is not None or comp.get("target_base") is not None
     has_loc = any(v is not None for v in loc.values())
     return has_comp or has_loc
+
+
+def comp_color(label) -> str:
+    return COMP_LABEL_COLORS.get((label or "").strip(), GREY)
+
+
+def loc_color(label, cfg) -> str:
+    key = LOC_LABEL_ARR.get((label or "").strip())
+    if not key:
+        return GREY
+    arr = (cfg.get("location") or {}).get("arrangements") or {}
+    return RATING_COLORS.get(arr.get(key), GREY)
+
+
+def lane_color(lane_fit_str, cfg):
+    """Color the (job-centric) Lane cell by how well it maps to the candidate's lanes, reading the
+    Lane Fit string ("Primary (confidence) ..."). p1 lane -> green, p2+ -> amber, Outside -> red/grey."""
+    s = (lane_fit_str or "").strip()
+    if not s:
+        return None
+    m = re.match(r"^(.*?)\s*\((high|medium|low)\)", s)
+    primary = (m.group(1) if m else s).strip()
+    conf = m.group(2) if m else "medium"
+    if primary.lower() == "outside lanes":
+        return {"high": RED, "low": GREY}.get(conf, "F4CCCC")
+    lanes = {(l.get("name") or "").strip().lower(): l.get("priority") for l in (cfg.get("lanes") or [])}
+    pr = lanes.get(primary.lower())
+    if pr == 1:
+        return GREEN
+    if pr in (2, 3):
+        return YELLOW
+    return "C6E0B4"
+
+
+def inline_list_formula(values):
+    """Build an inline data-validation list like the reference workbook. A single quoted literal is
+    capped ~255 chars in Excel, so long lists are split at comma boundaries into <=240-char chunks
+    concatenated with & — e.g. "a,b,"&"c,d". Reproduces the exact comma-joined list when evaluated."""
+    joined = ",".join(values)
+    if len(joined) <= 240:
+        return '"' + joined + '"'
+    chunks, cur = [], ""
+    for i, v in enumerate(values):
+        piece = v + ("," if i < len(values) - 1 else "")
+        if cur and len(cur) + len(piece) > 240:
+            chunks.append(cur)
+            cur = piece
+        else:
+            cur += piece
+    if cur:
+        chunks.append(cur)
+    return "&".join('"' + c + '"' for c in chunks)
 
 
 # --------------------------------------------------------------------------- #
@@ -206,105 +220,117 @@ def parse_title_link(val):
 
 
 def read_records(path):
+    """Return (headers, records). Records are data dicts keyed by header, order preserved
+    (vet-jobs already sorted by final score). The CSV carries no divider rows."""
     with open(path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
-    headers = rows[0]
-    idx = {h: i for i, h in enumerate(headers) if h.strip()}
-
-    def get(row, name):
-        i = idx.get(name)
-        if i is None and name in COL_ALIASES:
-            i = idx.get(COL_ALIASES[name])
-        return row[i] if (i is not None and i < len(row)) else ""
-
+    headers = [h.strip() for h in rows[0]]
     records = []
     for row in rows[1:]:
         if not any(c.strip() for c in row):
             continue
-        rec = {key: get(row, key) for _, key in COLUMNS if key is not None}
+        rec = {headers[i]: (row[i] if i < len(row) else "") for i in range(len(headers))}
         for s in SCORE_COLS:
             v = str(rec.get(s, "")).strip()
             rec[s] = int(v) if v.lstrip("-").isdigit() else (v or None)
         records.append(rec)
-    records.sort(key=lambda r: (r.get("final_score") or 0), reverse=True)
-    return records
+    return headers, records
 
 
 def solid(hex_color):
     return PatternFill(start_color=hex_color, end_color=hex_color, fill_type="solid")
 
 
-def _lane_fit_color(text):
-    t = (text or "").lower()
-    if "high" in t:
-        return "E2EFDA"   # faint green
-    if "low" in t:
-        return "F2F2F2"   # faint grey (low confidence)
-    return None           # medium / unknown -> no fill
+INSTRUCTIONS = [
+    ("This spreadsheet is two things at once", True),
+    ("A ranking report (AI-scored) AND your living job-search tracker.", False),
+    ("", False),
+    ("Where to start", True),
+    ("Rows are ordered best-fit first by Final Score. Columns whose header ends in \"?\" are YOURS to fill in (Applied Date, Status, Have Intro, Your Notes, Decline/Down Date).", False),
+    ("", False),
+    ("Status", True),
+    ("\"Status? [You Change]\" starts from the AI's Final Score:  >=80 Apply ASAP  ·  70-79 Apply If Time  ·  60-69 Backup Lane  ·  <60 Or Skip It.  Pick a new value from the dropdown as each application progresses.", False),
+    ("\"On Ice\" means you already applied to a different role at that company — don't double-apply.", False),
+    ("", False),
+    ("Grouping & sorting", True),
+    ("To group by stage, sort by the Status column (use the header filter button, or Data > Sort). The job rows have no merged cells, so sorting works cleanly.", False),
+    ("Below the jobs is a legend of section colors. If you like visual breaks between groups, copy a bar in above a group after sorting — optional.", False),
+    ("Pasting jobs into your own tracker? Copy only the job rows, NOT the legend bars, so you don't end up with duplicate dividers.", False),
+    ("", False),
+    ("Colors & the dropdown", True),
+    ("Status / Lane / Location Fit / Comp Fit cells are color-coded. In Google Sheets you can layer the native rounded \"chip\" dropdown on top if you prefer that look (that is a Sheets feature, not part of the file).", False),
+    ("", False),
+    ("AI detail columns (to the right)", True),
+    ("Everything from \"Desire Score\" rightward is AI-generated.  \"Lane\" = what the job actually is;  \"Lane Fit\" = how that maps to your target lanes.", False),
+    ("", False),
+    ("CSV companion", True),
+    ("A matching .csv has the same columns + job rows (no colors, dropdown, legend, or tabs).", False),
+]
+
+
+def build_instructions(ws):
+    ws.column_dimensions["A"].width = 110
+    t = ws.cell(1, 1, "How to use this tracker")
+    t.font = Font(name=FONT, bold=True, size=14, color="305496")
+    r = 3
+    for text, is_header in INSTRUCTIONS:
+        c = ws.cell(r, 1, text)
+        c.font = Font(name=FONT, bold=is_header, size=11, color=("305496" if is_header else "000000"))
+        c.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+        r += 1
 
 
 def build(input_csv, output_xlsx, config_path=None, quarantined=0):
     if not HAVE_OPENPYXL:
         raise RuntimeError("openpyxl is required to build the .xlsx (install requirements.txt in the venv).")
     cfg = load_config(config_path)
-    records = read_records(input_csv)
-    for rec in records:
-        rec["_comp_fit"] = comp_fit(rec.get("Comp Range", ""), cfg)
-        rec["_loc_fit"] = location_fit(rec.get("Location?", ""), cfg)
-
-    cat_color = {}
-    for rec in records:
-        cat = (rec.get("Category") or "").strip()
-        if cat and cat not in cat_color:
-            cat_color[cat] = CAT_PALETTE[len(cat_color) % len(CAT_PALETTE)]
+    headers, records = read_records(input_csv)
+    ncols = len(headers)
+    letter = {h: get_column_letter(i + 1) for i, h in enumerate(headers)}
+    legend_letter = get_column_letter(LEGEND_MERGE_TO)
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Job Rankings"
-    ncols = len(COLUMNS)
-    last_row = len(records) + 1
-    letter = {hdr: get_column_letter(i + 1) for i, (hdr, _) in enumerate(COLUMNS)}
+    build_instructions(wb.create_sheet("Instructions"))   # second tab
 
     THIN = Side(style="thin", color="D9D9D9")
     BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+    ALIGN = Alignment(horizontal="center", vertical="top", wrap_text=True)
+    base_font = Font(name=FONT, size=10, color="000000")
+    link_font = Font(name=FONT, size=10, color="0563C1", underline="single")
 
+    # Header row.
     hdr_fill = solid("305496")
     hdr_font = Font(name=FONT, bold=True, color="FFFFFF", size=10)
-    for c, (hdr, _) in enumerate(COLUMNS, start=1):
-        cell = ws.cell(1, c, hdr)
+    for c, h in enumerate(headers, start=1):
+        cell = ws.cell(1, c, h)
         cell.fill = hdr_fill
         cell.font = hdr_font
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.alignment = ALIGN
         cell.border = BORDER
     ws.row_dimensions[1].height = 30
 
-    # Header notes: quarantine count + missing-config guidance.
     notes = []
     if quarantined and int(quarantined) > 0:
-        notes.append(f"Prep quarantined {quarantined} thin/failed post(s); they were NOT ranked. "
-                     f"See '0 - Prep Report/'.")
+        notes.append(f"Prep quarantined {quarantined} thin/failed post(s); they were NOT ranked. See '0 - Prep Report/'.")
     if not config_complete_enough(cfg):
-        notes.append("Candidate preferences (jail.config.json comp/location) are missing or empty, "
-                     "so Comp Fit / Location Fit are neutral. Run /intake or fill jail.config.json "
-                     "for candidate-relative coloring.")
+        notes.append("Candidate preferences (jail.config.json comp/location) are missing or empty, so Comp Fit / "
+                     "Location Fit are neutral. Run /intake or fill jail.config.json for candidate-relative coloring.")
     if notes:
-        ws["A1"].comment = Comment("\n".join(notes), "JAIL")
+        ws[f"{letter[H_STATUS]}1"].comment = Comment("\n".join(notes), "JAIL")
 
-    base_font = Font(name=FONT, size=10, color="000000")
-    link_font = Font(name=FONT, size=10, color="0563C1", underline="single")
-    for r, rec in enumerate(records, start=2):
-        for c, (hdr, key) in enumerate(COLUMNS, start=1):
-            if hdr == "Comp Fit":
-                val = rec["_comp_fit"][0]
-            elif hdr == "Location Fit":
-                val = rec["_loc_fit"][0]
-            else:
-                val = "" if key is None else rec.get(key, "")
+    # Data rows (job rows only — no dividers).
+    for i, rec in enumerate(records):
+        r = i + 2
+        for c, h in enumerate(headers, start=1):
+            val = rec.get(h, "")
             if val is None:
                 val = ""
             cell = ws.cell(r, c)
             cell.border = BORDER
-            if hdr == "Job Post Title + Link" and val:
+            cell.alignment = ALIGN
+            if h == H_TITLE and val:
                 title, url = parse_title_link(str(val))
                 cell.value = title
                 if url:
@@ -315,69 +341,84 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
             else:
                 cell.value = val
                 cell.font = base_font
-            if hdr in CENTER_COLS:
-                cell.alignment = Alignment(horizontal="center", vertical="top")
-            elif hdr in WRAP_COLS:
-                cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
-            else:
-                cell.alignment = Alignment(horizontal="left", vertical="top")
+        st = (rec.get(H_STATUS) or "").strip()
+        if st in STATUS_COLORS:
+            fh, foh = STATUS_COLORS[st]
+            ws[f"{letter[H_STATUS]}{r}"].fill = solid(fh)
+            ws[f"{letter[H_STATUS]}{r}"].font = Font(name=FONT, size=10, bold=True, color=foh)
+        lc = lane_color(rec.get(H_LANEFIT, ""), cfg)
+        if lc:
+            ws[f"{letter[H_LANE]}{r}"].fill = solid(lc)
+            ws[f"{letter[H_LANEFIT]}{r}"].fill = solid(lc)
+        cc = comp_color(rec.get(H_COMPFIT, ""))
+        ws[f"{letter[H_COMPRANGE]}{r}"].fill = solid(cc)
+        ws[f"{letter[H_COMPFIT]}{r}"].fill = solid(cc)
+        loc = loc_color(rec.get(H_LOCFIT, ""), cfg)
+        ws[f"{letter[H_WORKLOC]}{r}"].fill = solid(loc)
+        ws[f"{letter[H_LOCFIT]}{r}"].fill = solid(loc)
 
-        comp_c = rec["_comp_fit"][1]
-        loc_c = rec["_loc_fit"][1]
-        ws[f"{letter['Comp Range']}{r}"].fill = solid(comp_c)
-        ws[f"{letter['Comp Fit']}{r}"].fill = solid(comp_c)
-        ws[f"{letter['Location?']}{r}"].fill = solid(loc_c)
-        ws[f"{letter['Location Fit']}{r}"].fill = solid(loc_c)
-        lf = _lane_fit_color(rec.get("Lane Fit", ""))
-        if lf:
-            ws[f"{letter['Lane Fit']}{r}"].fill = solid(lf)
-        cat = (rec.get("Category") or "").strip()
-        if cat in cat_color:
-            ws[f"{letter['Category']}{r}"].fill = solid(cat_color[cat])
+    n = len(records)
+    last_data_row = n + 1  # header is row 1
+    for h in headers:
+        ws.column_dimensions[letter[h]].width = WIDTHS.get(h, 16)
+    ws.freeze_panes = "A2"  # freeze the header row only
 
-    for hdr, _ in COLUMNS:
-        ws.column_dimensions[letter[hdr]].width = WIDTHS.get(hdr, 16)
-    ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:{get_column_letter(ncols)}{last_row}"
+    if n >= 1:
+        # Header filter buttons over the job rows only (legend below is outside this range).
+        ws.auto_filter.ref = f"A1:{get_column_letter(ncols)}{last_data_row}"
+        # Status dropdown — inline list (shows the arrow), applied to the job rows only.
+        dv = DataValidation(type="list", formula1=inline_list_formula(STATUS_VALUES),
+                            showDropDown=False, allowBlank=True)
+        ws.add_data_validation(dv)
+        dv.add(f"{letter[H_STATUS]}2:{letter[H_STATUS]}{last_data_row}")
 
-    if last_row < 2:
-        wb.save(output_xlsx)
-        return 0
+        # Score color ramps.
+        for s in SUB_SCORE_COLS:
+            col = letter[s]
+            rng = f"{col}2:{col}{last_data_row}"
+            for rule in [
+                CellIsRule(operator="greaterThanOrEqual", formula=["85"], fill=solid(SCORE_BUCKETS[0][1]), stopIfTrue=True),
+                CellIsRule(operator="between", formula=["80", "84"], fill=solid(SCORE_BUCKETS[1][1]), stopIfTrue=True),
+                CellIsRule(operator="between", formula=["75", "79"], fill=solid(SCORE_BUCKETS[2][1]), stopIfTrue=True),
+                CellIsRule(operator="between", formula=["70", "74"], fill=solid(SCORE_BUCKETS[3][1]), stopIfTrue=True),
+                CellIsRule(operator="between", formula=["65", "69"], fill=solid(SCORE_BUCKETS[4][1]), stopIfTrue=True),
+                CellIsRule(operator="between", formula=["60", "64"], fill=solid(SCORE_BUCKETS[5][1]), stopIfTrue=True),
+                CellIsRule(operator="between", formula=["50", "59"], fill=solid(SCORE_BUCKETS[6][1]), stopIfTrue=True),
+                CellIsRule(operator="lessThan", formula=["50"], fill=solid(SCORE_BUCKETS[7][1]), stopIfTrue=True),
+            ]:
+                ws.conditional_formatting.add(rng, rule)
+        fcol = letter[H_FINAL]
+        frng = f"{fcol}2:{fcol}{last_data_row}"
+        for rule in [
+            CellIsRule(operator="greaterThanOrEqual", formula=["80"], fill=solid(FINAL_STRONG), stopIfTrue=True),
+            CellIsRule(operator="between", formula=["70", "79"], fill=solid(FINAL_MAYBE), stopIfTrue=True),
+            CellIsRule(operator="between", formula=["60", "69"], fill=solid(FINAL_WEAK), stopIfTrue=True),
+            CellIsRule(operator="lessThan", formula=["60"], fill=solid(FINAL_SKIP), stopIfTrue=True),
+        ]:
+            ws.conditional_formatting.add(frng, rule)
 
-    # Sub-score 0-100 ramp.
-    for s in SUB_SCORE_COLS:
-        col = letter[s]
-        rng = f"{col}2:{col}{last_row}"
-        rules = [
-            CellIsRule(operator="greaterThanOrEqual", formula=["85"], fill=solid(SCORE_BUCKETS[0][1]), stopIfTrue=True),
-            CellIsRule(operator="between", formula=["80", "84"], fill=solid(SCORE_BUCKETS[1][1]), stopIfTrue=True),
-            CellIsRule(operator="between", formula=["75", "79"], fill=solid(SCORE_BUCKETS[2][1]), stopIfTrue=True),
-            CellIsRule(operator="between", formula=["70", "74"], fill=solid(SCORE_BUCKETS[3][1]), stopIfTrue=True),
-            CellIsRule(operator="between", formula=["65", "69"], fill=solid(SCORE_BUCKETS[4][1]), stopIfTrue=True),
-            CellIsRule(operator="between", formula=["60", "64"], fill=solid(SCORE_BUCKETS[5][1]), stopIfTrue=True),
-            CellIsRule(operator="between", formula=["50", "59"], fill=solid(SCORE_BUCKETS[6][1]), stopIfTrue=True),
-            CellIsRule(operator="lessThan", formula=["50"], fill=solid(SCORE_BUCKETS[7][1]), stopIfTrue=True),
-        ]
-        for rule in rules:
-            ws.conditional_formatting.add(rng, rule)
-
-    # final_score colored to the Status bands.
-    fcol = letter["final_score"]
-    frng = f"{fcol}2:{fcol}{last_row}"
-    for rule in [
-        CellIsRule(operator="greaterThanOrEqual", formula=["80"], fill=solid(FINAL_STRONG), stopIfTrue=True),
-        CellIsRule(operator="between", formula=["70", "79"], fill=solid(FINAL_MAYBE), stopIfTrue=True),
-        CellIsRule(operator="between", formula=["60", "69"], fill=solid(FINAL_WEAK), stopIfTrue=True),
-        CellIsRule(operator="lessThan", formula=["60"], fill=solid(FINAL_SKIP), stopIfTrue=True),
-    ]:
-        ws.conditional_formatting.add(frng, rule)
+    # Section-color legend — a SEPARATE block below the jobs (blank-row gap), merged A:J. Not mixed
+    # into the sortable data; a palette to copy a bar from after sorting if you want visual breaks.
+    lr = last_data_row + 2
+    lbl = ws.cell(lr, 1, "Section colors  (optional — after sorting by Status, copy a bar in above a group; do NOT paste these into your own tracker's data)")
+    lbl.font = Font(name=FONT, size=9, italic=True, color="808080")
+    lbl.alignment = Alignment(horizontal="left", vertical="center")
+    ws.merge_cells(f"A{lr}:{legend_letter}{lr}")
+    for j, (label, (fill_hex, font_hex)) in enumerate(SECTION_COLORS.items()):
+        br = lr + 1 + j
+        ws.merge_cells(f"A{br}:{legend_letter}{br}")
+        cell = ws.cell(br, 1, label)
+        cell.fill = solid(fill_hex)
+        cell.font = Font(name=FONT, bold=True, size=11, color=font_hex)
+        cell.alignment = Alignment(horizontal="left", vertical="center")
+        ws.row_dimensions[br].height = 20
 
     wb.save(output_xlsx)
-    return len(records)
+    return n
 
 
 def main(argv):
-    parser = argparse.ArgumentParser(description="Build the candidate-relative rankings .xlsx.")
+    parser = argparse.ArgumentParser(description="Build the job-search tracker .xlsx from a rankings CSV.")
     parser.add_argument("input_csv")
     parser.add_argument("output_xlsx", nargs="?", default=None)
     parser.add_argument("--config", default=None, help="path to jail.config.json (candidate preferences)")

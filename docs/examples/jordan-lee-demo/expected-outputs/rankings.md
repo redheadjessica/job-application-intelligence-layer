@@ -6,7 +6,7 @@
 ## 93 — Thornbury: Senior Product Marketing Manager, AI Workflows
 
 - **Status:** Apply ASAP: High Prio
-- **Category:** AI Product Marketing  |  **Lane:** AI Product Marketing  |  **Lane fit:** AI Product Marketing (high) · +GTM Strategy
+- **Lane:** AI Product Marketing  |  **Lane fit:** AI Product Marketing (high) · +GTM Strategy
 - **Location:** Remote  |  **Comp:** 215-245
 - **Scores:** Desire 95 / Market 90 / Style 92 / Practicality 97 → **Final 93**
 - **Mission fit:** AI-native workflow automation with explicit "keep claims honest" culture — directly matches Jordan's values and domain pull
@@ -18,7 +18,7 @@
 ## 64 — Flintlock: Principal Product Marketing Manager, Developer AI Platform
 
 - **Status:** Apply Eventually: Backup Lane
-- **Category:** AI Product Marketing  |  **Lane:** AI Product Marketing  |  **Lane fit:** AI Product Marketing (high) · +GTM Strategy
+- **Lane:** AI Product Marketing  |  **Lane fit:** AI Product Marketing (high) · +GTM Strategy
 - **Location:** IRL San Francisco - 5 days  |  **Comp:** 235-275
 - **Scores:** Desire 72 / Market 74 / Style 70 / Practicality 18 → **Final 64**
 - **Mission fit:** AI developer tooling is a high-pull domain; infrastructure/platform niche is adjacent but slightly outside Jordan's workflow/productivity SaaS sweet spot
@@ -30,7 +30,7 @@
 ## 62 — Lanternleaf Learning: GTM Lead, AI Adoption (Education)
 
 - **Status:** Apply Eventually: Backup Lane
-- **Category:** AI Product Marketing  |  **Lane:** AI Product Marketing  |  **Lane fit:** AI Product Marketing (high) · +GTM Strategy
+- **Lane:** GTM Strategy  |  **Lane fit:** GTM Strategy (high) · +AI Product Marketing
 - **Location:** Remote  |  **Comp:** 150-165
 - **Scores:** Desire 62 / Market 74 / Style 70 / Practicality 28 → **Final 62**
 - **Mission fit:** AI tools for under-resourced schools — genuine public-interest mission, a named carve-out in Lane 1
@@ -41,8 +41,8 @@
 
 ## 33 — Lyceum AI: Product Strategy Lead, AI Research Platform
 
-- **Status:** Skip
-- **Category:** AI Product Marketing  |  **Lane:** Outside lanes  |  **Lane fit:** Outside lanes (high)
+- **Status:** Apply Eventually: Or Skip It
+- **Lane:** Product Strategy / AI Research  |  **Lane fit:** Outside lanes (high)
 - **Location:** IRL NYC - 2 days  |  **Comp:** 205-245
 - **Scores:** Desire 30 / Market 18 / Style 52 / Practicality 45 → **Final 33**
 - **Mission fit:** AI-native ML tooling company is in Jordan's pull zone, but the product is aimed at ML researchers, not the GTM/workflow buyer Jordan knows
