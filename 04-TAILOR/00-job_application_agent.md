@@ -437,20 +437,24 @@ The main actionable output must be written into **one markdown file** in the act
 
 where `[Company]` is the hiring company name and `[Role]` is the job title (abbreviate long titles sensibly, e.g. Sr Analyst, VP Ops, Dir Marketing). Example: `application_resume_output - Acme - Sr Analyst.md`. Use the same company and role names from the active job folder where possible.
 
-This file should contain the full actionable output for the run, including:
-- Read Log
-- Job Analysis
-- Gap Check
-- Strategic Evidence Opportunities
-- Inferred Relevance Questions
-- Hidden Story Prompts
-- Resume Base Recommendation
-- Work Experience Changes
-- Summary Options
-- Skills Recommendation
-- Content Opportunity (high-priority roles only; omit otherwise)
-- Suggested System Updates
-- Final Risks / Notes
+This file should contain the full actionable output for the run, in this order (**work-on-it sections at the top, explanatory/diagnostic sections at the bottom**, so the candidate can open the file and immediately start working. Not extremely rigid — merge or adapt sections when it genuinely reads better — but default to this order and always keep the paste-ready material in the top half and the Read Log/system notes last):
+
+**Top — what the candidate works from:**
+1. Questions for the candidate (always first)
+2. Resume Base Recommendation (which base file to start from + why)
+3. Work Experience Changes (per-role: notes first, then the paste-ready `- ` bullet block)
+4. Summary Options
+5. Skills Recommendation
+6. Selected Writing / Projects recommendation (if the candidate has a Voice/portfolio family)
+7. Content Opportunity (high-priority roles only; omit otherwise — unless the candidate's profile says to always include one)
+
+**Bottom — context and diagnostics:**
+8. Job Analysis
+9. Gap Check
+10. Strategic Evidence Opportunities / Inferred Relevance Questions / Hidden Story Prompts
+11. Final Risks / Notes
+12. Suggested System Updates
+13. Read Log (last)
 
 ## Terminal Output
 
@@ -462,9 +466,15 @@ The markdown file in the active job folder should be the clean version intended 
 
 All proposed bullets, summaries, and skills should be formatted so they can be copied with minimal cleanup.
 
+**⭐ NO hard line-wrapping.** Write each sentence/paragraph/bullet as ONE continuous line and let the editor soft-wrap. Never insert manual line breaks mid-sentence with continuation indentation — it makes the files hard to read and wastes space. One bullet = one line, however long.
+
+**⭐ Work Experience format — notes first, then paste-ready bullets.** For EACH role section: (1) your reasoning/notes/what-changed at the top, then (2) a single clean block of the complete final bullets in submission order, each starting with `- `, containing ONLY the exact resume text — **no quotation marks around bullets, no inline commentary, no source tags, nothing interleaved between bullets.** The test: the candidate selects the whole bullet block, pastes it straight into their editor, and edits nothing. (Candidates skip suggestions when cleaning quotes/notes out takes too long.)
+
 Avoid:
 - tables
 - source tags inline with bullets
+- quotation marks wrapped around proposed resume text
+- manual mid-sentence line breaks (hard wrapping)
 - long separator lines
 - excessive blank lines
 - wrapped “quote-style” formatting that makes copying harder
@@ -1087,6 +1097,12 @@ The final skills line should be written cleanly into `application_resume_output.
 
 ---
 
+## Sibling applications at the same company — tailor each independently
+
+When two roles at the same company are tailored (e.g. a Staff and a Principal opening), **do NOT force the two applications to be consistent** with each other — no matching Selected-Writing sections, summaries, or module choices for consistency's sake. Each run makes its own best call against its own JD; divergent choices between siblings are a feature, not an error to reconcile.
+
+---
+
 ## Step 9.5 — Targeted Content Opportunity (high-priority roles only)
 
 For a **high-priority role only** (the batch ranked it Apply ASAP / Apply If Time, or it's clearly a top target), consider whether **one** new or repurposed piece of writing would *materially* strengthen this specific application. If the candidate has writing samples or a portfolio (the Voice family from intake), draw on them.
@@ -1094,6 +1110,7 @@ For a **high-priority role only** (the batch ranked it Apply ASAP / Apply If Tim
 Rules:
 - **Recommend at most ONE piece.** Never a list.
 - **Omit the section entirely** if there isn't a strong, specific reason to write or repurpose something. Most applications should not get a recommendation. Silence is the default.
+- **Profile override:** if the candidate's `01-profile.md` says to always propose content ideas, this section becomes required in every output (1–2 ideas, still honest about effort/risk) — their standing preference beats the omit-by-default rule.
 - It can be a brand-new piece or a repurpose/extension of existing writing.
 - Be honest about effort and risk — don't recommend a heavy lift for a marginal gain.
 

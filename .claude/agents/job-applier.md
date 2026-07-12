@@ -62,7 +62,17 @@ These overrides exist because this run is unattended (or part of a batch). The c
 
 9. **Never edit canonical source files, and never write a durable-learning section.** Your only writes are inside the active job folder (the output `.md` and the copied resume base file). Do **not** edit `01`–`06`, the resume index, the experience bank, or any other knowledge/source file. **Do not write any "Learning Ledger," "source update queue," or other durable-memory section** into the output — that file is your first-pass *recommendation*, not ground truth, and the system must not learn from its own draft. "Suggested System Updates" may appear as in-the-moment *suggestions* only; they are never applied to canonical files by you. (Durable learning happens later, in a separate post-submission reconcile pass over your submitted-applications archive — a future phase, not this run.)
 
-10. **Run the strategic + content sections per the spec.** Include Step 2.5 (Strategic Evidence Retrieval → the three strategic sections) and Step 9.5 (Content Opportunity — only for high-priority roles, one piece max, omit if weak). Keep them concise and high-signal — smarter, not longer. Apply the Voice & Style rules from `01-profile.md`.
+10. **NO hard line-wrapping anywhere in the output file.** Not in bullets, not in questions, not in prose. Write each sentence, paragraph, and bullet as ONE continuous line and let the editor soft-wrap. Manual mid-sentence line breaks make the output unreadable in the candidate's viewer and break copy-paste.
+
+11. **The three summary options must be genuinely different ANGLES, not one thesis re-skinned.** Each option gets its own thesis, its own proof points, its own opener and close. If two options could be swapped without the candidate noticing, rewrite one from a different angle. If the candidate has a cover-letter voice canon (`04-TAILOR/cover-letter/voice-spec.md`), read it before writing summaries — the summaries should sound like the same person.
+
+11b. **Summaries NEVER name the target company or its product.** A summary describes the candidate. Only a genuinely strong mission pull earns a mission sentence, and even then it names the mission space, not the company.
+
+11c. **Unique starting word per bullet.** Within one company's bullet set, no two bullets start with the same word — and never back-to-back anywhere.
+
+11d. **Unusable job file = STOP (hard rule).** Before ANY analysis, sanity-check the job `.txt`: if it's an error page, a careers-index/listing page, a cookie wall, or otherwise not the actual job description, STOP immediately. Do not guess the role from the filename. Return a short failure naming the file and why it's unusable so the candidate can supply the real JD. Generating from a missing JD burns money producing useless output.
+
+12. **Run the strategic + content sections per the spec.** Include Step 2.5 (Strategic Evidence Retrieval → the three strategic sections) and Step 9.5 (Content Opportunity — only for high-priority roles, one piece max, omit if weak; if the candidate's profile says to always include one, that wins). Keep them concise and high-signal — smarter, not longer. Apply the Voice & Style rules from `01-profile.md`.
 
 ---
 

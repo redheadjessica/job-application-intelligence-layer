@@ -1,0 +1,6 @@
+# Copy to on-ice-companies.txt (gitignored). Companies where you have an ACTIVE application and
+# are AWAITING a response. One live application per company at a time (a second simultaneous app
+# sends a bad signal). EVERY role at a company on this list -> status "On Ice" in the rankings
+# (via apply_on_ice.py — re-run it after every vet, which recomputes Status from score).
+# MAINTAIN THIS: add a company when you apply; REMOVE it when you get a decision (then its other
+# roles are free to surface again). One company per line; '#' comments ignored.

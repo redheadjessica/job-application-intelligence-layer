@@ -11,7 +11,7 @@ Clone this repo, run **`/intake`** once to generate your own personal files from
 ## Repo layout (numbered in workflow order)
 
 - **`00-INTAKE/`** — your career materials + intake state. Two input folders: **`01-about-you/`** (evidence — resumes, LinkedIn, held-role JDs, metrics, writing samples) and **`02-where-you-want-to-go/`** (direction — target/dream roles; shapes scoring/direction, but **never** becomes claims about your experience). Also holds the generated `materials-inventory.md` and `resume-assessment.md`.
-- **`01-INBOX/`** — active job URLs to rank. Paste into **`paste-job-urls-to-rank-here.txt`** (one per line).
+- **`01-INBOX/`** — active job URLs to rank. Paste into **`paste-job-urls-to-rank-here.txt`** (one per line; a gitignored working copy — create it from the tracked `.template.txt` if it doesn't exist yet).
 - **`02-PREP/`** — **Prep.** Fetch each job URL into a clean job `.txt`: `prep_job_urls.py`, the Playwright fallback `prep_job_urls_playwright.py`, and the ATS-aware `ats_fetchers.py` (Greenhouse / Lever / Ashby / Workday / LinkedIn-guest). PII-free; no dependency on your profile.
 - **`03-VETTING/`** — **Vet.** Triage only: score and rank which jobs are worth applying to, using your scoring card + candidate profile. Writes a ranked CSV + Markdown + a formatted XLSX. See `03-VETTING/CLAUDE.md`.
 - **`04-TAILOR/`** — **Tailor.** Resume *tailoring* only (never submitting). Writes an `application_resume_output - [Company] - [Role].md` draft: picks a resume base, flags gaps, suggests content. Engine spec: `04-TAILOR/00-job_application_agent.md`.

@@ -23,12 +23,16 @@ __READY TO REVIEW/*/
 # ── Root config: generated instance (by setup/intake). Template is tracked. ──
 jail.config.json
 
+# ── Inbox working copy (your pasted job URLs — private). Template is tracked. ──
+01-INBOX/paste-job-urls-to-rank-here.txt
+
 # ── Generated candidate-specific INSTANCES (by /intake or /reconcile). ───────
 #    Templates (*.template.md) are tracked; these bare-name instances are not.
 00-INTAKE/materials-inventory.md
 00-INTAKE/resume-assessment.md
 03-VETTING/01-scoring-card.md
 03-VETTING/02-candidate-profile.md
+03-VETTING/on-ice-companies.txt
 04-TAILOR/01-profile.md
 04-TAILOR/02-resume-index.md
 04-TAILOR/03-approved-truths-and-boundary-rules.md
@@ -40,6 +44,25 @@ jail.config.json
 04-TAILOR/10-bio-library.md
 04-TAILOR/learning/learning-ledger.md
 04-TAILOR/learning/source-update-queue.md
+04-TAILOR/learning/answer-bank.md
+04-TAILOR/learning/harvest-backfill-log.md
+# Per-pinned-entity canon (candidate-named 03/03b files, e.g. a current venture; no tracked template)
+04-TAILOR/03-*.md
+04-TAILOR/03b-*.md
+!04-TAILOR/03-approved-truths-and-boundary-rules.template.md
+
+# ── Cover-letter module: generated instances (by /cover-letter-intake). ──────
+#    Templates (*.template.md / config.template.json) are tracked; instances are not.
+04-TAILOR/cover-letter/config.json
+04-TAILOR/cover-letter/voice-spec.md
+04-TAILOR/cover-letter/eval-rubric.md
+04-TAILOR/cover-letter/formatting-spec.md
+04-TAILOR/cover-letter/feedback-ledger.md
+04-TAILOR/cover-letter/feedback-queue.md
+04-TAILOR/cover-letter/writing-links.md
+04-TAILOR/cover-letter/anecdote-bank.md
+04-TAILOR/cover-letter/exemplars/*
+!04-TAILOR/cover-letter/exemplars/README.md
 
 # ── Intake materials (personal). Keep the folder + its README tracked. ───────
 00-INTAKE/01-about-you/*
@@ -52,3 +75,9 @@ jail.config.json
 # ── Submitted-applications archive (personal). Keep the folder tracked. ──────
 05-SUBMITTED-APPLICATIONS/*
 !05-SUBMITTED-APPLICATIONS/.gitkeep
+
+# Personal-identifier denylist read by the local pre-commit firewall hook
+*denylist.local.txt
+
+# Codex tooling — used for audits only, not part of the product (never commit)
+.codex/

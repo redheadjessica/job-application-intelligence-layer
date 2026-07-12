@@ -14,8 +14,8 @@ A ranked spreadsheet of the jobs you gave it (colored to *your* pay, location, a
 ## What it does NOT do
 - It doesn't **find or scrape** jobs — you bring the links.
 - It doesn't **auto-apply or submit**. Ever.
-- It doesn't write **cover letters** (out of scope for now).
-- It doesn't generate a **finished Word/Pages/Google-Docs file** — you do the final polish.
+- It doesn't write **cover letters** out of the box — there's an optional module for that (run `/cover-letter-intake` to teach it your voice first; see below). Without that setup, no letters.
+- It doesn't generate a **finished Word/Pages/Google-Docs resume file** — you do the final polish. (The cover-letter module is the exception: it produces a formatted `.docx` paste source.)
 - It doesn't **guarantee interviews**, and it won't **invent experience** to make you look better.
 - It doesn't know what you actually submitted unless you save the final file and archive it.
 
@@ -77,7 +77,7 @@ This matters, so read it once:
 JAIL speeds the work up; you keep the judgment. You review: the **intake setup** before it's saved, the **rankings** before you tailor, the **tailored draft** before you submit, the **archive** before it moves, and any **reconcile proposals** before they touch your core files. It drafts and organizes — you decide and submit.
 
 ## Commands
-Mostly you just talk to Claude. The slash commands: **`/intake`** (set up / update), **`/run-batch`** (rank a batch, optionally tailor), **`/vet-jobs`** / **`/tailor-jobs`** (rank-only / tailor specific jobs), **`/archive`** (move a submitted app to your archive), **`/reconcile`** (learn from submitted apps).
+Mostly you just talk to Claude. The slash commands: **`/intake`** (set up / update), **`/run-batch`** (rank a batch, optionally tailor), **`/vet-jobs`** / **`/tailor-jobs`** (rank-only / tailor specific jobs), **`/cover-letter-intake`** (optional: teach the letter system your voice from your past letters), **`cover-letter`** (draft + adversarially evaluate a letter for a job), **`/archive`** (move a submitted app to your archive), **`/reconcile`** (learn from submitted apps).
 
 ## Good to know
 - **It hands you a draft, not a final.** You finish the wording/formatting in your own editor.
@@ -87,7 +87,8 @@ Mostly you just talk to Claude. The slash commands: **`/intake`** (set up / upda
 
 ## Deeper docs
 - [`docs/v2-end-to-end-workflow.md`](docs/v2-end-to-end-workflow.md) — the full workflow + architecture (source of truth).
-- [`docs/final-review-and-cover-letters.md`](docs/final-review-and-cover-letters.md) — what V2 leaves to you.
+- [`docs/final-review-and-cover-letters.md`](docs/final-review-and-cover-letters.md) — the final mile, and how the optional cover-letter module fits.
+- [`04-TAILOR/cover-letter/README.md`](04-TAILOR/cover-letter/README.md) — the cover-letter system (your voice spec, deterministic lint, adversarial eval, anti-smoothing).
 - [`docs/testing-and-caveats.md`](docs/testing-and-caveats.md) — what's verified vs. still needs a live run.
 
 ## If `/intake` doesn't show up

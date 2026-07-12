@@ -25,9 +25,9 @@ All of these are **already gitignored**, so staging into them will not accidenta
 | `05-SUBMITTED-APPLICATIONS/<year>/` | archived application | `05-SUBMITTED-APPLICATIONS/*` |
 | `03-VETTING/0X-*.md`, `04-TAILOR/0X-*.md` | instance source-of-truth files | per-file ignore rules |
 
-### One tracked file to watch
+### The inbox working copy
 
-`01-INBOX/paste-job-urls-to-rank-here.txt` is a **tracked seed file**, not gitignored. If you stage `example.com` placeholder URLs into it for a screenshot, that edit **will** show in `git status`. During cleanup, revert it — `git checkout -- "01-INBOX/paste-job-urls-to-rank-here.txt"` — and do **not** commit Jordan's URLs into it.
+`01-INBOX/paste-job-urls-to-rank-here.txt` is a **gitignored working copy** (created from the tracked `.template.txt` by `new_batch.py`). Placeholder URLs staged into it for a screenshot never show in `git status`; just delete them during cleanup. Do not edit the tracked `.template.txt` itself.
 
 ## How to avoid accidentally committing runtime / private data
 

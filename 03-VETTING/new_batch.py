@@ -58,7 +58,12 @@ def main() -> None:
         (review_root / tier).mkdir(parents=True, exist_ok=True)
 
     # Snapshot tonight's URLs from the inbox into the batch (don't clobber an existing snapshot).
+    # The working copy is gitignored (private); create it from the tracked template on first run.
     inbox = REPO_ROOT / "01-INBOX" / "paste-job-urls-to-rank-here.txt"
+    inbox_template = REPO_ROOT / "01-INBOX" / "paste-job-urls-to-rank-here.template.txt"
+    if not inbox.exists() and inbox_template.exists():
+        shutil.copy2(inbox_template, inbox)
+        print(f"Created your private inbox working copy: {inbox.relative_to(REPO_ROOT)} — paste URLs there.")
     urls_dest = review_root / "3 - Source Material" / f"Submitted URLs - {batch}.txt"
     if urls_dest.exists():
         print(f"Note: {urls_dest.name} already present — left as-is.")

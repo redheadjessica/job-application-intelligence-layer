@@ -1,0 +1,17 @@
+{
+  "_README": "Copy to config.json (gitignored); /cover-letter-intake fills it. The lint, .docx generator, and reconcile's extract_submission.py read the instance, never this template. signature_name is your name exactly as you sign letters (used to exclude the signature from word counts, to name the .docx deliverable, and to strip letterhead chrome during reconcile extraction). personal_domains lists your own domains (e.g. your portfolio site) so contact-strip lines never pollute the reconcile diff. lint.links.min may be 0 if you have no published writing to link. lint.disabled_rules accepts rule ids (em-dash, semicolon, phrase, contraction, triads, links, link-anchor, energy, rhythm, length) for shipped rules that don't match your taste. lint.extra_banned_phrases adds your personal rules as {pattern (regex), message, level: error|warn}. docx.* sets the deliverable's body font/size/color to match YOUR resume template.",
+  "schema_version": 1,
+  "signature_name": null,
+  "personal_domains": [],
+  "lint": {
+    "links": { "min": 1, "max": 5 },
+    "body_words": { "min": 240, "max": 650, "target_min": 350, "target_max": 620 },
+    "disabled_rules": [],
+    "extra_banned_phrases": []
+  },
+  "docx": {
+    "font": "Helvetica Neue",
+    "size_pt": 10,
+    "color_hex": "3F3F3F"
+  }
+}

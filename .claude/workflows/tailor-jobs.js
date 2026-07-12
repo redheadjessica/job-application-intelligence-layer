@@ -62,7 +62,15 @@ Create the destination job folder INSIDE "${resumesDir}" using the naming conven
 "Company - Role" (NO date — the parent batch folder is already dated; abbreviate long titles sensibly, e.g. Senior -> Sr,
 Vice President -> VP). Use mkdir -p and quote paths since they contain spaces. Copy the job file in,
 and write the output file ("application_resume_output - [Company] - [Role].md") there per your spec,
-with the "Questions for the candidate" section at the top. Do not ask questions — defer them to that section.`,
+with the "Questions for the candidate" section at the top. Do not ask questions — defer them to that section.
+
+REBUILD-ON-STALE: if an "application_resume_output*.md" ALREADY EXISTS in that folder, treat it as
+STALE — the candidate's canon (profile, boundary rules, experience bank, summary/skills sources,
+resume index) has very likely been updated since it was written. You are being re-run precisely to
+re-incorporate the current canon. Do NOT read the old draft and conclude it "holds up" / is "good
+enough" and skip the rewrite. Rebuild the analysis fresh from the current canon and OVERWRITE the
+file. The finished .md must reflect every current credential, confirmed gap, and guardrail —
+re-derive, don't ratify the old draft.`,
     { agentType: 'job-applier', model: 'sonnet', phase: 'Tailor', schema: CONFIRM_SCHEMA, label: who }
   )
   if (res) tailored.push({ order: i + 1, ...p, ...res })
