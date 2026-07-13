@@ -1,7 +1,7 @@
 export const meta = {
   name: 'run-batch',
   description: 'Front door for a job batch: always vet + rank; OPTIONALLY continue into tailoring resumes for the top N jobs (sequentially, highest first). Vet-only is the default.',
-  whenToUse: 'Run a vetting batch. Pass {folder} to vet only, or {folder, tailor: true, topN: 3} to also prepare resumes for the top jobs. `folder` is the review batch root, e.g. "__READY TO REVIEW/06-02-26".',
+  whenToUse: 'Run a vetting batch. Pass {folder} to vet only, or {folder, tailor: true, topN: 3} to also prepare resumes for the top jobs. `folder` is the review batch root, e.g. "__READY_TO_REVIEW__PRIVATE_GITIGNORED/06-02-26".',
   phases: [
     { title: 'Vet', detail: 'score + rank the batch into "1 - Rankings/" (delegates to vet-jobs)' },
     { title: 'Tailor', detail: 'optional: prepare resume drafts into "2 - Tailored Resumes/", one at a time' },
@@ -18,11 +18,11 @@ const TOP_N = (A && typeof A === 'object' && Number.isInteger(A.topN)) ? A.topN 
 // Default sequential ("one then the next"); set tailorParallel: true for overnight speed.
 const TAILOR_PARALLEL = !!(A && typeof A === 'object' && A.tailorParallel)
 if (!FOLDER || typeof FOLDER !== 'string') {
-  throw new Error('Pass {folder} (vet only) or {folder, tailor: true, topN: 3} (vet + tailor top N). `folder` is the review batch root, e.g. "__READY TO REVIEW/06-02-26".')
+  throw new Error('Pass {folder} (vet only) or {folder, tailor: true, topN: 3} (vet + tailor top N). `folder` is the review batch root, e.g. "__READY_TO_REVIEW__PRIVATE_GITIGNORED/06-02-26".')
 }
 
 // ---- Resolve the batch layout ----
-// Every file a run produces lives under __READY TO REVIEW/<batch>/ in three tiers:
+// Every file a run produces lives under __READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/ in three tiers:
 //   1 - Rankings/                    vet-jobs writes the CSV/MD/XLSX here
 //   2 - Tailored Resumes/            one folder per tailored job
 //   3 - Source Material/All Job Posts (full text)/   the fetched job .txt files

@@ -8,16 +8,18 @@ Clone this repo, run **`/intake`** once to generate your own personal files from
 
 ---
 
-## Repo layout (numbered in workflow order)
+## Repo layout
+
+Three visible top-level roots: **`ENGINE__PUBLIC_GIT_TRACKED/`** (public mechanism + templates, tracked), **`PRIVATE__YOUR_FILES_GITIGNORED/`** (the user's generated instances + materials + archive, gitignored), and **`__READY_TO_REVIEW__PRIVATE_GITIGNORED/`** (generated review output, gitignored). Inside ENGINE and PRIVATE the numbered stages mirror one-to-one (`00-INTAKE`…`04-TAILOR`; private half named `<stage>__YOUR_PRIVATE_INFO`). Per stage:
 
 - **`ENGINE__PUBLIC_GIT_TRACKED/00-INTAKE/`** (public READMEs + template) + **`PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/`** (your materials + generated intake state). Two input folders: **`01-about-you/`** (evidence — resumes, LinkedIn, held-role JDs, metrics, writing samples) and **`02-where-you-want-to-go/`** (direction — target/dream roles; shapes scoring/direction, but **never** becomes claims about your experience). Also holds the generated `materials-inventory.md` and `resume-assessment.md`.
 - **`ENGINE__PUBLIC_GIT_TRACKED/01-INBOX/`** (public template) + **`PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/`** (your data) — active job URLs to rank. Paste one per line into the private **`paste-job-urls-to-rank-here.txt`** (a gitignored working copy, created from the tracked `.template.txt` on first run).
 - **`ENGINE__PUBLIC_GIT_TRACKED/02-PREP/`** — **Prep.** Fetch each job URL into a clean job `.txt`: `prep_job_urls.py`, the Playwright fallback `prep_job_urls_playwright.py`, and the ATS-aware `ats_fetchers.py` (Greenhouse / Lever / Ashby / Workday / LinkedIn-guest). PII-free; no dependency on your profile.
 - **`ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/`** (engine) + **`PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/`** (your scoring card + profile) — **Vet.** Triage only: score and rank which jobs are worth applying to, using your scoring card + candidate profile. Writes a ranked CSV + Markdown + a formatted XLSX. See `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/CLAUDE.md`.
-- **`04-TAILOR/`** — **Tailor.** Resume *tailoring* only (never submitting). Writes an `application_resume_output - [Company] - [Role].md` draft: picks a resume base, flags gaps, suggests content. Engine spec: `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/00-job_application_agent.md`.
+- **`ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/`** (engine + templates) + **`PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/`** (your instances) — **Tailor.** Resume *tailoring* only (never submitting). Writes an `application_resume_output - [Company] - [Role].md` draft: picks a resume base, flags gaps, suggests content. Engine spec: `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/00-job_application_agent.md`.
 - **`ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/`** (spec + templates) + **`PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/learning/`** (your ledger/queue) — **Reconcile.** Post-submission learning loop (maintenance-only, never read during a generation run): compares what the system recommended against what you actually submitted and proposes lessons for your review. `reconcile-spec.md`, `learning-ledger.md`, `source-update-queue.md`.
-- **`05-SUBMITTED-APPLICATIONS/`** — durable archive of submitted applications (gitignored; the default archive root, configurable in `jail.config.json`). After you submit an application, run **`/archive`** to *move* its folder here (never copied), then **`/reconcile`** later to learn from the final submitted version.
-- **`__READY TO REVIEW/`** — the human-review hub. Holds dated **job batches** (`MM-DD-YY/`) and other **review folders** (`MM-DD-YY - Intake Review/`, `MM-DD-YY - Source Update Review/`). Only exact date-shaped folder names (`MM-DD-YY`) are treated as job batches.
+- **`PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/`** — durable archive of submitted applications (gitignored; the default archive root, configurable in `jail.config.json`). After you submit an application, run **`/archive`** to *move* its folder here (never copied), then **`/reconcile`** later to learn from the final submitted version.
+- **`__READY_TO_REVIEW__PRIVATE_GITIGNORED/`** — the human-review hub. Holds dated **job batches** (`MM-DD-YY/`) and other **review folders** (`MM-DD-YY - Intake Review/`, `MM-DD-YY - Source Update Review/`). Only exact date-shaped folder names (`MM-DD-YY`) are treated as job batches.
 
 ---
 
@@ -45,7 +47,7 @@ Until intake has run, only the `.template.md` files exist and the pipeline has n
 
 ## How to run (three modes)
 
-First scaffold + fetch a batch: `python ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/new_batch.py <MM-DD-YY>`, then run the fetch commands it prints. Then pick a mode (`<batch>` = `__READY TO REVIEW/<MM-DD-YY>`):
+First scaffold + fetch a batch: `python ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/new_batch.py <MM-DD-YY>`, then run the fetch commands it prints. Then pick a mode (`<batch>` = `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<MM-DD-YY>`):
 
 1. **Vet only (default):** `run-batch {folder: "<batch>"}` — vets and ranks into `1 - Rankings/`, then stops. You review the rankings and decide what to pursue.
 2. **Vet + tailor top N:** `run-batch {folder: "<batch>", tailor: true, topN: 3}` — vets, then tailors resume drafts into `2 - Tailored Resumes/` for the top N (sequential, highest first, Skip-status excluded).
@@ -55,7 +57,7 @@ Tailoring always runs the `job-applier` agent in autonomous mode: it never block
 
 ### Where a run writes
 
-Everything a run produces lands in one place: **`__READY TO REVIEW/<batch>/`**, in numbered tiers so the review order is top-down by importance — `0 - Prep Report/` (prep's `prep-report.md` + `prep-manifest.json`), `1 - Rankings/`, `2 - Tailored Resumes/` (one `Company - Role` folder per tailored job), and `3 - Source Material/` (usable job posts in `All Job Posts (full text)/`; thin/failed quarantined in sibling `Needs Review/` and `Failed/`; plus a snapshot of that batch's URLs). The leading `__` pins the folder to the top of the repo. Nothing is moved after the fact; `ENGINE__PUBLIC_GIT_TRACKED/02-PREP/`, `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/`, `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/` hold only engine code + templates (your 04-TAILOR instances live under `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/`), never run outputs.
+Everything a run produces lands in one place: **`__READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/`**, in numbered tiers so the review order is top-down by importance — `0 - Prep Report/` (prep's `prep-report.md` + `prep-manifest.json`), `1 - Rankings/`, `2 - Tailored Resumes/` (one `Company - Role` folder per tailored job), and `3 - Source Material/` (usable job posts in `All Job Posts (full text)/`; thin/failed quarantined in sibling `Needs Review/` and `Failed/`; plus a snapshot of that batch's URLs). The leading `__` pins the folder to the top of the repo. Nothing is moved after the fact; `ENGINE__PUBLIC_GIT_TRACKED/02-PREP/`, `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/`, `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/` hold only engine code + templates (your 04-TAILOR instances live under `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/`), never run outputs.
 
 ---
 

@@ -9,7 +9,7 @@ Help the candidate decide which jobs are worth applying to before moving anythin
 
 ## Standing Rules
 - Prefer CSV output for spreadsheet use; also write a readable Markdown summary
-- Output files (rankings CSV/MD/XLSX) go into the batch's `1 - Rankings/` tier under `__READY TO REVIEW/<batch>/` when an out-dir is provided; otherwise alongside the scored job files
+- Output files (rankings CSV/MD/XLSX) go into the batch's `1 - Rankings/` tier under `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/` when an out-dir is provided; otherwise alongside the scored job files
 - Prefer `.txt` over `.pdf` when both exist for the same role; if only `.pdf` exists, read it directly
 - Do not create `.txt` copies unless explicitly asked
 - Do not recommend resume bases or generate application materials here (that is the tailoring step)

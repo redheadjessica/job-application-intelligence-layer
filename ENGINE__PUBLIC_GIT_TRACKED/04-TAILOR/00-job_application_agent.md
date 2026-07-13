@@ -45,7 +45,7 @@ This version of the system is focused on **resume generation and resume setup on
 Cover letters and application-answer generation are out of scope for V2 unless a later module explicitly adds them.
 
 The current goal is to make the resume workflow work end-to-end:
-- work inside the current job batch under `__READY TO REVIEW/MM-DD-YY/` (the job file is provided to you)
+- work inside the current job batch under `__READY_TO_REVIEW__PRIVATE_GITIGNORED/MM-DD-YY/` (the job file is provided to you)
 - create the job-specific output folder in the batch's `2 - Tailored Resumes/` tier
 - analyze the role thoroughly
 - diagnose fit
@@ -129,7 +129,7 @@ Use for:
 Use `06a-skills-library.md` only for full calibration notes, assessment history, or maintenance work. Do not read it during standard generation runs.
 
 ## `10-bio-library.md`
-*Numbered `10`, not `07`, on purpose: it sits in a separate tier from the `01`–`06` core generation sequence — it is conditional and non-resume (bio prose for cover letters, networking, intros). The post-submission **learning loop** lives in its own subfolder, `04-TAILOR/learning/` (the reconcile spec, learning ledger, and source-update queue); those files are maintenance-only and are never read during a generation run.*
+*Numbered `10`, not `07`, on purpose: it sits in a separate tier from the `01`–`06` core generation sequence — it is conditional and non-resume (bio prose for cover letters, networking, intros). The post-submission **learning loop** lives in its own subfolder, `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/learning/` (spec + templates under `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/`) (the reconcile spec, learning ledger, and source-update queue); those files are maintenance-only and are never read during a generation run.*
 
 Do **not** read this during standard resume generation runs. It is long-form narrative context that is rarely needed for resume tailoring, and reading it "just in case" adds latency on every run.
 
@@ -560,7 +560,7 @@ The candidate only needs to volunteer extra context when it would **change** one
 
 You are given **one** target job file inside the current batch (the autonomous agent provides the exact path). The current flow:
 
-- A dated job batch lives under `__READY TO REVIEW/MM-DD-YY/`.
+- A dated job batch lives under `__READY_TO_REVIEW__PRIVATE_GITIGNORED/MM-DD-YY/`.
 - The job posts you tailor against are in that batch's `3 - Source Material/`.
 - Your tailored output goes in the batch's `2 - Tailored Resumes/[Company] - [Role]/`.
 - The candidate's source files are the **generated instances** under `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/` and `04-TAILOR/` (never the `*.template.md` files).

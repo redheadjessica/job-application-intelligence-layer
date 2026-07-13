@@ -6,8 +6,8 @@
 - **Role:** {{Role title}}
 - **Submitted:** {{MM-DD-YY, or "unknown"}}
 - **Source batch:** {{MM-DD-YY}}
-- **Moved from:** {{original path under __READY TO REVIEW/}}
-- **Archived at:** {{archive path, e.g. 05-SUBMITTED-APPLICATIONS/2026/Company - Role - MM-DD-YY}}
+- **Moved from:** {{original path under __READY_TO_REVIEW__PRIVATE_GITIGNORED/}}
+- **Archived at:** {{archive path, e.g. PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/2026/Company - Role - MM-DD-YY}}
 
 ## Files present
 - {{application_resume_output - … .md}}

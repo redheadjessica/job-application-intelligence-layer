@@ -15,7 +15,7 @@ This must be re-run after every vet, because the vet re-computes Status from sco
 otherwise clobber the On-Ice tracking.
 
 Usage:
-  python apply_on_ice.py --rankings "__READY TO REVIEW/<batch>/1 - Rankings/<batch>-rankings.xlsx"
+  python apply_on_ice.py --rankings "__READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/1 - Rankings/<batch>-rankings.xlsx"
                          [--companies PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/on-ice-companies.txt]
 """
 import argparse

@@ -29,7 +29,7 @@ Status legend: `proposed` · `needs-confirmation` · `needs-2nd-occurrence` · `
 - **Confidence:** med — pending Q1 confirmation
 - **Evidence:** Thornbury Sr PMM AI Workflows (06-25-26) · **occurrences:** 1
 - **Status:** needs-confirmation (promotable now on Jordan's answer to Q1)
-- **Source:** `05-SUBMITTED-APPLICATIONS/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/reconcile-report - Thornbury - Sr PMM AI Workflows - 06-25-26.md`
+- **Source:** `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/reconcile-report - Thornbury - Sr PMM AI Workflows - 06-25-26.md`
 
 ### [needs-confirmation] 04-experience-bank.md — Add shorter win-loss bullet variant
 
@@ -38,7 +38,7 @@ Status legend: `proposed` · `needs-confirmation` · `needs-2nd-occurrence` · `
 - **Confidence:** med (Q2 answer strengthens/weakens; Q3 may split this into two changes)
 - **Evidence:** Thornbury Sr PMM AI Workflows (06-25-26) · **occurrences:** 1
 - **Status:** needs-confirmation (promotable now on Jordan's answers to Q2 and Q3)
-- **Source:** `05-SUBMITTED-APPLICATIONS/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/reconcile-report - Thornbury - Sr PMM AI Workflows - 06-25-26.md`
+- **Source:** `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/reconcile-report - Thornbury - Sr PMM AI Workflows - 06-25-26.md`
 
 ### [needs-confirmation] 00-job_application_agent.md — IC-only routing rule: suppress people-management bullets
 
@@ -47,7 +47,7 @@ Status legend: `proposed` · `needs-confirmation` · `needs-2nd-occurrence` · `
 - **Confidence:** med — pending Q4 confirmation
 - **Evidence:** Thornbury Sr PMM AI Workflows (06-25-26) · **occurrences:** 1
 - **Status:** needs-confirmation (promotable now on Jordan's answer to Q4)
-- **Source:** `05-SUBMITTED-APPLICATIONS/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/reconcile-report - Thornbury - Sr PMM AI Workflows - 06-25-26.md`
+- **Source:** `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/reconcile-report - Thornbury - Sr PMM AI Workflows - 06-25-26.md`
 
 ### [needs-confirmation] 05-summary-quick.md — Register submitted Option 2 text as canonical Family B AI-native closer
 
@@ -56,7 +56,7 @@ Status legend: `proposed` · `needs-confirmation` · `needs-2nd-occurrence` · `
 - **Confidence:** high
 - **Evidence:** Thornbury Sr PMM AI Workflows (06-25-26) · **occurrences:** 1
 - **Status:** needs-confirmation (high confidence; promotable now; one occurrence is sufficient for a summary registration)
-- **Source:** `05-SUBMITTED-APPLICATIONS/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/reconcile-report - Thornbury - Sr PMM AI Workflows - 06-25-26.md`
+- **Source:** `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/reconcile-report - Thornbury - Sr PMM AI Workflows - 06-25-26.md`
 
 ---
 
@@ -72,7 +72,7 @@ Every item here is preserved indefinitely. Each is promotable now on your confir
 - **Preserved:** yes — promotable now on Jordan's answer to Q5, or auto-surfaced at a 2nd occurrence
 - **Evidence:** Thornbury Sr PMM AI Workflows (06-25-26) · **occurrences:** 1
 - **Status:** needs-2nd-occurrence (or confirmation via Q5)
-- **Source:** `05-SUBMITTED-APPLICATIONS/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/reconcile-report - Thornbury - Sr PMM AI Workflows - 06-25-26.md`
+- **Source:** `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/reconcile-report - Thornbury - Sr PMM AI Workflows - 06-25-26.md`
 
 ### [watch] voice — ', internal' qualifier dropped from positioning bullet
 
@@ -82,7 +82,7 @@ Every item here is preserved indefinitely. Each is promotable now on your confir
 - **Preserved:** yes — promotable on confirmation or 2nd occurrence
 - **Evidence:** Thornbury Sr PMM AI Workflows (06-25-26) · **occurrences:** 1
 - **Status:** needs-2nd-occurrence (or confirmation)
-- **Source:** `05-SUBMITTED-APPLICATIONS/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/reconcile-report - Thornbury - Sr PMM AI Workflows - 06-25-26.md`
+- **Source:** `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/reconcile-report - Thornbury - Sr PMM AI Workflows - 06-25-26.md`
 
 ---
 
@@ -93,7 +93,7 @@ Finalized résumés that cleanly represent a role archetype. On your confirmatio
 ### Thornbury Sr PMM AI Workflows (06-25-26) — AI product marketing + workflow-automation SaaS + anti-hype/grounded-claims culture
 
 - **Archetype:** AI product marketing + workflow-automation SaaS + anti-hype/grounded-claims culture
-- **Resume:** `05-SUBMITTED-APPLICATIONS/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/` (the finalized submitted PDF)
+- **Resume:** `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/` (the finalized submitted PDF)
 - **Configuration:** Option 2 summary (Jordan's edits), [variant-ai] bullet swap (tail dropped), win-loss bullet trimmed (IC-clean: no negative qualifier, no scope clause), Birchwood intern bullet removed, 11-skill block (P&P dropped)
 - **Recommendation:** Future roles at Series B+ AI-native or AI-tooling companies emphasizing honest positioning, customer research, and pragmatic AI fluency should copy this resume as the starting point rather than rebuilding from the base. This is the tightest, most submitted-and-approved configuration of the AI Product Marketing family as of 2026-06-25.
 - **Action needed:** Jordan to confirm → promote to resume index as 'Jordan Lee — Sr PMM AI Workflows (Thornbury, 2026)'. Consider confirming after answering Q1–Q5, since a few open edits (AI tail, win-loss variant) could further refine the canonical config.

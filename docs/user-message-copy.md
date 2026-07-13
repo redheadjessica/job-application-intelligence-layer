@@ -5,7 +5,7 @@ A reference for the chat language JAIL uses at each step, so intake, prep, ranki
 > Where each currently lives: intake → `.claude/skills/intake/SKILL.md`; prep → `ENGINE__PUBLIC_GIT_TRACKED/02-PREP/prep_common.py` (stdout) + `prep-report.md`; ranking → `.claude/workflows/vet-jobs.js`; archive → `.claude/skills/archive/SKILL.md`; reconcile → `.claude/workflows/reconcile.js`. Keep those in this voice.
 
 ## Intake — review ready
-> Your intake review is ready in `__READY TO REVIEW/<MM-DD-YY> - Intake Review/`. Start with `START HERE.md`, then open the files in order. Look for anything wrong, missing, overstated, or just not-you. Easiest way to give feedback: talk it back to me here (voice-to-text is great). You can also edit the files directly — tell me when you're done and I'll reread them. Nothing is saved to your source of truth until you approve.
+> Your intake review is ready in `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<MM-DD-YY> - Intake Review/`. Start with `START HERE.md`, then open the files in order. Look for anything wrong, missing, overstated, or just not-you. Easiest way to give feedback: talk it back to me here (voice-to-text is great). You can also edit the files directly — tell me when you're done and I'll reread them. Nothing is saved to your source of truth until you approve.
 
 ## Intake — approved / promoted
 > Done. I've written your source-of-truth files (scoring card, profile, experience bank, summaries, skills, preferences). They're private and gitignored. You can rank jobs now — paste a few links into `PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/paste-job-urls-to-rank-here.txt` and tell me to start a batch.
@@ -35,7 +35,7 @@ A reference for the chat language JAIL uses at each step, so intake, prep, ranki
 > I found the generated resume output, but I don't see a final submitted PDF. If you edited the resume before submitting, reconcile needs that final version. Want to add it before I archive this, or should I move it without the PDF for now?
 
 ## Archive — complete
-> Archived `<Company - Role>` to `<archive path>`. Moved, not copied — it's out of `__READY TO REVIEW` now. Reconcile hasn't run; when you're ready, run `/reconcile` so JAIL can learn from the final submitted version.
+> Archived `<Company - Role>` to `<archive path>`. Moved, not copied — it's out of `__READY_TO_REVIEW__PRIVATE_GITIGNORED` now. Reconcile hasn't run; when you're ready, run `/reconcile` so JAIL can learn from the final submitted version.
 
 ## Reconcile — suggested
 > This is archived. No rush, but once you've got a few submitted, run `/reconcile` so JAIL can learn what you actually changed and get sharper.

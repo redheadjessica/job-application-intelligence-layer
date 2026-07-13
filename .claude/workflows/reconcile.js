@@ -1,7 +1,7 @@
 export const meta = {
   name: 'reconcile',
-  description: 'Post-application learning: reconcile completed submitted applications (compare the agent\'s recommendation vs the finalized submitted resume), write a per-folder reconcile report, and merge candidate lessons into the learning ledger + source-update queue (04-TAILOR/learning/). Never edits canonical generation files. Implements ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/reconcile-spec.md.',
-  whenToUse: 'After applications are submitted and moved to your submitted-applications archive (use /archive to move them). {archive} is OPTIONAL — without it, reconcile reads archive.path from jail.config.json (fallback 05-SUBMITTED-APPLICATIONS) and scans its year subfolders. Pass {folders:[...]} for an explicit set, or {limit:N} to cap. Cadence: run it after your first few applications, after a meaningfully changed final resume, when a new resume base emerges, or after repeated summary/skills corrections — less often once things stabilize. Vet/tailor is unrelated.',
+  description: 'Post-application learning: reconcile completed submitted applications (compare the agent\'s recommendation vs the finalized submitted resume), write a per-folder reconcile report, and merge candidate lessons into the learning ledger + source-update queue (PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/learning/). Never edits canonical generation files. Implements ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/reconcile-spec.md.',
+  whenToUse: 'After applications are submitted and moved to your submitted-applications archive (use /archive to move them). {archive} is OPTIONAL — without it, reconcile reads archive.path from jail.config.json (fallback PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO) and scans its year subfolders. Pass {folders:[...]} for an explicit set, or {limit:N} to cap. Cadence: run it after your first few applications, after a meaningfully changed final resume, when a new resume base emerges, or after repeated summary/skills corrections — less often once things stabilize. Vet/tailor is unrelated.',
   phases: [
     { title: 'Discover', detail: 'find ready, unreconciled submitted-application folders', model: 'haiku' },
     { title: 'Reconcile', detail: 'one agent per folder: diff recommendation vs final PDF, write the report', model: 'sonnet' },
@@ -13,7 +13,7 @@ export const meta = {
 let A = args
 if (typeof A === 'string') { try { A = JSON.parse(A) } catch (_) { /* leave raw */ } }
 A = (A && typeof A === 'object') ? A : {}
-const ARCHIVE = A.archive || ''   // empty -> discover resolves it from jail.config.json archive.path (fallback 05-SUBMITTED-APPLICATIONS)
+const ARCHIVE = A.archive || ''   // empty -> discover resolves it from jail.config.json archive.path (fallback PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO)
 const FOLDERS = Array.isArray(A.folders) ? A.folders : null   // explicit list (names or abs paths)
 const LIMIT = Number.isInteger(A.limit) ? A.limit : null      // cap when scanning
 const PRIV_APP = 'PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO'  // learning INSTANCES (gitignored)
@@ -65,8 +65,8 @@ const DISCOVER_SCHEMA = {
         properties: { folder: { type: 'string' }, reason: { type: 'string' } },
       },
     },
-    archive_resolved: { type: 'string', description: 'the archive path actually scanned (from {archive}, else jail.config.json archive.path, else the 05-SUBMITTED-APPLICATIONS fallback)' },
-    workspace_leftovers: { type: 'array', items: { type: 'string' }, description: 'completed-looking folders still under __READY TO REVIEW (they contain a final resume PDF) — a cleanliness warning only; NEVER moved by reconcile' },
+    archive_resolved: { type: 'string', description: 'the archive path actually scanned (from {archive}, else jail.config.json archive.path, else the PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO fallback)' },
+    workspace_leftovers: { type: 'array', items: { type: 'string' }, description: 'completed-looking folders still under __READY_TO_REVIEW__PRIVATE_GITIGNORED (they contain a final resume PDF) — a cleanliness warning only; NEVER moved by reconcile' },
   },
 }
 
@@ -206,7 +206,7 @@ const scopeLine = FOLDERS
   ? `Process ONLY these folders (names are relative to the archive unless already absolute):\n${FOLDERS.map((f) => '- ' + f).join('\n')}`
   : (ARCHIVE
       ? `Scan the archive "${ARCHIVE}" (including its year subfolders, e.g. <archive>/2026/) for application folders.${LIMIT ? ` Limit to the ${LIMIT} most recent ready folders.` : ''}`
-      : `No archive path was passed. Resolve it: read jail.config.json -> archive.path; if the file is missing or invalid, fall back to "05-SUBMITTED-APPLICATIONS" (note which you used in archive_resolved). Then scan that archive INCLUDING its year subfolders (e.g. <archive>/2026/) for application folders.${LIMIT ? ` Limit to the ${LIMIT} most recent ready folders.` : ''}`)
+      : `No archive path was passed. Resolve it: read jail.config.json -> archive.path; if the file is missing or invalid, fall back to "PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO" (note which you used in archive_resolved). Then scan that archive INCLUDING its year subfolders (e.g. <archive>/2026/) for application folders.${LIMIT ? ` Limit to the ${LIMIT} most recent ready folders.` : ''}`)
 
 const discovery = await agent(
   `You are the discovery step of the reconcile workflow (ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/reconcile-spec.md §5 readiness).
@@ -221,17 +221,17 @@ Steps:
    - it has a FINAL submitted resume PDF (a "*Resume*.pdf", or the single non-JD .pdf in the folder; a .pages alone is NOT enough),
    - it has a scraped job post (a .txt, or a "Job Application*"/"* Job*" PDF),
    - it does NOT already contain a "reconcile-report - *.md" (else already done -> skip with reason "already reconciled"),
-   - it is under your submitted-applications archive (not __READY TO REVIEW).
+   - it is under your submitted-applications archive (not __READY_TO_REVIEW__PRIVATE_GITIGNORED).
 4. For each READY folder, identify the exact filenames: jd_file, output_md, final_pdf, and (if present) cover_letter and answers. Derive company, role, and submitted_date from the folder name (e.g. "Acme - Sr Analyst - 01-15-26" -> company "Acme", role "Sr Analyst", date "01-15-26").
-5. Return "archive_resolved" = the archive path you actually scanned (the passed archive, the jail.config.json archive.path, or the "05-SUBMITTED-APPLICATIONS" fallback).
-6. WORKSPACE LEFTOVERS (cleanliness warning — do NOT move anything): also look under "__READY TO REVIEW/*/2 - Tailored Resumes/*" for completed-looking folders (ones containing a final resume PDF — a "*Resume*.pdf" or a single non-JD .pdf). Return their folder names in "workspace_leftovers". They are NOT reconciled here; they're surfaced so the user can archive them with /archive.
+5. Return "archive_resolved" = the archive path you actually scanned (the passed archive, the jail.config.json archive.path, or the "PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO" fallback).
+6. WORKSPACE LEFTOVERS (cleanliness warning — do NOT move anything): also look under "__READY_TO_REVIEW__PRIVATE_GITIGNORED/*/2 - Tailored Resumes/*" for completed-looking folders (ones containing a final resume PDF — a "*Resume*.pdf" or a single non-JD .pdf). Return their folder names in "workspace_leftovers". They are NOT reconciled here; they're surfaced so the user can archive them with /archive.
 Use ls and quote paths (folders contain spaces, &, parentheses). Return absolute folder_path values.`,
   { phase: 'Discover', model: 'haiku', schema: DISCOVER_SCHEMA, label: 'discover folders' }
 )
 
 const leftovers = (discovery && discovery.workspace_leftovers) || []
 const leftoverNote = leftovers.length
-  ? ` Also: ${leftovers.length} completed-looking folder(s) still in __READY TO REVIEW — if those were submitted, archive them with /archive (${leftovers.join(', ')}).`
+  ? ` Also: ${leftovers.length} completed-looking folder(s) still in __READY_TO_REVIEW__PRIVATE_GITIGNORED — if those were submitted, archive them with /archive (${leftovers.join(', ')}).`
   : ''
 if (!discovery || !Array.isArray(discovery.ready) || discovery.ready.length === 0) {
   return { reconciled: 0, ready: 0, skipped: discovery ? discovery.skipped : [], archive: discovery ? discovery.archive_resolved : '', workspace_leftovers: leftovers, note: `No ready, unreconciled folders found.${leftoverNote}` }

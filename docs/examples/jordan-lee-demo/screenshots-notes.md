@@ -18,8 +18,8 @@
 |---|---|---|---|---|---|
 | `folder-tree.png` | repo root in Finder / VS Code | numbered `ENGINE__… / PRIVATE__… … docs` structure | top level, expanded one level | both | manual |
 | `intake-folders.png` | `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/` + `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/` (Finder) | evidence vs direction; Jordan's files | the two subfolders + their files | both | manual |
-| `intake-review.png` | `__READY TO REVIEW/06-25-26 - Intake Review/` (open `START HERE.md`) | the review-before-save gate; 8 files | `START HERE` + the numbered 1–7 files | both | manual |
-| `review-hub.png` | `__READY TO REVIEW/` (Finder) | the batch **and** the intake-review folder together | the hub with both folder types | both | manual |
+| `intake-review.png` | `__READY_TO_REVIEW__PRIVATE_GITIGNORED/06-25-26 - Intake Review/` (open `START HERE.md`) | the review-before-save gate; 8 files | `START HERE` + the numbered 1–7 files | both | manual |
+| `review-hub.png` | `__READY_TO_REVIEW__PRIVATE_GITIGNORED/` (Finder) | the batch **and** the intake-review folder together | the hub with both folder types | both | manual |
 | `prep-report.png` | `docs/examples/jordan-lee-demo/expected-outputs/prep-report.md` (md preview) | 4 usable / 1 thin / 0 failed / 0 dupes | the summary block | README | manual |
 | `ranking-xlsx.png` | `docs/examples/jordan-lee-demo/expected-outputs/rankings.xlsx` (Numbers/Excel/Sheets) | the tracker UI: a **Status dropdown** open, human columns + AI detail, **Lane**/Location/Comp stoplight colors, and the **section-color legend** below the jobs | the open dropdown + the 4 colored rows + the legend block | both | manual |
 | `tailored-output.png` | `docs/examples/jordan-lee-demo/expected-outputs/tailored - Thornbury (strong fit).md` (preview) | a tailored draft + its structure | a tailored block + a "Questions" peek | both | manual |

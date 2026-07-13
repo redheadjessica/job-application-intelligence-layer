@@ -23,7 +23,7 @@ The full synthetic kit lives in **`docs/examples/jordan-lee-demo/`** (committed,
 | 3 | Folder tree (`ENGINE__PUBLIC_GIT_TRACKED`, `PRIVATE__YOUR_FILES_GITIGNORED` … `docs`) | the numbered structure | `[shot: folder-tree]` |
 | 4 | The two `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO` folders | evidence vs. direction | `[shot: intake-folders]` |
 | 5 | `/intake` staged review (`… - Intake Review/`) | the review-before-save gate | `[shot: intake-review]` |
-| 6 | `__READY TO REVIEW/` hub | where everything to review lives | `[shot: review-hub]` |
+| 6 | `__READY_TO_REVIEW__PRIVATE_GITIGNORED/` hub | where everything to review lives | `[shot: review-hub]` |
 | 7 | Prep report (`0 - Prep Report/prep-report.md`) | usable vs. thin/failed/dupes | `[shot: prep-report]` |
 | 8 | Ranking spreadsheet (Jordan's batch) | Comp/Location/Lane Fit + colors | `[shot: ranking-xlsx]` |
 | 9 | Tailored output (`application_resume_output - … .md`) | the draft + Questions section | `[shot: tailored-output]` |

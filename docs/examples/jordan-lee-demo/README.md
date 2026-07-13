@@ -60,7 +60,7 @@ Because it is 100% fictional, the artifacts here can be committed and shown publ
 
 - **Synthetic only.** If it describes a real person, company, or job, it does not belong here.
 - **Do not use real candidate data here.** Not the author's, not anyone's.
-- **Do not force-add runtime / private paths.** Never `git add -f` anything under `__READY TO REVIEW/<batch>/`, `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/`, `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/`, `jail.config.json`, or `05-SUBMITTED-APPLICATIONS/`. Those are gitignored on purpose. Commit demo data **here** (in `examples/`) instead.
+- **Do not force-add runtime / private paths.** Never `git add -f` anything under `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/`, `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/`, `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/`, `jail.config.json`, or `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/`. Those are gitignored on purpose. Commit demo data **here** (in `examples/`) instead.
 - **Screenshots of runtime folders are fine — only when populated with synthetic Jordan Lee data**, then cleaned up. See `staging/README.md`.
 - **Real-URL smoke tests are separate and disposable** — never committed, never screenshotted.
 

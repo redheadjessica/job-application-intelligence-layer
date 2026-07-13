@@ -1,7 +1,7 @@
 # Master Profile
 
 Central source of truth for positioning {{YOUR NAME}} in tailored resumes: role fit, positioning, tone, factual boundaries, and writing constraints.
-<!-- intake: this file is the single source of truth the tailoring agent reads before writing any resume. Fill every placeholder below from your resume, LinkedIn, and your own sense of how you want to come across. The other 04-TAILOR/ files (experience bank, summary library, any canonical product wording) hold the detail; this file holds the rules. -->
+<!-- intake: this file is the single source of truth the tailoring agent reads before writing any resume. Fill every placeholder below from your resume, LinkedIn, and your own sense of how you want to come across. The other `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/` files (experience bank, summary library, any canonical product wording) hold the detail; this file holds the rules. -->
 
 ---
 

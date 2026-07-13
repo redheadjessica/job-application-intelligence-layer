@@ -8,4 +8,4 @@
 # - Even links you've only glanced at are fine; ranking is what tells you which are worth your time.
 # - Then tell Claude in chat, e.g. "rank today's batch" — or run ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/new_batch.py.
 # - The working copy is a shared seed; your pasted URLs are snapshotted into each dated batch under
-#   "__READY TO REVIEW/<date>/3 - Source Material/" when a batch is created.
+#   "__READY_TO_REVIEW__PRIVATE_GITIGNORED/<date>/3 - Source Material/" when a batch is created.

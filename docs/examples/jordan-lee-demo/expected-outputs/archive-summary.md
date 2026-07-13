@@ -4,8 +4,8 @@
 - **Role:** Senior Product Marketing Manager, AI Workflows
 - **Submitted:** 06-25-26
 - **Source batch:** 06-25-26
-- **Moved from:** `__READY TO REVIEW/06-25-26/2 - Tailored Resumes/Thornbury - Sr PMM AI Workflows/`
-- **Archived at:** `05-SUBMITTED-APPLICATIONS/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/`
+- **Moved from:** `__READY_TO_REVIEW__PRIVATE_GITIGNORED/06-25-26/2 - Tailored Resumes/Thornbury - Sr PMM AI Workflows/`
+- **Archived at:** `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/`
 
 ## Files present
 - `application_resume_output - Thornbury - Sr PMM AI Workflows.md` — the agent's recommendation
@@ -17,7 +17,7 @@
 - none
 
 ## Final submitted resume
-- **PDF:** `05-SUBMITTED-APPLICATIONS/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/Jordan Lee - Resume - Thornbury - FINAL.pdf`
+- **PDF:** `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/Jordan Lee - Resume - Thornbury - FINAL.pdf`
 
 ## Reconcile
 - **Run yet?** No — not yet.

@@ -1,11 +1,11 @@
 ---
 name: archive
-description: Move a SUBMITTED application's folder out of the __READY TO REVIEW workspace into the durable, private submitted-applications archive (default 05-SUBMITTED-APPLICATIONS/<year>/). Runs a readiness check, warns clearly if the final submitted resume PDF is missing or ambiguous, moves (never copies), and writes a short archive-summary.md. Only on the user's explicit instruction. Never submits anything; never runs reconcile.
+description: Move a SUBMITTED application's folder out of the __READY_TO_REVIEW__PRIVATE_GITIGNORED workspace into the durable, private submitted-applications archive (default PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/<year>/). Runs a readiness check, warns clearly if the final submitted resume PDF is missing or ambiguous, moves (never copies), and writes a short archive-summary.md. Only on the user's explicit instruction. Never submits anything; never runs reconcile.
 ---
 
 # Archive a submitted application
 
-You move ONE completed application's folder from the review workspace into the user's durable archive, so the active `__READY TO REVIEW/` area stays clean and the submitted record is preserved for later learning (`/reconcile`).
+You move ONE completed application's folder from the review workspace into the user's durable archive, so the active `__READY_TO_REVIEW__PRIVATE_GITIGNORED/` area stays clean and the submitted record is preserved for later learning (`/reconcile`).
 
 ## North star
 
@@ -17,11 +17,11 @@ The **submitted application record is the durable source of what actually happen
 
 ## Step 1 — Locate the folder
 
-The usual source is a job folder under `__READY TO REVIEW/<MM-DD-YY>/2 - Tailored Resumes/<Company - Role>/`. Accept an explicit folder path if the user points at one. If multiple folders could match, list them and ask which. Do **not** assume every folder under `2 - Tailored Resumes/` was submitted.
+The usual source is a job folder under `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<MM-DD-YY>/2 - Tailored Resumes/<Company - Role>/`. Accept an explicit folder path if the user points at one. If multiple folders could match, list them and ask which. Do **not** assume every folder under `2 - Tailored Resumes/` was submitted.
 
 ## Step 2 — Resolve the archive path (config-aware)
 
-- Read `jail.config.json` → `archive.path`. If missing/invalid, fall back to **`05-SUBMITTED-APPLICATIONS`** and **say so** in chat.
+- Read `jail.config.json` → `archive.path`. If missing/invalid, fall back to **`PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO`** and **say so** in chat.
 - **Year subfolder:** use the submission date if it's clear (the batch date `MM-DD-YY` → `20YY`, or a date in the folder name). If ambiguous, use the current year (`date +%Y`) and note it in the summary.
 - Destination: `<archive.path>/<YYYY>/<Company - Role - date>` (keep the existing readable folder name; the archive convention is `Company - Role - MM-DD-YY`).
 
@@ -54,7 +54,7 @@ Do **not** silently archive. Say, clearly:
 ## Step 5 — Move (never copy)
 
 - `mkdir -p "<archive.path>/<YYYY>"` (quote paths — they contain spaces).
-- **`mv`** the whole folder into the year folder. Never copy — after the move the original must no longer exist under `__READY TO REVIEW/`.
+- **`mv`** the whole folder into the year folder. Never copy — after the move the original must no longer exist under `__READY_TO_REVIEW__PRIVATE_GITIGNORED/`.
 - **Never overwrite.** If a folder with that name already exists in the archive, append a deterministic suffix (`-2`, `-3`, …) to the destination name.
 
 ## Step 6 — Write `archive-summary.md`
@@ -65,7 +65,7 @@ Inside the moved folder, write `archive-summary.md` from `.claude/skills/archive
 
 After the move, glance at the source batch's `2 - Tailored Resumes/` for other **completed-looking** folders (ones that contain a final resume PDF). If any remain, gently mention them:
 
-> "I see N other completed-looking folder(s) still in `__READY TO REVIEW`. If those were submitted too, tell me and I'll archive them."
+> "I see N other completed-looking folder(s) still in `__READY_TO_REVIEW__PRIVATE_GITIGNORED`. If those were submitted too, tell me and I'll archive them."
 
 Never auto-move anything the user didn't name.
 

@@ -1,4 +1,4 @@
-<!-- Cover-letter intake review skeleton. /cover-letter-intake copies this into "__READY TO REVIEW/<MM-DD-YY> - Cover Letter Intake/" and fills it in. Nothing here is saved until you approve. -->
+<!-- Cover-letter intake review skeleton. /cover-letter-intake copies this into "__READY_TO_REVIEW__PRIVATE_GITIGNORED/<MM-DD-YY> - Cover Letter Intake/" and fills it in. Nothing here is saved until you approve. -->
 
 # Your cover-letter voice review — start here
 

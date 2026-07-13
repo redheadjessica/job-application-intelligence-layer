@@ -20,9 +20,9 @@ All of these are **already gitignored**, so staging into them will not accidenta
 | `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/` | Jordan's resume + brag doc | `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/*` |
 | `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/` | target JD | `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/*` |
 | `jail.config.json` | Jordan's preferences | `jail.config.json` |
-| `__READY TO REVIEW/<batch>/` | prep report, rankings, tailored, source material | `__READY TO REVIEW/*/` |
-| `__READY TO REVIEW/<date> - Intake Review/` | staged intake review | `__READY TO REVIEW/*/` |
-| `05-SUBMITTED-APPLICATIONS/<year>/` | archived application | `05-SUBMITTED-APPLICATIONS/*` |
+| `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/` | prep report, rankings, tailored, source material | `__READY_TO_REVIEW__PRIVATE_GITIGNORED/*/` |
+| `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<date> - Intake Review/` | staged intake review | `__READY_TO_REVIEW__PRIVATE_GITIGNORED/*/` |
+| `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/<year>/` | archived application | `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/*` |
 | `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/*.md`, `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/*.md` | instance source-of-truth files | wholesale (PRIVATE root); cover-letter instances still per-file until Batch B |
 
 ### The inbox working copy

@@ -43,9 +43,9 @@ flowchart TD
    - `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/` — **evidence**: resumes (any version), LinkedIn export, brag/wins docs, metrics, writing samples, and job descriptions for roles you've actually **held**.
    - `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/` — **direction**: postings for roles you *want*. These shape your scoring and lanes; they're never treated as proof you've done that work.
    *(You can also just paste materials into the chat.)* <!-- TODO: screenshot [shot: intake-folders] -->
-5. **Run `/intake`.** It reads your materials, gives you a straight read, asks a few questions, and puts a **review folder** together — `__READY TO REVIEW/<date> - Intake Review/`. Open `START HERE.md`, check it over, and tell Claude when it looks right. **Nothing is saved to your source-of-truth files until you approve.** <!-- TODO: screenshot [shot: intake-review] -->
-6. **Add some jobs** — paste links into your private inbox `PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/paste-job-urls-to-rank-here.txt`, one per line. Then tell Claude: **"Start today's batch and tailor my top job."** *(Savvy: `python ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/new_batch.py <MM-DD-YY>`, run the prep command it prints, then `/run-batch {folder: "__READY TO REVIEW/<MM-DD-YY>", tailor: true, topN: 1}`.)*
-7. **Review the results** in `__READY TO REVIEW/<date>/`:
+5. **Run `/intake`.** It reads your materials, gives you a straight read, asks a few questions, and puts a **review folder** together — `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<date> - Intake Review/`. Open `START HERE.md`, check it over, and tell Claude when it looks right. **Nothing is saved to your source-of-truth files until you approve.** <!-- TODO: screenshot [shot: intake-review] -->
+6. **Add some jobs** — paste links into your private inbox `PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/paste-job-urls-to-rank-here.txt`, one per line. Then tell Claude: **"Start today's batch and tailor my top job."** *(Savvy: `python ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/new_batch.py <MM-DD-YY>`, run the prep command it prints, then `/run-batch {folder: "__READY_TO_REVIEW__PRIVATE_GITIGNORED/<MM-DD-YY>", tailor: true, topN: 1}`.)*
+7. **Review the results** in `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<date>/`:
    - `0 - Prep Report/` — what was fetched, and anything skipped (duplicates, thin/failed posts).
    - `1 - Rankings/` — your jobs scored and sorted, with the reasons why.
    - `2 - Tailored Resumes/` — your top job's draft + notes. Start with the "Questions for the candidate" section, then finish in your own editor.
@@ -57,12 +57,15 @@ That's the whole loop. Re-run it whenever you've collected a few new postings.
 ---
 
 ## Folders (plain language)
-- **`ENGINE__PUBLIC_GIT_TRACKED/00-INTAKE/`** holds the intake READMEs + template; your materials + generated intake state live under **`PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/`**.
-- **`ENGINE__PUBLIC_GIT_TRACKED/01-INBOX/`** holds the public inbox template; your pasted URLs live in **`PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/`**.
-- **`ENGINE__PUBLIC_GIT_TRACKED/02-PREP/`**, **`ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/`**, **`ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/`** — the engine (fetch, rank, tailor) + templates; your private 03-VETTING files live under **`PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/`**.
-- **`05-SUBMITTED-APPLICATIONS/`** — your private archive of submitted apps (gitignored).
-- **`__READY TO REVIEW/`** — the human-review hub: batches and intake/source-update reviews.
-- **`docs/`** — deeper docs (see below).
+Three top-level folders are all you ever work with:
+
+- **`ENGINE__PUBLIC_GIT_TRACKED/`** — the public engine. All the numbered workflow stages' code, agents, prompts, and blank `*.template.*` files. Git-tracked, safe to commit, you rarely open it; update it with `git pull`.
+- **`PRIVATE__YOUR_FILES_GITIGNORED/`** — your private data. The filled-in instances `/intake` generates (profile, scoring card, experience bank, cover-letter voice…), your intake materials, and your submitted-applications archive. **Gitignored — never committed.** This is where you edit.
+- **`__READY_TO_REVIEW__PRIVATE_GITIGNORED/`** — your generated work to review. Ranked job batches, tailored resume drafts, cover letters, and staged intake/reconcile reviews. **Gitignored.** This is where you find output.
+
+Inside `ENGINE__…/` and `PRIVATE__…/` the stages mirror one-to-one — `00-INTAKE`, `01-INBOX`, `02-PREP`, `03-VETTING`, `04-TAILOR` under ENGINE, and your private half under `<stage>__YOUR_PRIVATE_INFO`. Your config `jail.config.json` sits at the repo root (gitignored; `jail.config.template.json` is its tracked template). Submitted applications default into `PRIVATE__…/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/`, or point the archive at a cloud folder in `jail.config.json`.
+
+*(The repo root also holds tool folders — `.claude/`, `.git/`, `.venv/` — and files like this README. They're required plumbing, not something you work with.)*
 
 ## Privacy — local-first, and built for it
 This matters, so read it once:

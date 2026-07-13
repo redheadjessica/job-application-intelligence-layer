@@ -246,7 +246,7 @@ def batch_dirs(source_dir) -> dict:
     derive the sibling quarantine dirs and the batch's prep-report dir."""
     src = Path(source_dir).resolve()
     sm = src.parent            # "3 - Source Material"
-    batch = sm.parent          # batch root (__READY TO REVIEW/MM-DD-YY)
+    batch = sm.parent          # batch root (__READY_TO_REVIEW__PRIVATE_GITIGNORED/MM-DD-YY)
     return {
         "batch": batch,
         "source": src,

@@ -12,7 +12,7 @@ and config for approval. The engine reads only the instances.
 ## How to run it
 
 ```
-cover-letter {job: "__READY TO REVIEW/<batch>/3 - Source Material/All Job Posts (full text)/foo.txt"}
+cover-letter {job: "__READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/3 - Source Material/All Job Posts (full text)/foo.txt"}
 cover-letter {jobs: ["...a.txt", "...b.txt"]}
 cover-letter {job: "...foo.txt", out: "path/to/an/existing/Company - Role folder"}
 ```

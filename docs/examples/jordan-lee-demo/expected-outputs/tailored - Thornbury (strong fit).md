@@ -16,7 +16,7 @@ None — straightforward fit. This role maps directly to Jordan's core positioni
 
 ## Read Log
 
-- **Active job folder:** `__READY TO REVIEW/06-25-26/2 - Tailored Resumes/Thornbury - Sr PMM AI Workflows/`
+- **Active job folder:** `__READY_TO_REVIEW__PRIVATE_GITIGNORED/06-25-26/2 - Tailored Resumes/Thornbury - Sr PMM AI Workflows/`
 - **Job file read:** `thornbury__senior-product-marketing-manager-ai-workflows.txt` (~1 KB, plain text)
 - **System files read:**
   - `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/01-profile.md` (~252 lines)

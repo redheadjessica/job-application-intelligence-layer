@@ -17,9 +17,6 @@ node_modules/
 # Machine-specific local Claude Code settings (regenerated; never commit)
 .claude/settings.local.json
 
-# Batch run outputs (keep the empty review folder, ignore generated batches)
-__READY TO REVIEW/*/
-
 # ── New explicit-root layout (migration in progress). Everything under the PRIVATE
 #    root and the generated-output root is your data — ignored wholesale. Templates and
 #    mechanism live under ENGINE__PUBLIC_GIT_TRACKED/ and stay tracked. ─────────────────
@@ -29,10 +26,6 @@ __READY_TO_REVIEW__PRIVATE_GITIGNORED/
 # ── Root config: generated instance (by setup/intake). Template is tracked. ──
 jail.config.json
 
-
-# ── Submitted-applications archive (personal). Keep the folder tracked. ──────
-05-SUBMITTED-APPLICATIONS/*
-!05-SUBMITTED-APPLICATIONS/.gitkeep
 
 # Personal-identifier denylist read by the local pre-commit firewall hook
 *denylist.local.txt

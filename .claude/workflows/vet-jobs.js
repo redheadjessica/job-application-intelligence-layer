@@ -1,7 +1,7 @@
 export const meta = {
   name: 'vet-jobs',
   description: 'Score a dated batch folder of job descriptions in parallel (one agent per job), then assemble CSV + Markdown rankings into that same folder',
-  whenToUse: 'Run a job-vetting batch fast. Pass the batch folder path as args, e.g. {folder: "__READY TO REVIEW/06-02-26"}.',
+  whenToUse: 'Run a job-vetting batch fast. Pass the batch folder path as args, e.g. {folder: "__READY_TO_REVIEW__PRIVATE_GITIGNORED/06-02-26"}.',
   phases: [
     { title: 'Discover', detail: 'list job files in the batch folder', model: 'haiku' },
     { title: 'Score', detail: 'one agent per job, scored concurrently', model: 'sonnet' },
@@ -15,7 +15,7 @@ let A = args
 if (typeof A === 'string') { try { A = JSON.parse(A) } catch (_) { /* leave as raw string */ } }
 const FOLDER = (A && typeof A === 'object' && A.folder) ? A.folder : A
 if (!FOLDER || typeof FOLDER !== 'string') {
-  throw new Error('Pass the batch folder path as args, e.g. {folder: "__READY TO REVIEW/06-02-26"} or just "__READY TO REVIEW/04-09-26".')
+  throw new Error('Pass the batch folder path as args, e.g. {folder: "__READY_TO_REVIEW__PRIVATE_GITIGNORED/06-02-26"} or just "__READY_TO_REVIEW__PRIVATE_GITIGNORED/04-09-26".')
 }
 // Optional: write the rankings somewhere OTHER than the scored folder (e.g. a sibling
 // "1 - Rankings/" tier), and name them after the batch rather than the source subfolder.

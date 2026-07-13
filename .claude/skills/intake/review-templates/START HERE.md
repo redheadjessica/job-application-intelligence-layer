@@ -1,4 +1,4 @@
-<!-- Intake review skeleton. /intake copies this into "__READY TO REVIEW/<MM-DD-YY> - Intake Review/" and fills it in. Nothing here is saved to your source of truth until you approve. -->
+<!-- Intake review skeleton. /intake copies this into "__READY_TO_REVIEW__PRIVATE_GITIGNORED/<MM-DD-YY> - Intake Review/" and fills it in. Nothing here is saved to your source of truth until you approve. -->
 
 # Your intake review — start here
 

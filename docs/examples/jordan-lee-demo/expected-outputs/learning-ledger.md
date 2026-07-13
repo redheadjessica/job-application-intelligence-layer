@@ -40,7 +40,7 @@ Categories: routing · missed-evidence · claim-boundary · voice · skills · c
 
 ### Thornbury — Sr PMM AI Workflows (06-25-26)  ·  status: pending
 
-**Folder:** `05-SUBMITTED-APPLICATIONS/2026/Thornbury - Sr PMM AI Workflows - 06-25-26`
+**Folder:** `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/2026/Thornbury - Sr PMM AI Workflows - 06-25-26`
 
 - **Base recommended → used:** Jordan Lee — Senior PMM (AI Product Marketing family) → same (agreed, mixed)
 - **Accepted:** Option 2 summary (agent's top recommendation); [variant-ai] bullet swap; win-loss bullet partially retained; Birchwood first bullet; all 11 remaining skills in recommended order
@@ -57,5 +57,5 @@ Categories: routing · missed-evidence · claim-boundary · voice · skills · c
 - **Open questions (5):** Q1 AI bullet tail (defensive vs. space), Q2 win-loss negative qualifier (over-hedged vs. length), Q3 messaging hierarchy (intentional scope vs. editorial), Q4 Birchwood intern (padding for IC roles), Q5 P&P skill (relevance vs. boundary vs. length)
 - **Confirmed lessons:** _(pending candidate answers to Q1–Q5)_
 - **Source files possibly affected:** 04-experience-bank.md (AI bullet variant, win-loss bullet variant), 00-job_application_agent.md (IC routing rule), 06-skills-quick.md (P&P routing note), 05-summary-quick.md (Family B AI-native closer)
-- **Reconcile report:** `05-SUBMITTED-APPLICATIONS/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/reconcile-report - Thornbury - Sr PMM AI Workflows - 06-25-26.md`
+- **Reconcile report:** `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO/2026/Thornbury - Sr PMM AI Workflows - 06-25-26/reconcile-report - Thornbury - Sr PMM AI Workflows - 06-25-26.md`
 - **Base/template candidate:** YES — AI product marketing + workflow-automation SaaS + anti-hype/grounded-claims culture. See source-update-queue.md Base/template candidates section.

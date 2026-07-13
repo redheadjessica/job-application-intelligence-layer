@@ -52,7 +52,7 @@ At the very start, detect which mode you're in:
 This is the mechanism that keeps the repo safe to be public and keeps you from silently overwriting the person's source of truth.
 
 1. **Tracked templates (`*.template.md` / `*.template.json`)** are blank skeletons full of `{{PLACEHOLDERS}}`. You **read** these for structure. **Never fill a template in place** — they stay committable and personal-data-free.
-2. **Staged review** lives in `__READY TO REVIEW/<MM-DD-YY> - Intake Review/` (gitignored; the Unit-1 batch guard keeps it from being treated as a job batch). You write **human-readable review files** here first. Nothing canonical is written yet.
+2. **Staged review** lives in `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<MM-DD-YY> - Intake Review/` (gitignored; the Unit-1 batch guard keeps it from being treated as a job batch). You write **human-readable review files** here first. Nothing canonical is written yet.
 3. **Generated instances (the bare `.md` / `.json`, gitignored)** are the person's real source of truth. The **engine reads these.** You write them **only after the person approves**, by faithfully transcribing the reviewed content (see *Promotion discipline*).
 
 If a required instance is missing, the engine tells the user to run `/intake` first — so generating these correctly is the whole point.
@@ -117,7 +117,7 @@ Ask the one-or-several lanes question; infer from their direction materials and 
 Lead with: **"Before I tell you what I see — how do you feel about your resume right now?"** Then batch the Tier-1 gaps the materials can't answer, preferring choices over essays: **priority lanes** (confirm/reorder) · **comp** (target + floor) · **location/workstyle** (home metro + aliases; rate each setup — remote / hybrid-near / onsite-near / hybrid-elsewhere / onsite-elsewhere — as preferred/ok/stretch/no; relocate?; hard nos) · **custom factors** (1–2 idiosyncratic must-haves) · **weights** (default 35/30/20/15 across Want-it / Fit / Culture / Practicality). These answers also feed `jail.config.json`.
 
 ### Step 6 — STAGE the review folder (do NOT write canonical instances yet)
-Create `__READY TO REVIEW/<MM-DD-YY> - Intake Review/` (folder via `date +%m-%d-%y`). Instantiate the review files **from the tracked skeletons in `.claude/skills/intake/review-templates/`** — copy each, then fill it with the actual proposed content for the person. Write all of:
+Create `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<MM-DD-YY> - Intake Review/` (folder via `date +%m-%d-%y`). Instantiate the review files **from the tracked skeletons in `.claude/skills/intake/review-templates/`** — copy each, then fill it with the actual proposed content for the person. Write all of:
 
 ```
 START HERE.md
@@ -134,7 +134,7 @@ Each review file carries the **real proposed content** (so what they review is w
 
 ### Step 7 — Guide them in chat
 After staging, tell the user, clearly and warmly:
-- **Your intake review is ready** in `__READY TO REVIEW/<MM-DD-YY> - Intake Review/`.
+- **Your intake review is ready** in `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<MM-DD-YY> - Intake Review/`.
 - **Start with `START HERE.md`**, then open the files in order.
 - Look for anything **wrong, missing, overstated, or not-you**.
 - The easiest way to give feedback is **voice-to-text right here in chat** — just talk it back to me.
@@ -177,7 +177,7 @@ Generate the instance from its template (`ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/0
 Generate the instance from `jail.config.template.json`, filling what you learned. This unit populates:
 
 - `approved`: today (`date +%Y-%m-%d`)
-- `archive.path`: where submitted applications will live — default `"05-SUBMITTED-APPLICATIONS"`; ask if they want elsewhere (e.g. a cloud-synced folder). `year_subfolders: true`.
+- `archive.path`: where submitted applications will live — default `"PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO"`; ask if they want elsewhere (e.g. a cloud-synced folder). `year_subfolders: true`.
 - `comp`: `currency`, `target_base`, `floor_base` (numbers in thousands; `null` if they won't say).
 - `location`: `home_metro` (their city) + `home_metro_aliases` (other names for it — e.g. "NYC", "New York", "Manhattan", "Brooklyn"), `relocate` (`"never"|"exceptional"|"yes"`), and the **`arrangements` ratings**: for each of `remote`, `home_hybrid`, `home_onsite`, `other_hybrid`, `other_onsite`, set `preferred` | `ok` | `stretch` | `no` (or `null` only if truly unknown). These drive candidate-relative location coloring in ranking — capture them from the Job Preferences review; don't leave them all null.
 - `lanes`: one `{ "id": "...", "name": "...", "priority": N }` per lane (ids are short kebab-case).

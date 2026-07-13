@@ -21,7 +21,7 @@
 
 ## Read Log
 
-- **Active job folder:** `__READY TO REVIEW/06-25-26/2 - Tailored Resumes/Lyceum AI - Product Strategy Lead AI Research Platform/`
+- **Active job folder:** `__READY_TO_REVIEW__PRIVATE_GITIGNORED/06-25-26/2 - Tailored Resumes/Lyceum AI - Product Strategy Lead AI Research Platform/`
 - **Job description:** `lyceum-ai__product-strategy-lead-ai-research-platform.txt` (plain text, ~34 lines)
 - **System files opened:**
   - `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/01-profile.md` (~252 lines)

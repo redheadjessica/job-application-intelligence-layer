@@ -25,7 +25,7 @@ const outOverride = (A && typeof A === 'object' && A.out) ? A.out : null
 // Derive the batch the same way tailor-jobs does, so letters land beside resume drafts.
 function batchOf(p) {
   const parts = String(p || '').replace(/\/+$/, '').split('/')
-  const idx = parts.indexOf('__READY TO REVIEW')
+  const idx = parts.indexOf('__READY_TO_REVIEW__PRIVATE_GITIGNORED')
   if (idx >= 0 && parts.length > idx + 1) return parts[idx + 1]
   return parts.length >= 2 ? parts[parts.length - 2] : 'manual'
 }
@@ -82,7 +82,7 @@ const results = await pipeline(
 
   // ---- Stage 1: Draft ----
   async (jobPath) => {
-    const destParent = outOverride || `__READY TO REVIEW/${batchOf(jobPath)}/2 - Tailored Resumes`
+    const destParent = outOverride || `__READY_TO_REVIEW__PRIVATE_GITIGNORED/${batchOf(jobPath)}/2 - Tailored Resumes`
     const draft = await agent(
       `DRAFT mode. Write ONE cover letter per your spec (.claude/agents/cover-letter-writer.md rules apply — read the candidate's canon files first; feedback-ledger newest entries win).
 

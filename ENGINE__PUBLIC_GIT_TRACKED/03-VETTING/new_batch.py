@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Scaffold a fresh review batch under __READY TO REVIEW/<MM-DD-YY>/.
+"""Scaffold a fresh review batch under __READY_TO_REVIEW__PRIVATE_GITIGNORED/<MM-DD-YY>/.
 
 Every file a run produces lands inside that one dated folder:
 
-    __READY TO REVIEW/<batch>/
+    __READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/
       0 - Prep Report/                   <- prep-report.md + prep-manifest.json
       1 - Rankings/                      <- vet-jobs writes the CSV/MD/XLSX here
       2 - Tailored Resumes/              <- one folder per tailored job
@@ -50,7 +50,7 @@ def resolve_batch(arg: str | None) -> str:
 
 def main() -> None:
     batch = resolve_batch(sys.argv[1] if len(sys.argv) > 1 else None)
-    review_root = REPO_ROOT / "__READY TO REVIEW" / batch
+    review_root = REPO_ROOT / "__READY_TO_REVIEW__PRIVATE_GITIGNORED" / batch
 
     if review_root.exists():
         print(f"Note: {review_root} already exists — ensuring the tier folders are present.")
@@ -89,7 +89,7 @@ def main() -> None:
     print('  #    then read "0 - Prep Report/prep-report.md" for a plain-English summary.')
     print('  #    Re-run the same command anytime to retry thin/failed posts (usable ones are skipped).')
     print("  # 2) Vet + tailor the top 3:")
-    print(f'  run-batch {{folder: "__READY TO REVIEW/{batch}", tailor: true, topN: 3}}')
+    print(f'  run-batch {{folder: "__READY_TO_REVIEW__PRIVATE_GITIGNORED/{batch}", tailor: true, topN: 3}}')
     print("\n  (Advanced) For stubborn JS-rendered pages that came back thin, retry with the renderer:")
     print(f'  .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/02-PREP/prep_job_urls_playwright.py "{src_rel}" --input "{urls_rel}"')
 

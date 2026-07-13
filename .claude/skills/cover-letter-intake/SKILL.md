@@ -41,7 +41,7 @@ Same mechanism as `/intake`:
 
 1. **Tracked templates** in `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/*.template.md` + `config.template.json` are
    the skeletons. Read them for structure. **Never fill a template in place.**
-2. **Staged review** lives in `__READY TO REVIEW/<MM-DD-YY> - Cover Letter Intake/` (folder via
+2. **Staged review** lives in `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<MM-DD-YY> - Cover Letter Intake/` (folder via
    `date +%m-%d-%y`). Instantiate the review files from the skeletons in
    `.claude/skills/cover-letter-intake/review-templates/` and fill them with real proposed content.
 3. **Generated instances** (bare names in `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/`, gitignored) are written

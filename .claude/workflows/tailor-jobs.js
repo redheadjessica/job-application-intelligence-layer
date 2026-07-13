@@ -17,18 +17,18 @@ if (!raw || raw.length === 0) {
 }
 const picks = raw.map((j) => (typeof j === 'string' ? { abs_path: j } : j))
 
-// Consolidated review home: __READY TO REVIEW/<batch>/. Derive <batch> from each job file's
-// parent folder (e.g. __READY TO REVIEW/06-02-26/foo.txt -> 06-02-26) so hand-picked jobs land alongside
+// Consolidated review home: __READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/. Derive <batch> from each job file's
+// parent folder (e.g. __READY_TO_REVIEW__PRIVATE_GITIGNORED/06-02-26/foo.txt -> 06-02-26) so hand-picked jobs land alongside
 // their batch. Falls back to "manual" if the path has no recognizable parent.
 // A job batch is ONLY a date-shaped folder (MM-DD-YY). Non-batch review folders under
-// __READY TO REVIEW (e.g. "06-02-26 - Intake Review", "06-02-26 - Source Update Review")
+// __READY_TO_REVIEW__PRIVATE_GITIGNORED (e.g. "06-02-26 - Intake Review", "06-02-26 - Source Update Review")
 // must never be treated as a batch.
 const isBatchName = (s) => /^\d{2}-\d{2}-\d{2}$/.test(s)
 function batchOf(p) {
   const parts = String(p || '').replace(/\/+$/, '').split('/')
-  // Job files live under __READY TO REVIEW/<batch>/.../foo.txt — the batch is the segment
-  // right after "__READY TO REVIEW", but only if it is date-shaped.
-  const idx = parts.indexOf('__READY TO REVIEW')
+  // Job files live under __READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/.../foo.txt — the batch is the segment
+  // right after "__READY_TO_REVIEW__PRIVATE_GITIGNORED", but only if it is date-shaped.
+  const idx = parts.indexOf('__READY_TO_REVIEW__PRIVATE_GITIGNORED')
   if (idx >= 0 && parts.length > idx + 1 && isBatchName(parts[idx + 1])) return parts[idx + 1]
   // Fallback: the immediate parent folder, only if it is itself date-shaped; else "manual".
   const parent = parts.length >= 2 ? parts[parts.length - 2] : ''
@@ -52,7 +52,7 @@ for (let i = 0; i < picks.length; i++) {
   const p = picks[i]
   const who = p.company || p.abs_path
   log(`Tailoring ${i + 1}/${picks.length}: ${who}`)
-  const resumesDir = `__READY TO REVIEW/${batchOf(p.abs_path)}/2 - Tailored Resumes`
+  const resumesDir = `__READY_TO_REVIEW__PRIVATE_GITIGNORED/${batchOf(p.abs_path)}/2 - Tailored Resumes`
   const res = await agent(
     `Tailor a resume for ONE job, in autonomous mode.
 
@@ -78,5 +78,5 @@ re-derive, don't ratify the old draft.`,
 
 return {
   tailored,
-  note: `Prepared ${tailored.length} resume draft(s) in __READY TO REVIEW/. Open each job folder's "application_resume_output - [Company] - [Role].md", starting with the "Questions for the candidate" section.`,
+  note: `Prepared ${tailored.length} resume draft(s) in __READY_TO_REVIEW__PRIVATE_GITIGNORED/. Open each job folder's "application_resume_output - [Company] - [Role].md", starting with the "Questions for the candidate" section.`,
 }
