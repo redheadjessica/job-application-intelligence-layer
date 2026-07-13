@@ -14,7 +14,7 @@ reconcile agents never re-read PDFs (or pay vision costs) on any later run:
   _extracted/MANIFEST.txt               what was found, how pages were classified, what's missing
 
 The candidate's identity chrome (signature line, personal domains) is read from
-04-TAILOR/cover-letter/config.json (signature_name, personal_domains) when it exists, so
+PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/config.json (signature_name, personal_domains) when it exists, so
 template header/contact lines never pollute the diff. Without that config, generic contact-line
 filters still apply.
 
@@ -41,7 +41,7 @@ RESUME_MARKERS = ("experience", "skills", "education", "summary", "professional"
 
 def load_identity():
     """(signature_name, [personal domains]) from the cover-letter config, if set up."""
-    cfg_path = Path(__file__).resolve().parents[3] / "04-TAILOR" / "cover-letter" / "config.json"
+    cfg_path = Path(__file__).resolve().parents[3] / "PRIVATE__YOUR_FILES_GITIGNORED" / "04-TAILOR__YOUR_PRIVATE_INFO" / "cover-letter" / "config.json"
     if cfg_path.is_file():
         try:
             cfg = json.loads(cfg_path.read_text(encoding="utf-8"))

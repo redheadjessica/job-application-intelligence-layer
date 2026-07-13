@@ -105,7 +105,7 @@ Return (structured): job_folder, draft_path, company, role, links_used [{anchor,
   // ---- Stage 2: Evaluate ----
   async ({ jobPath, draft }) => {
     const evaluation = await agent(
-      `Evaluate ONE cover letter draft per 04-TAILOR/cover-letter/eval-rubric.md (read it first, follow it exactly — including any dose rules in the feedback ledger).
+      `Evaluate ONE cover letter draft per PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/eval-rubric.md (read it first, follow it exactly — including any dose rules in the feedback ledger).
 
 Draft: ${draft.draft_path}
 Job description: ${jobPath}
@@ -134,10 +134,10 @@ Job folder: ${draft.job_folder}
 
 Steps, in order:
 1. ${needsRevision
-        ? `REVISE mode per your spec (surgeon, not editor): address every must-fix, apply considers only where you agree, touch ONLY cited lines. Write the result to "_cl_work/final.md" (leave draft-v1.md untouched). Then run the preservation lint and fix until 0 errors: .venv/bin/python3 04-TAILOR/cover-letter/lint_cover_letter.py "<final.md>" --prev "${draft.draft_path}"`
-        : `No revision needed (strong first draft). Copy the draft to "_cl_work/final.md" and run: .venv/bin/python3 04-TAILOR/cover-letter/lint_cover_letter.py "<final.md>" (must be 0 errors).`}
-2. Generate the deliverable: read signature_name from 04-TAILOR/cover-letter/config.json, hyphenate it (e.g. "Jordan Lee" -> "Jordan-Lee"), then run: .venv/bin/python3 04-TAILOR/cover-letter/make_cover_letter_docx.py "<final.md>" -o "${draft.job_folder}/<Hyphenated-Name>-CoverLetter - ${draft.company} - ${draft.role}.docx"
-3. Link QA: for each link, curl -sIL -o /dev/null -w "%{http_code}" --max-time 10 "<url>". 200/30x = pass; Medium/LinkedIn 403/999 bot-blocks = verify the URL character-for-character against 04-TAILOR/cover-letter/writing-links.md and mark "matches writing-links". Anything else = flag.
+        ? `REVISE mode per your spec (surgeon, not editor): address every must-fix, apply considers only where you agree, touch ONLY cited lines. Write the result to "_cl_work/final.md" (leave draft-v1.md untouched). Then run the preservation lint and fix until 0 errors: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py "<final.md>" --prev "${draft.draft_path}"`
+        : `No revision needed (strong first draft). Copy the draft to "_cl_work/final.md" and run: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py "<final.md>" (must be 0 errors).`}
+2. Generate the deliverable: read signature_name from PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/config.json, hyphenate it (e.g. "Jordan Lee" -> "Jordan-Lee"), then run: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/make_cover_letter_docx.py "<final.md>" -o "${draft.job_folder}/<Hyphenated-Name>-CoverLetter - ${draft.company} - ${draft.role}.docx"
+3. Link QA: for each link, curl -sIL -o /dev/null -w "%{http_code}" --max-time 10 "<url>". 200/30x = pass; Medium/LinkedIn 403/999 bot-blocks = verify the URL character-for-character against PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/writing-links.md and mark "matches writing-links". Anything else = flag.
 4. Write the COMPACT review packet to "${draft.job_folder}/application_coverletter_output - ${draft.company} - ${draft.role}.md" — target ~35 lines, do NOT include the letter text (reconcile reads _cl_work/final.md directly). Exactly these sections:
    # Cover Letter — ${draft.company} — ${draft.role}
    ## Questions for you (resolve before sending)   <- open questions + the writer's declined-fix disagreements + link-QA flags; "None" if empty

@@ -5,9 +5,9 @@ Enforces the mechanical rules from the voice spec (banned phrases, punctuation, 
 AI fingerprints). Zero tokens, never forgets a rule.
 
 Usage (from the repo root):
-  .venv/bin/python3 04-TAILOR/cover-letter/lint_cover_letter.py path/to/letter.md
-  .venv/bin/python3 04-TAILOR/cover-letter/lint_cover_letter.py letter.md --prev path/to/previous_draft.md
-  .venv/bin/python3 04-TAILOR/cover-letter/lint_cover_letter.py letter.md --json
+  .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py path/to/letter.md
+  .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py letter.md --prev path/to/previous_draft.md
+  .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py letter.md --json
 
 --prev enables PRESERVATION MODE (anti-smoothing): compares the new draft against the previous
 one and errors if energy/voice was stripped (lost exclamation points, removed links, collapsed
@@ -344,7 +344,7 @@ def main():
     ap.add_argument("--prev", help="previous draft — enables anti-smoothing preservation checks")
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--exemplar", action="store_true", help="lint an exemplar body (skips link-count rules)")
-    ap.add_argument("--config", default=str(Path(__file__).parent / "config.json"),
+    ap.add_argument("--config", default=str(Path(__file__).resolve().parents[3] / "PRIVATE__YOUR_FILES_GITIGNORED" / "04-TAILOR__YOUR_PRIVATE_INFO" / "cover-letter" / "config.json"),
                     help="config JSON (default: config.json beside this script; falls back to defaults)")
     args = ap.parse_args()
 

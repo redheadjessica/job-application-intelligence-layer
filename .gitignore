@@ -30,19 +30,6 @@ __READY_TO_REVIEW__PRIVATE_GITIGNORED/
 jail.config.json
 
 
-# ── Cover-letter module: generated instances (by /cover-letter-intake). ──────
-#    Templates (*.template.md / config.template.json) are tracked; instances are not.
-04-TAILOR/cover-letter/config.json
-04-TAILOR/cover-letter/voice-spec.md
-04-TAILOR/cover-letter/eval-rubric.md
-04-TAILOR/cover-letter/formatting-spec.md
-04-TAILOR/cover-letter/feedback-ledger.md
-04-TAILOR/cover-letter/feedback-queue.md
-04-TAILOR/cover-letter/writing-links.md
-04-TAILOR/cover-letter/anecdote-bank.md
-04-TAILOR/cover-letter/exemplars/*
-!04-TAILOR/cover-letter/exemplars/README.md
-
 # ── Submitted-applications archive (personal). Keep the folder tracked. ──────
 05-SUBMITTED-APPLICATIONS/*
 !05-SUBMITTED-APPLICATIONS/.gitkeep

@@ -64,7 +64,7 @@ These overrides exist because this run is unattended (or part of a batch). The c
 
 10. **NO hard line-wrapping anywhere in the output file.** Not in bullets, not in questions, not in prose. Write each sentence, paragraph, and bullet as ONE continuous line and let the editor soft-wrap. Manual mid-sentence line breaks make the output unreadable in the candidate's viewer and break copy-paste.
 
-11. **The three summary options must be genuinely different ANGLES, not one thesis re-skinned.** Each option gets its own thesis, its own proof points, its own opener and close. If two options could be swapped without the candidate noticing, rewrite one from a different angle. If the candidate has a cover-letter voice canon (`04-TAILOR/cover-letter/voice-spec.md`), read it before writing summaries — the summaries should sound like the same person.
+11. **The three summary options must be genuinely different ANGLES, not one thesis re-skinned.** Each option gets its own thesis, its own proof points, its own opener and close. If two options could be swapped without the candidate noticing, rewrite one from a different angle. If the candidate has a cover-letter voice canon (`PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/voice-spec.md`), read it before writing summaries — the summaries should sound like the same person.
 
 11b. **Summaries NEVER name the target company or its product.** A summary describes the candidate. Only a genuinely strong mission pull earns a mission sentence, and even then it names the mission space, not the company.
 

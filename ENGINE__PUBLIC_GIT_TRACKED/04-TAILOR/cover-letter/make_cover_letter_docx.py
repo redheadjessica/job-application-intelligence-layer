@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate the cover-letter .docx copy-paste source from a markdown letter file.
 
-Formatting per the formatting spec (04-TAILOR/cover-letter/formatting-spec.md): body font,
+Formatting per the formatting spec (PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/formatting-spec.md): body font,
 size, and text color come from config.json next to this script (gitignored instance; copy
 config.template.json). Single spacing with space-after, bullets with bold lead-ins, real
 inline hyperlinks (underlined, body-colored). The defaults below apply when no config exists.
@@ -13,7 +13,7 @@ Markdown subset understood:
   - [anchor](url) links (may contain **bold** inside anchor — not needed, kept simple)
 
 Usage (from the repo root):
-  .venv/bin/python3 04-TAILOR/cover-letter/make_cover_letter_docx.py letter.md -o out.docx
+  .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/make_cover_letter_docx.py letter.md -o out.docx
 """
 
 import argparse
@@ -165,7 +165,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("md_file")
     ap.add_argument("-o", "--out", required=True)
-    ap.add_argument("--config", default=str(Path(__file__).parent / "config.json"),
+    ap.add_argument("--config", default=str(Path(__file__).resolve().parents[3] / "PRIVATE__YOUR_FILES_GITIGNORED" / "04-TAILOR__YOUR_PRIVATE_INFO" / "cover-letter" / "config.json"),
                     help="config JSON (default: config.json beside this script; falls back to defaults)")
     args = ap.parse_args()
     cfg = load_docx_config(args.config)

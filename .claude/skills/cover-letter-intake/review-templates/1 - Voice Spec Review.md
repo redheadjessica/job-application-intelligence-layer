@@ -1,4 +1,4 @@
-<!-- Cover-letter intake review file — proposed, NOT yet saved. Talk feedback to Claude in chat, or edit directly and tell Claude when done. Promotes to: 04-TAILOR/cover-letter/voice-spec.md (+ eval-rubric.md). -->
+<!-- Cover-letter intake review file — proposed, NOT yet saved. Talk feedback to Claude in chat, or edit directly and tell Claude when done. Promotes to: PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/voice-spec.md (+ eval-rubric.md). -->
 
 # 1 - Voice Spec
 

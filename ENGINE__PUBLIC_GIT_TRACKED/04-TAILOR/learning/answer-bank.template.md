@@ -11,7 +11,7 @@ Maintenance rules:
 - **Key by archetype** (why-this-company, concept-to-shipped-tradeoff, how-you-use-AI, …); create
   a new `##` archetype heading only when no existing one fits.
 - **Condense answers over ~150 words** to the argument + anecdote slugs (slugs reference
-  `04-TAILOR/cover-letter/anecdote-bank.md`); short answers stay verbatim.
+  `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/anecdote-bank.md`); short answers stay verbatim.
 - Note which parts are company-specific (to strip on reuse).
 - Idempotent: one entry per question per company; re-runs never duplicate.
 

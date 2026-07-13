@@ -1,6 +1,6 @@
 ---
 name: cover-letter-intake
-description: Onboarding + update for the cover-letter system. Reads a person's past cover letters and published writing, distills their voice into a proposed voice spec, exemplar set, anecdote bank, and writing-links key, asks a few sharp questions, then STAGES everything in a review folder for approval before promoting to the private instances in 04-TAILOR/cover-letter/. Run after /intake (it builds on the application canon); re-run anytime to add letters or refresh the canon.
+description: Onboarding + update for the cover-letter system. Reads a person's past cover letters and published writing, distills their voice into a proposed voice spec, exemplar set, anecdote bank, and writing-links key, asks a few sharp questions, then STAGES everything in a review folder for approval before promoting to the private instances in PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/. Run after /intake (it builds on the application canon); re-run anytime to add letters or refresh the canon.
 ---
 
 # Cover Letter Intake
@@ -27,7 +27,7 @@ don't exist yet, run `/intake` first — the letter writer needs them for truth-
 
 ## First run vs. update (one command, two modes)
 
-- **Look for an approved setup:** does `04-TAILOR/cover-letter/voice-spec.md` exist with a
+- **Look for an approved setup:** does `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/voice-spec.md` exist with a
   `<!-- jail-approved: ... -->` marker?
 - **No → FIRST RUN.** Say: *"Looks like this is your first cover-letter intake. I'll study your
   past letters and writing, then propose a voice spec for you to check."* Run the full flow.
@@ -39,12 +39,12 @@ don't exist yet, run `/intake` first — the letter writer needs them for truth-
 
 Same mechanism as `/intake`:
 
-1. **Tracked templates** in `04-TAILOR/cover-letter/*.template.md` + `config.template.json` are
+1. **Tracked templates** in `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/*.template.md` + `config.template.json` are
    the skeletons. Read them for structure. **Never fill a template in place.**
 2. **Staged review** lives in `__READY TO REVIEW/<MM-DD-YY> - Cover Letter Intake/` (folder via
    `date +%m-%d-%y`). Instantiate the review files from the skeletons in
    `.claude/skills/cover-letter-intake/review-templates/` and fill them with real proposed content.
-3. **Generated instances** (bare names in `04-TAILOR/cover-letter/`, gitignored) are written
+3. **Generated instances** (bare names in `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/`, gitignored) are written
    **only after approval**, by faithfully transcribing the reviewed content, each markdown
    instance stamped `<!-- jail-approved: YYYY-MM-DD -->` on its first line.
 
@@ -80,7 +80,7 @@ Study the letters like an editor, not a fan. For each, note:
   proposed `config.json` `extra_banned_phrases` and voice-spec hard-rule edits.
 - **Candidate GOLD:** the letter that best represents them (their pride pick wins over yours).
   **Candidate NEGATIVE:** one they disliked, annotated by what's wrong. Draft the annotation
-  headers per `04-TAILOR/cover-letter/exemplars/README.md`.
+  headers per `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/exemplars/README.md`.
 
 The shipped template defaults (contractions, no em dashes, banned AI vocabulary, quiet links) are
 strong priors — keep them unless their letters *consistently* contradict one (e.g. a genuinely
@@ -120,7 +120,7 @@ Same discipline as `/intake`:
   edited files from disk before promoting). **Silence is never approval.**
 - The explicit gate: *"Does this sound like you on your best day — good enough to write your next
   letter from?"*
-- On approval, write the instances in `04-TAILOR/cover-letter/`:
+- On approval, write the instances in `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/`:
 
 | Review file | Promotes to |
 |---|---|
@@ -133,7 +133,7 @@ Same discipline as `/intake`:
 
 - **Promote faithfully** — transcribe, don't improve. Exemplar bodies stay verbatim.
 - After promoting, **verify mechanically:** run
-  `.venv/bin/python3 04-TAILOR/cover-letter/lint_cover_letter.py "04-TAILOR/cover-letter/exemplars/<gold>.md" --exemplar`
+  `.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py "PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/exemplars/<gold>.md" --exemplar`
   — it should exit 0 (warnings fine). If the GOLD errors, the annotation should acknowledge why
   (their voice overrides the default rule → disable it in config) — resolve before finishing.
 

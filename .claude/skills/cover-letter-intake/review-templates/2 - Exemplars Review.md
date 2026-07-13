@@ -1,4 +1,4 @@
-<!-- Cover-letter intake review file — proposed, NOT yet saved. Promotes to: 04-TAILOR/cover-letter/exemplars/*.md (verbatim letter bodies + annotation headers). -->
+<!-- Cover-letter intake review file — proposed, NOT yet saved. Promotes to: PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/exemplars/*.md (verbatim letter bodies + annotation headers). -->
 
 # 2 - Exemplars
 

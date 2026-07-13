@@ -1,4 +1,4 @@
-<!-- Cover-letter intake review file — proposed, NOT yet saved. Promotes to: 04-TAILOR/cover-letter/writing-links.md. Skip this file (and set lint.links.min to 0) if the person has no public work to link. -->
+<!-- Cover-letter intake review file — proposed, NOT yet saved. Promotes to: PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/writing-links.md. Skip this file (and set lint.links.min to 0) if the person has no public work to link. -->
 
 # 4 - Writing Links
 

@@ -242,7 +242,7 @@ What this changes:
 
 ## 12. Cover-letter reconcile (addendum — requires the optional cover-letter module)
 
-Cover letters produced by the `cover-letter` workflow get their own reconcile lane inside the same pass, with the same church-and-state discipline. Skip this lane entirely if the candidate hasn't set up `04-TAILOR/cover-letter/` (no feedback-queue instance).
+Cover letters produced by the `cover-letter` workflow get their own reconcile lane inside the same pass, with the same church-and-state discipline. Skip this lane entirely if the candidate hasn't set up the cover-letter module (no `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/feedback-queue.md` instance).
 
 **The baseline vs ground-truth rule:**
 - The candidate **never edits the generated `.docx`** — it is always, verbatim, the agent's final output. The equivalent markdown baseline is `_cl_work/final.md` in the job folder.
@@ -263,8 +263,8 @@ Detect cover-letter content by **content heuristics, not filenames**: a salutati
 - Every candidate lesson is framed in plain English: **"You did Y on the [Company] letter — was that on purpose? Should it become the default?"** with before/after text.
 
 **Where lessons go (NOT the resume learning files):**
-- Candidates append to **`04-TAILOR/cover-letter/feedback-queue.md`** (pending, folder-keyed, idempotent).
-- After the candidate confirms, entries are promoted to **`04-TAILOR/cover-letter/feedback-ledger.md`** — the only cover-letter learning file read at generation time.
+- Candidates append to **`PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/feedback-queue.md`** (pending, folder-keyed, idempotent).
+- After the candidate confirms, entries are promoted to **`PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/feedback-ledger.md`** — the only cover-letter learning file read at generation time.
 - Voice-rule changes that contradict the voice spec are queue items proposing a spec edit — applying them to the spec is always a separate human-approved action, exactly like §9's canonical-file gate.
 
 The per-folder reconcile report gains a `## Cover letter` section when a letter was found (or a one-line "no cover letter in folder" note). Pattern thresholds (§9) apply: one-off edits inform, repeated edits (2+) propose.
@@ -277,7 +277,7 @@ The per-folder reconcile report gains a `## Cover letter` section when a letter 
 
 **Extraction-first (deterministic, cached forever).** Every per-folder reconcile begins by running `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/extract_submission.py "<folder>"`. It writes `_extracted/`: `submitted-resume.txt`, `submitted-coverletter.txt` (pages found by content — handles the letter-as-page-3 shape), `submitted-answers.txt` (a pasted `application-answers.txt` always wins over PDF pages), `coverletter-diff.txt` (sentence-level unified diff vs `_cl_work/final.md`, normalized for PDF artifacts: ligatures, bullets, letterhead chrome — the candidate's signature/domains come from the cover-letter `config.json`), and `MANIFEST.txt`. Agents read these instead of PDFs; the diff IS the cover-letter feedback signal. Screenshots are transcribed by an agent at most ONCE (appended to `submitted-answers.txt`, marked with the source filename) and never re-read. Extraction is cached — re-running reconcile on a folder costs ~0 reading tokens. Capture tip for the candidate: paste answer text into `application-answers.txt` when convenient, screenshots when not.
 
-**Anecdote harvest → `04-TAILOR/cover-letter/anecdote-bank.md` (direct entry, tagged).** Personal stories and lived details found in submitted letters/answers — especially ones the candidate added by hand (visible in the diff) — are their own words: observed facts, not inferences. They enter the bank directly, tagged with their source application (no queue gate; the queue remains for style/rule inferences). The bank tracks `Used in` per story so the writer never repeats a story to the same company. The bank is a generation-time canon file (writer + evaluator read it); reconcile appends entries and usage lines but never rewrites existing story text.
+**Anecdote harvest → `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/anecdote-bank.md` (direct entry, tagged).** Personal stories and lived details found in submitted letters/answers — especially ones the candidate added by hand (visible in the diff) — are their own words: observed facts, not inferences. They enter the bank directly, tagged with their source application (no queue gate; the queue remains for style/rule inferences). The bank tracks `Used in` per story so the writer never repeats a story to the same company. The bank is a generation-time canon file (writer + evaluator read it); reconcile appends entries and usage lines but never rewrites existing story text.
 
 **Answers lane (harvest-only) → `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/learning/answer-bank.md`.** No baseline exists for application answers (nothing drafts them yet), so there is nothing to diff — reconcile harvests question+answer pairs keyed by archetype (why-this-company, how-you-use-AI, …), condensing long answers to argument + anecdote slugs. This bank seeds future answer drafting; if an answer-drafting lane is built later, it gains a baseline and joins the diff-based learning like cover letters.
 

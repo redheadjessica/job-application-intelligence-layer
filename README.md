@@ -88,7 +88,7 @@ Mostly you just talk to Claude. The slash commands: **`/intake`** (set up / upda
 ## Deeper docs
 - [`docs/v2-end-to-end-workflow.md`](docs/v2-end-to-end-workflow.md) — the full workflow + architecture (source of truth).
 - [`docs/final-review-and-cover-letters.md`](docs/final-review-and-cover-letters.md) — the final mile, and how the optional cover-letter module fits.
-- [`04-TAILOR/cover-letter/README.md`](04-TAILOR/cover-letter/README.md) — the cover-letter system (your voice spec, deterministic lint, adversarial eval, anti-smoothing).
+- [`ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/README.md`](ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/README.md) — the cover-letter system (your voice spec, deterministic lint, adversarial eval, anti-smoothing).
 - [`docs/testing-and-caveats.md`](docs/testing-and-caveats.md) — what's verified vs. still needs a live run.
 
 ## If `/intake` doesn't show up

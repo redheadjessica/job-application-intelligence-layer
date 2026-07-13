@@ -19,16 +19,16 @@ templates or from your own defaults.
 
 ## Read these before writing (both modes, in this order)
 
-1. `04-TAILOR/cover-letter/voice-spec.md` — your canon. Follow it exactly.
-2. `04-TAILOR/cover-letter/feedback-ledger.md` — the candidate's direct feedback. **Newest entries
+1. `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/voice-spec.md` — your canon. Follow it exactly.
+2. `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/feedback-ledger.md` — the candidate's direct feedback. **Newest entries
    override everything else, including the voice spec.**
-3. `04-TAILOR/cover-letter/exemplars/` — the letter marked **GOLD** in its filename/status is the
+3. `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/exemplars/` — the letter marked **GOLD** in its filename/status is the
    gold standard; skim the others too (including any **NEGATIVE** one — that's what failure looks
    like).
-3b. `04-TAILOR/cover-letter/anecdote-bank.md` — the ONLY source of personal stories besides the
+3b. `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/anecdote-bank.md` — the ONLY source of personal stories besides the
    canon and the candidate themselves. Check each story's "Used in" before reusing: never the same
    story to the same company twice. Never invent, embellish, or composite a story.
-4. `04-TAILOR/cover-letter/writing-links.md` — the ONLY source for link URLs and link-selection
+4. `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/writing-links.md` — the ONLY source for link URLs and link-selection
    guidance ("best linked when…", lanes). Never invent or recall a URL from memory. If this file
    doesn't exist, the candidate has no link strategy — write without links.
 5. The job `.txt` you were given.
@@ -55,10 +55,10 @@ candidate can supply the real JD. Generating from a missing JD burns money produ
    with the link removed.
 3. Write the letter per voice-spec structure. Markdown format: `Re: **[Role Title]**` + date line,
    `Dear [Company] team,`, body (paragraphs and/or `- ` bullets with `**bold lead-ins.**`),
-   closing + the candidate's signature name (from `04-TAILOR/cover-letter/config.json`). Inline
+   closing + the candidate's signature name (from `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/config.json`). Inline
    links as `[anchor](url)`.
 4. **Lint gate:** run
-   `.venv/bin/python3 04-TAILOR/cover-letter/lint_cover_letter.py "<draft path>"`
+   `.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py "<draft path>"`
    and fix every ERROR (max 3 passes). Fix by writing better, never by blanding: if a lint fix
    would make a sentence more generic, find a third option. Leave justified warnings (e.g. the one
    deliberate emphasis non-contraction) and note them in your return.
@@ -81,7 +81,7 @@ You get the draft, the evaluator's findings, and the original draft path for com
   record why in your return — that disagreement goes to the review packet, and that's a valid
   outcome.
 - **Lint with preservation check:**
-  `.venv/bin/python3 04-TAILOR/cover-letter/lint_cover_letter.py "<revised path>" --prev "<original draft path>"`
+  `.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py "<revised path>" --prev "<original draft path>"`
   Every ERROR must be fixed, including smoothing errors (restore what you stripped).
 
 ## Output contract

@@ -1,4 +1,4 @@
-<!-- Cover-letter intake review file — proposed, NOT yet saved. Promotes to: 04-TAILOR/cover-letter/anecdote-bank.md. -->
+<!-- Cover-letter intake review file — proposed, NOT yet saved. Promotes to: PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/anecdote-bank.md. -->
 
 # 3 - Anecdote Bank
 
