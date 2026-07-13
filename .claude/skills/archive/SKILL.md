@@ -25,6 +25,10 @@ The usual source is a job folder under `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<M
 - **Year subfolder:** use the submission date if it's clear (the batch date `MM-DD-YY` → `20YY`, or a date in the folder name). If ambiguous, use the current year (`date +%Y`) and note it in the summary.
 - Destination: `<archive.path>/<YYYY>/<Company - Role - date>` (keep the existing readable folder name; the archive convention is `Company - Role - MM-DD-YY`).
 
+## Step 2b — Visibility symlink (convenience only, do this once)
+
+If `archive.path` resolves to a location **outside this repo** (i.e. not the in-repo `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO` default) and nothing already exists at `PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO`, create it as a symlink to `archive.path`: `ln -s "<archive.path>" "PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO"`. This makes the real external archive Browse-able from inside PRIVATE without changing where anything is read from or written to — `archive.path` from `jail.config.json` stays the only authoritative path; the symlink is a convenience view, never a source of truth. Skip this step if that path already exists as a real folder (in-repo default) or an existing symlink/file.
+
 ## Step 3 — Readiness check
 
 `ls` the folder and classify what's there.
