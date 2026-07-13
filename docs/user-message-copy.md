@@ -2,7 +2,7 @@
 
 A reference for the chat language JAIL uses at each step, so intake, prep, ranking, tailoring, archive, and reconcile all sound the same. This is **not** wired into code — the skills and workflows generate their own messages; this is the canonical voice to keep them consistent. Tone: plain, specific, helpful, a little human. Not over-polished, not corporate.
 
-> Where each currently lives: intake → `.claude/skills/intake/SKILL.md`; prep → `02-PREP/prep_common.py` (stdout) + `prep-report.md`; ranking → `.claude/workflows/vet-jobs.js`; archive → `.claude/skills/archive/SKILL.md`; reconcile → `.claude/workflows/reconcile.js`. Keep those in this voice.
+> Where each currently lives: intake → `.claude/skills/intake/SKILL.md`; prep → `ENGINE__PUBLIC_GIT_TRACKED/02-PREP/prep_common.py` (stdout) + `prep-report.md`; ranking → `.claude/workflows/vet-jobs.js`; archive → `.claude/skills/archive/SKILL.md`; reconcile → `.claude/workflows/reconcile.js`. Keep those in this voice.
 
 ## Intake — review ready
 > Your intake review is ready in `__READY TO REVIEW/<MM-DD-YY> - Intake Review/`. Start with `START HERE.md`, then open the files in order. Look for anything wrong, missing, overstated, or just not-you. Easiest way to give feedback: talk it back to me here (voice-to-text is great). You can also edit the files directly — tell me when you're done and I'll reread them. Nothing is saved to your source of truth until you approve.

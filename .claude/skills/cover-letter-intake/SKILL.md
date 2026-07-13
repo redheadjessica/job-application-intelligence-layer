@@ -56,7 +56,7 @@ Same mechanism as `/intake`:
 2. **Any feedback they've received or given on letters** — a coach's notes, their own edits to an
    AI draft, "I always delete sentences like X." Seeds the feedback ledger.
 3. **Published/public work to link** (posts, portfolio, projects, talks) — URLs preferred; fetch
-   with `02-PREP/prep_job_urls.py` when useful. Optional: if they have none, the system runs
+   with `ENGINE__PUBLIC_GIT_TRACKED/02-PREP/prep_job_urls.py` when useful. Optional: if they have none, the system runs
    linkless (`lint.links.min: 0`).
 4. **Their letter/resume template** (or a PDF of a real sent letter) — to measure font, size, and
    text color for `config.json` → `docx` and the formatting spec. If they have no template, keep

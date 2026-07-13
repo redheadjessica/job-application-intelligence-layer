@@ -85,13 +85,13 @@ def main() -> None:
     urls_rel = urls_dest.relative_to(REPO_ROOT)
     print("\nNext steps (run from the repo root):")
     print("  # 1) Fetch the job posts (dedupes, quarantines thin/failed, writes a prep report):")
-    print(f'  .venv/bin/python3 02-PREP/prep_job_urls.py "{src_rel}" --input "{urls_rel}"')
+    print(f'  .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/02-PREP/prep_job_urls.py "{src_rel}" --input "{urls_rel}"')
     print('  #    then read "0 - Prep Report/prep-report.md" for a plain-English summary.')
     print('  #    Re-run the same command anytime to retry thin/failed posts (usable ones are skipped).')
     print("  # 2) Vet + tailor the top 3:")
     print(f'  run-batch {{folder: "__READY TO REVIEW/{batch}", tailor: true, topN: 3}}')
     print("\n  (Advanced) For stubborn JS-rendered pages that came back thin, retry with the renderer:")
-    print(f'  .venv/bin/python3 02-PREP/prep_job_urls_playwright.py "{src_rel}" --input "{urls_rel}"')
+    print(f'  .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/02-PREP/prep_job_urls_playwright.py "{src_rel}" --input "{urls_rel}"')
 
 
 if __name__ == "__main__":

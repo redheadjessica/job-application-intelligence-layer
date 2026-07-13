@@ -64,7 +64,7 @@ Offer all of these; moving files is the hard part for many people.
 - **Paste or attach right here in chat.** Default suggestion. Save durable pasted facts (don't let them live only in the thread) — note them in the inventory with source `pasted-<YYYY-MM-DD>`.
 - **Point me at a folder they keep** — read it **read-only**; never move, rename, or edit their files.
 - **Drop files into the intake folders:** evidence in `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/`; direction in `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/`.
-- **Give me URLs** for public writing/portfolio — fetch with `02-PREP/prep_job_urls.py` and friends.
+- **Give me URLs** for public writing/portfolio — fetch with `ENGINE__PUBLIC_GIT_TRACKED/02-PREP/prep_job_urls.py` and friends.
 - **LinkedIn:** can't be scraped — *help them export it* (profile → **More → Save to PDF**, or **Settings → Get a copy of your data**), then read the file.
 
 ## Making sense of it

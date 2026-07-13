@@ -13,7 +13,7 @@ The user asked for this to be explicit. Honest labels:
 | `rankings.csv` | the ranked job table (durable source) | **Real `vet-jobs` workflow** — LLM scored the 4 usable posts; final-score/status computed by the workflow |
 | `rankings.xlsx` | the colored tracker spreadsheet (**the product artifact + the screenshot/hero subject**) | **Real `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/make_rankings_xlsx.py`** rendered it from `rankings.csv` + `jail.config.json` (candidate-relative comp/location colors) |
 | `rankings.md` | readable markdown rankings | **Real `vet-jobs` workflow** |
-| `prep-report.md` | prep summary (usable / thin / failed / dupes) | **Hand-curated** to match `02-PREP/prep_common.py`'s exact output format. Prep was **not** run on the synthetic local posts; live fetch is the separate, disposable Unit 6 real-URL smoke test |
+| `prep-report.md` | prep summary (usable / thin / failed / dupes) | **Hand-curated** to match `ENGINE__PUBLIC_GIT_TRACKED/02-PREP/prep_common.py`'s exact output format. Prep was **not** run on the synthetic local posts; live fetch is the separate, disposable Unit 6 real-URL smoke test |
 | `prep-manifest.json` | machine-readable prep manifest | **Hand-curated** to the real manifest schema |
 | `tailored - Thornbury (strong fit).md` | tailored draft + "Questions for the candidate" (happy path: "None — straightforward fit") | **Real `job-applier` agent** (via `tailor-jobs`) |
 | `tailored - Lyceum AI (truth-firewall).md` | tailored draft with **6** honesty questions (weak-evidence role) | **Real `job-applier` agent** — shows the truth-firewall refusing to overclaim |
