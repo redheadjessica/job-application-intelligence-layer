@@ -29,25 +29,6 @@ __READY_TO_REVIEW__PRIVATE_GITIGNORED/
 # ── Root config: generated instance (by setup/intake). Template is tracked. ──
 jail.config.json
 
-# ── Generated candidate-specific INSTANCES (by /intake or /reconcile). ───────
-#    Templates (*.template.md) are tracked; these bare-name instances are not.
-04-TAILOR/01-profile.md
-04-TAILOR/02-resume-index.md
-04-TAILOR/03-approved-truths-and-boundary-rules.md
-04-TAILOR/04-experience-bank.md
-04-TAILOR/05-summary-quick.md
-04-TAILOR/05a-summary-library.md
-04-TAILOR/06-skills-quick.md
-04-TAILOR/06a-skills-library.md
-04-TAILOR/10-bio-library.md
-04-TAILOR/learning/learning-ledger.md
-04-TAILOR/learning/source-update-queue.md
-04-TAILOR/learning/answer-bank.md
-04-TAILOR/learning/harvest-backfill-log.md
-# Per-pinned-entity canon (candidate-named 03/03b files, e.g. a current venture; no tracked template)
-04-TAILOR/03-*.md
-04-TAILOR/03b-*.md
-!04-TAILOR/03-approved-truths-and-boundary-rules.template.md
 
 # ── Cover-letter module: generated instances (by /cover-letter-intake). ──────
 #    Templates (*.template.md / config.template.json) are tracked; instances are not.

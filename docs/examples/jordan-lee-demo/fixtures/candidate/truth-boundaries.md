@@ -1,4 +1,4 @@
-<!-- 100% FICTIONAL synthetic demo material. See ../../README.md. These are the truth boundaries /intake will turn into 04-TAILOR/03-approved-truths-and-boundary-rules (instance) in Unit 3. -->
+<!-- 100% FICTIONAL synthetic demo material. See ../../README.md. These are the truth boundaries /intake will turn into PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/03-approved-truths-and-boundary-rules (instance) in Unit 3. -->
 
 # Jordan Lee — Truth Boundaries
 

@@ -21,8 +21,8 @@ you. A voice spec built on invented examples poisons every letter after it.
 
 ## Prerequisite
 
-This skill builds on the application canon (`04-TAILOR/01-profile.md`,
-`04-TAILOR/04-experience-bank.md`, `04-TAILOR/03-approved-truths-and-boundary-rules.md`). If those
+This skill builds on the application canon (`PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/01-profile.md`,
+`PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/04-experience-bank.md`, `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/03-approved-truths-and-boundary-rules.md`). If those
 don't exist yet, run `/intake` first — the letter writer needs them for truth-checking claims.
 
 ## First run vs. update (one command, two modes)

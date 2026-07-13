@@ -1,4 +1,4 @@
-<!-- Intake review file — proposed, NOT yet saved. Promotes to: 04-TAILOR/05-summary-quick.md, 04-TAILOR/06-skills-quick.md, (optional) 04-TAILOR/10-bio-library.md. These are CONCISE quick-references the tailor step reads, not full libraries. -->
+<!-- Intake review file — proposed, NOT yet saved. Promotes to: PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/05-summary-quick.md, PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/06-skills-quick.md, (optional) PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/10-bio-library.md. These are CONCISE quick-references the tailor step reads, not full libraries. -->
 
 # 6 - Summary + Skills
 

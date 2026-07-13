@@ -1,6 +1,6 @@
 export const meta = {
   name: 'reconcile',
-  description: 'Post-application learning: reconcile completed submitted applications (compare the agent\'s recommendation vs the finalized submitted resume), write a per-folder reconcile report, and merge candidate lessons into the learning ledger + source-update queue (04-TAILOR/learning/). Never edits canonical generation files. Implements 04-TAILOR/learning/reconcile-spec.md.',
+  description: 'Post-application learning: reconcile completed submitted applications (compare the agent\'s recommendation vs the finalized submitted resume), write a per-folder reconcile report, and merge candidate lessons into the learning ledger + source-update queue (04-TAILOR/learning/). Never edits canonical generation files. Implements ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/reconcile-spec.md.',
   whenToUse: 'After applications are submitted and moved to your submitted-applications archive (use /archive to move them). {archive} is OPTIONAL — without it, reconcile reads archive.path from jail.config.json (fallback 05-SUBMITTED-APPLICATIONS) and scans its year subfolders. Pass {folders:[...]} for an explicit set, or {limit:N} to cap. Cadence: run it after your first few applications, after a meaningfully changed final resume, when a new resume base emerges, or after repeated summary/skills corrections — less often once things stabilize. Vet/tailor is unrelated.',
   phases: [
     { title: 'Discover', detail: 'find ready, unreconciled submitted-application folders', model: 'haiku' },
@@ -16,10 +16,11 @@ A = (A && typeof A === 'object') ? A : {}
 const ARCHIVE = A.archive || ''   // empty -> discover resolves it from jail.config.json archive.path (fallback 05-SUBMITTED-APPLICATIONS)
 const FOLDERS = Array.isArray(A.folders) ? A.folders : null   // explicit list (names or abs paths)
 const LIMIT = Number.isInteger(A.limit) ? A.limit : null      // cap when scanning
-const REPO_APP = '04-TAILOR'                                   // learning files live in 04-TAILOR/learning/ (repo-relative)
+const PRIV_APP = 'PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO'  // learning INSTANCES (gitignored)
+const ENG_APP = 'ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR'                          // engine + templates (tracked)
 
 // Condensed reconcile rules, inlined so per-folder agents don't each re-read the 200-line spec.
-const RULES = `RECONCILE RULES (condensed from 04-TAILOR/learning/reconcile-spec.md):
+const RULES = `RECONCILE RULES (condensed from ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/reconcile-spec.md):
 - OBSERVED = fact from comparing the agent's recommendation (.md) vs the FINAL submitted PDF (ground truth): a bullet present in one not the other, a changed word, a different base, a softened/corrected claim, a style edit. State plainly. IGNORE pure formatting / .pages->PDF noise (whitespace, line breaks, glyph/ligature extraction) — semantic content only.
 - INFERRED = a hypothesis about WHY, or a generalizable lesson. ALWAYS label category (routing | missed-evidence | claim-boundary | voice | skills | content) + confidence (high|med|low). NEVER state intent as fact. Observed and inferred never mix.
 - Classification: everything starts as an observation. It becomes a QUESTION when the "why" is ambiguous and the answer changes whether it's a lesson. It becomes a CANDIDATE LEDGER entry when there's a plausible lesson (low bar). It becomes a PROPOSED SOURCE-UPDATE only at the HIGH bar: a specific, named-file edit AND (confirmed by the candidate OR recurs >=2 apps). One-offs are observations/questions, NOT proposed updates.
@@ -28,9 +29,9 @@ const RULES = `RECONCILE RULES (condensed from 04-TAILOR/learning/reconcile-spec
 - BASE / TEMPLATE CANDIDATE (§9a, copy-don't-rebuild): a finalized resume is itself a reusable artifact. If this submitted resume cleanly represents a role archetype (e.g. "healthcare + mobile + retention"), FLAG it as a base/template candidate — name the archetype and recommend future similar roles copy THIS exact resume rather than rebuild. One occurrence is enough to flag; promotion to the resume index is confirmation-only and is NOT subject to the >=2 gate.
 - NEVER edit any canonical file. Your ONLY write is this folder's reconcile report. Do not touch any repo source files or the learning files (the synthesis stage owns those).
 - COVER-LETTER LANE (spec §12; skip if the cover-letter module isn't set up — no 04-TAILOR/cover-letter/feedback-queue.md instance): the agent-side baseline is "_cl_work/final.md" — the candidate NEVER edits the generated .docx, so baseline vs submitted delta IS their feedback. Same observed/inferred firewall. Frame every candidate lesson in plain English: "You did Y on the [Company] letter — on purpose? Make it the default?" with before/after text. Cover-letter lessons are returned separately (cover_letter_findings) — they route to 04-TAILOR/cover-letter/feedback-queue.md, NEVER to the resume learning files. If the letter predates the cover-letter workflow (no baseline), record observed style patterns only, marked "no-baseline".
-- EXTRACTION-FIRST (token discipline, spec §13): ALWAYS run .venv/bin/python3 04-TAILOR/learning/extract_submission.py "<folder>" first (cached after the first run). Then read the _extracted/*.txt files and _extracted/coverletter-diff.txt INSTEAD of the PDFs — the diff IS the cover-letter signal (interpret it; don't re-diff). Open a PDF directly only if the manifest shows extraction failed or classified nothing. Read screenshot images ONLY if the manifest lists them AND submitted-answers.txt lacks their content; if you do, append the transcription to _extracted/submitted-answers.txt marked "[transcribed from <filename>]" so no future run ever reads the image again.
+- EXTRACTION-FIRST (token discipline, spec §13): ALWAYS run .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/extract_submission.py "<folder>" first (cached after the first run). Then read the _extracted/*.txt files and _extracted/coverletter-diff.txt INSTEAD of the PDFs — the diff IS the cover-letter signal (interpret it; don't re-diff). Open a PDF directly only if the manifest shows extraction failed or classified nothing. Read screenshot images ONLY if the manifest lists them AND submitted-answers.txt lacks their content; if you do, append the transcription to _extracted/submitted-answers.txt marked "[transcribed from <filename>]" so no future run ever reads the image again.
 - ANECDOTE HARVEST (spec §13; skip if no 04-TAILOR/cover-letter/anecdote-bank.md instance): from the submitted cover letter and answers, extract every personal story / lived detail (family, history, hobbies, personal product use, origin stories) — ESPECIALLY ones the candidate added by hand (in the diff) or that appear nowhere in the anecdote bank. These are the candidate's own words = observed facts; they go DIRECTLY into the bank (tagged with source), not through the queue. Also report bank stories that were REUSED (for Used-in tracking). Never harvest professional claims (those live in the experience bank) — only the personal/lived material.
-- ANSWERS LANE (spec §13): from _extracted/submitted-answers.txt, extract each question + the candidate's answer as an archetype pair (why-this-company, how-you-use-AI, etc.) for 04-TAILOR/learning/answer-bank.md. Condense answers >150 words to argument + anecdote slugs. Answers are harvest-only (no baseline exists).`
+- ANSWERS LANE (spec §13): from _extracted/submitted-answers.txt, extract each question + the candidate's answer as an archetype pair (why-this-company, how-you-use-AI, etc.) for PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/learning/answer-bank.md. Condense answers >150 words to argument + anecdote slugs. Answers are harvest-only (no baseline exists).`
 
 // ---- Schemas ----
 const DISCOVER_SCHEMA = {
@@ -208,7 +209,7 @@ const scopeLine = FOLDERS
       : `No archive path was passed. Resolve it: read jail.config.json -> archive.path; if the file is missing or invalid, fall back to "05-SUBMITTED-APPLICATIONS" (note which you used in archive_resolved). Then scan that archive INCLUDING its year subfolders (e.g. <archive>/2026/) for application folders.${LIMIT ? ` Limit to the ${LIMIT} most recent ready folders.` : ''}`)
 
 const discovery = await agent(
-  `You are the discovery step of the reconcile workflow (04-TAILOR/learning/reconcile-spec.md §5 readiness).
+  `You are the discovery step of the reconcile workflow (ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/reconcile-spec.md §5 readiness).
 
 ${scopeLine}
 
@@ -252,7 +253,7 @@ const results = (await parallel(discovery.ready.map((f) => async () => {
 Folder (absolute): ${f.folder_path}
 
 STEP 0 — extraction first (token discipline): run
-  .venv/bin/python3 04-TAILOR/learning/extract_submission.py "${f.folder_path}"
+  .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/extract_submission.py "${f.folder_path}"
 then read (quote paths — they contain spaces/&/parens):
 - The manifest + extracted texts: "_extracted/MANIFEST.txt", "_extracted/submitted-resume.txt", "_extracted/submitted-coverletter.txt", "_extracted/submitted-answers.txt", and "_extracted/coverletter-diff.txt" (if present)
 - Scraped JD: "${f.jd_file}"
@@ -260,7 +261,7 @@ then read (quote paths — they contain spaces/&/parens):
 - 04-TAILOR/cover-letter/anecdote-bank.md (slugs only — to tell new stories from reuses; skip if it doesn't exist)
 Do NOT open the PDFs unless the manifest shows extraction failed (fallback: "${f.final_pdf}"). Screenshots: per the extraction-first rule, read images only if the manifest lists them and their content isn't already in submitted-answers.txt; append transcriptions there once.
 ${extras}
-You MAY read 04-TAILOR/02-resume-index.md to identify which resume base was used vs recommended.
+You MAY read PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/02-resume-index.md to identify which resume base was used vs recommended.
 
 Do:
 1. Compare what the agent RECOMMENDED vs what was SUBMITTED (from the extracted texts), per the rules above (observed vs inferred; ignore formatting noise; check confounds).
@@ -287,10 +288,10 @@ const synth = await agent(
   `You are the SINGLE writer that merges reconcile results into the global learning files. ${RULES}
 
 Inputs: the per-folder reconcile results (JSON) below, plus the CURRENT state of these LEARNING instances (all gitignored, append-only — read whichever already exist):
-- ${REPO_APP}/learning/learning-ledger.md      (the ledger)
-- ${REPO_APP}/learning/source-update-queue.md  (the queue)
-- ${REPO_APP}/05a-summary-library.md           (the finalized-summary corpus)
-- ${REPO_APP}/06a-skills-library.md            (the skills calibration log)
+- ${PRIV_APP}/learning/learning-ledger.md      (the ledger)
+- ${PRIV_APP}/learning/source-update-queue.md  (the queue)
+- ${PRIV_APP}/05a-summary-library.md           (the finalized-summary corpus)
+- ${PRIV_APP}/06a-skills-library.md            (the skills calibration log)
 If one of these four instances does NOT exist but its "*.template.md" sibling does, create the instance from the template's structure first, then append. NEVER create or write the primary generation files (01-06, resume index, experience bank, 05-summary-quick, 06-skills-quick).
 
 RESULTS JSON:
@@ -303,9 +304,9 @@ Do, carefully:
 4. Update the queue: add or increment proposed source-update items. If a proposal recurs, increment its occurrence count and add the application rather than duplicating. New single-occurrence items go to the queue's watch list. CRITICAL (§9a): the watch list is a DURABLE record, not a holding pen — never drop or treat a single-occurrence item as moot. Frame each as "preserved; promotable now on the candidate's confirmation, or auto-surfaced at a 2nd occurrence." Nothing here is auto-applied; everything awaits human review.
 4b. COVER-LETTER CANDIDATES (spec §12; skip if the cover-letter module isn't set up): for every result whose cover_letter_findings.candidates is non-empty, APPEND them to 04-TAILOR/cover-letter/feedback-queue.md (folder-keyed, status: pending, idempotent — skip folders already present). Keep each in its plain-English "You did Y on the [Company] letter — on purpose? Make it the default?" form with the before/after text. NEVER write to 04-TAILOR/cover-letter/feedback-ledger.md (promotion is the candidate's manual confirmation) and NEVER route cover-letter lessons into the resume learning files.
 4c. ANECDOTE BANK (spec §13; skip if no anecdote-bank instance): merge all anecdotes into 04-TAILOR/cover-letter/anecdote-bank.md following its entry format. new=true -> add a full entry (Status: confirmed, submitted — <Company> <date>) unless a same-story entry already exists (then just update Used in). new=false -> append "<Company> — <Role> (<date>)" to that slug's Used in line if not already listed. These are the candidate's own submitted words — direct entry, no queue.
-4d. ANSWER BANK (spec §13): merge all answer_pairs into ${REPO_APP}/learning/answer-bank.md — create it from ${REPO_APP}/learning/answer-bank.template.md if missing; group under existing archetype headings where they match (create the archetype heading if new), each answer tagged "(<Company> — <Role>, <date>)". Idempotent: skip pairs already recorded for that company.
-5. BASE AUTO-REGISTRATION (§9b, "submission = seal of approval"): for every result with base_template_candidate.is_candidate=true, EDIT 04-TAILOR/02-resume-index.md directly. Apply the materiality test: new archetype or materially different evidence allocation -> add a named-anchor entry (registry table + a short anchor entry pointing at the finalized resume file in the archive folder, with modules noted); same archetype re-skinned -> add a one-line "newest exemplar" note under the existing anchor. ADDITIVE ONLY: never delete, demote, or rewrite existing entries. List every registration in the returned base_template_candidates field (it is a log of what you registered, not a to-confirm list).
-6. Canonical-file discipline (§9b — "submission = seal of approval" covers the candidate's VERBATIM submitted artifacts only): you MAY (a) add base registrations to 04-TAILOR/02-resume-index.md per step 5, and (b) APPEND each folder's verbatim finalized summary (role-archetype labeled, keyed by folder so re-runs don't duplicate) to 05a-summary-library.md, plus any clear, reusable skills observation to 06a-skills-library.md — create either from its template if missing; ALSO return the summaries as new_finalized_summaries_block for visibility. Everything else stays locked: do NOT edit 01-profile.md, 03-approved-truths-and-boundary-rules.md, 04-experience-bank.md, 05-summary-quick.md, 06-skills-quick.md, the cover-letter voice-spec, or the cover-letter feedback-ledger. INFERRED generalizations still go through the queue for the candidate's approval — they approve rules, not their own words. Other permitted writes: ledger + queue (${REPO_APP}/learning/), the cover-letter feedback-queue (4b), the anecdote bank (4c), the answer bank (4d).
+4d. ANSWER BANK (spec §13): merge all answer_pairs into ${PRIV_APP}/learning/answer-bank.md — create it from ${ENG_APP}/learning/answer-bank.template.md if missing; group under existing archetype headings where they match (create the archetype heading if new), each answer tagged "(<Company> — <Role>, <date>)". Idempotent: skip pairs already recorded for that company.
+5. BASE AUTO-REGISTRATION (§9b, "submission = seal of approval"): for every result with base_template_candidate.is_candidate=true, EDIT PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/02-resume-index.md directly. Apply the materiality test: new archetype or materially different evidence allocation -> add a named-anchor entry (registry table + a short anchor entry pointing at the finalized resume file in the archive folder, with modules noted); same archetype re-skinned -> add a one-line "newest exemplar" note under the existing anchor. ADDITIVE ONLY: never delete, demote, or rewrite existing entries. List every registration in the returned base_template_candidates field (it is a log of what you registered, not a to-confirm list).
+6. Canonical-file discipline (§9b — "submission = seal of approval" covers the candidate's VERBATIM submitted artifacts only): you MAY (a) add base registrations to PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/02-resume-index.md per step 5, and (b) APPEND each folder's verbatim finalized summary (role-archetype labeled, keyed by folder so re-runs don't duplicate) to 05a-summary-library.md, plus any clear, reusable skills observation to 06a-skills-library.md — create either from its template if missing; ALSO return the summaries as new_finalized_summaries_block for visibility. Everything else stays locked: do NOT edit 01-profile.md, 03-approved-truths-and-boundary-rules.md, 04-experience-bank.md, 05-summary-quick.md, 06-skills-quick.md, the cover-letter voice-spec, or the cover-letter feedback-ledger. INFERRED generalizations still go through the queue for the candidate's approval — they approve rules, not their own words. Other permitted writes: ledger + queue (${PRIV_APP}/learning/), the cover-letter feedback-queue (4b), the anecdote bank (4c), the answer bank (4d).
 7. Keep the ledger and queue tight and honest; flag confounds explicitly.
 
 Write the updated ledger and queue, then return the structured summary.`,

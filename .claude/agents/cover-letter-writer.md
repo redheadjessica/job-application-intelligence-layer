@@ -35,8 +35,8 @@ templates or from your own defaults.
 6. If the job folder already contains an `application_resume_output - … .md`, read it — it has the
    role analysis, gap assessment, and evidence selection. Stay consistent with it (same claims,
    same gap framing). If it recommended writing samples, weigh those for your link choices.
-7. For factual claims: `04-TAILOR/01-profile.md`, `04-TAILOR/04-experience-bank.md`, and
-   `04-TAILOR/03-approved-truths-and-boundary-rules.md` (every boundary rule there is mandatory).
+7. For factual claims: `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/01-profile.md`, `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/04-experience-bank.md`, and
+   `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/03-approved-truths-and-boundary-rules.md` (every boundary rule there is mandatory).
 
 ## Hard gate before ANY work
 

@@ -143,10 +143,10 @@ All items below are **one-occurrence observations.** Per the >=2 gate, none auto
 | # | Target file | Proposed change | Confidence | Gate |
 |---|---|---|---|---|
 | U1 | `04-experience-bank.md` | For the [variant-ai] Tilebridge bullet: consider dropping the tail "— a practitioner's use of AI tools, not ML engineering" from the bullet text itself, and instead ensure the boundary lives in the skills parenthetical or summary. (Pending Q1 confirmation.) | med | needs-confirmation |
-| U2 | `04-TAILOR/00-job_application_agent.md` or routing rules | For IC-only PMM roles: suppress the Birchwood intern/people-management bullet. (Pending Q4 confirmation.) | med | needs-confirmation |
-| U3 | `04-TAILOR/06-skills-quick.md` | Add a routing note to "Pricing & Packaging (Partner)": suppress for roles where P&P is absent from the JD. (Pending Q5 confirmation or second occurrence.) | low | needs-2nd-occurrence |
+| U2 | `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/00-job_application_agent.md` or routing rules | For IC-only PMM roles: suppress the Birchwood intern/people-management bullet. (Pending Q4 confirmation.) | med | needs-confirmation |
+| U3 | `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/06-skills-quick.md` | Add a routing note to "Pricing & Packaging (Partner)": suppress for roles where P&P is absent from the JD. (Pending Q5 confirmation or second occurrence.) | low | needs-2nd-occurrence |
 | U4 | `04-experience-bank.md` | For the win-loss bullet: consider offering a shorter variant that omits "the messaging hierarchy" and "not the roadmap owner," retaining only "as an input partner." (Pending Q2 + Q3 confirmation.) | med | needs-confirmation |
-| U5 | `04-TAILOR/05-summary-quick.md` | Register the submitted Option 2 text (as edited by Jordan) as the canonical Family B closer for AI-native company applications. (One occurrence; promotable on Jordan's confirmation.) | high | needs-confirmation |
+| U5 | `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/05-summary-quick.md` | Register the submitted Option 2 text (as edited by Jordan) as the canonical Family B closer for AI-native company applications. (One occurrence; promotable on Jordan's confirmation.) | high | needs-confirmation |
 
 ---
 

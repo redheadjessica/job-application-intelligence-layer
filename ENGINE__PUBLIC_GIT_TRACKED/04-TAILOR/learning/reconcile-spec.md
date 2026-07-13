@@ -81,7 +81,7 @@ occurrence** (§9). One-offs do not appear here.
 
 ---
 
-## 3. `04-TAILOR/learning/learning-ledger.md` (global, in the repo)
+## 3. `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/learning/learning-ledger.md` (global, in the repo)
 
 The durable, append-only record of lessons from completed applications. **Keyed by application folder name** so re-runs are idempotent (never double-append the same folder).
 
@@ -111,7 +111,7 @@ Never written from a tailoring draft — only from an archive reconcile. Human-r
 
 ---
 
-## 4. `04-TAILOR/learning/source-update-queue.md` (global, in the repo)
+## 4. `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/learning/source-update-queue.md` (global, in the repo)
 
 Proposed canonical edits awaiting human review. **Never auto-applied.**
 
@@ -233,7 +233,7 @@ The ≥2-occurrence threshold governs **only** the auto-promotion of *unconfirme
 **Once the candidate has actually applied with a resume, that is their seal of approval — it's good to use for other jobs.** No separate confirmation step.
 
 What this changes:
-- **Base registration is automatic.** Reconcile's synthesis step edits `04-TAILOR/02-resume-index.md` directly (named anchor for a new/materially-different archetype; "newest exemplar" line for a re-skin). Additive only, logged in the run output, reversible via git. The queue's "Base / template candidates" section is retired for new items.
+- **Base registration is automatic.** Reconcile's synthesis step edits `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/02-resume-index.md` directly (named anchor for a new/materially-different archetype; "newest exemplar" line for a re-skin). Additive only, logged in the run output, reversible via git. The queue's "Base / template candidates" section is retired for new items.
 - **Finalized summaries flow into `05a-summary-library.md` automatically** (verbatim, labeled by archetype + company + date).
 - **The human gate moves, it doesn't disappear:** it now sits exactly on the observed/inferred line. The candidate's verbatim submitted words and files auto-promote; INFERRED generalizations ("they seem to prefer…", proposed rule changes, voice-spec edits) still require confirmation via the queue. The candidate approves rules, not their own words.
 - The §8 "never edit canonical files" rule gains exactly two carve-outs: 02-resume-index registry additions and 05a verbatim-summary appends. Nothing else.
@@ -275,10 +275,10 @@ The per-folder reconcile report gains a `## Cover letter` section when a letter 
 
 **Principle: pay LLM tokens for interpretation, never for finding or re-reading.** Almost all reconcile cost is reading; most of what's read never changes. So:
 
-**Extraction-first (deterministic, cached forever).** Every per-folder reconcile begins by running `04-TAILOR/learning/extract_submission.py "<folder>"`. It writes `_extracted/`: `submitted-resume.txt`, `submitted-coverletter.txt` (pages found by content — handles the letter-as-page-3 shape), `submitted-answers.txt` (a pasted `application-answers.txt` always wins over PDF pages), `coverletter-diff.txt` (sentence-level unified diff vs `_cl_work/final.md`, normalized for PDF artifacts: ligatures, bullets, letterhead chrome — the candidate's signature/domains come from the cover-letter `config.json`), and `MANIFEST.txt`. Agents read these instead of PDFs; the diff IS the cover-letter feedback signal. Screenshots are transcribed by an agent at most ONCE (appended to `submitted-answers.txt`, marked with the source filename) and never re-read. Extraction is cached — re-running reconcile on a folder costs ~0 reading tokens. Capture tip for the candidate: paste answer text into `application-answers.txt` when convenient, screenshots when not.
+**Extraction-first (deterministic, cached forever).** Every per-folder reconcile begins by running `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/extract_submission.py "<folder>"`. It writes `_extracted/`: `submitted-resume.txt`, `submitted-coverletter.txt` (pages found by content — handles the letter-as-page-3 shape), `submitted-answers.txt` (a pasted `application-answers.txt` always wins over PDF pages), `coverletter-diff.txt` (sentence-level unified diff vs `_cl_work/final.md`, normalized for PDF artifacts: ligatures, bullets, letterhead chrome — the candidate's signature/domains come from the cover-letter `config.json`), and `MANIFEST.txt`. Agents read these instead of PDFs; the diff IS the cover-letter feedback signal. Screenshots are transcribed by an agent at most ONCE (appended to `submitted-answers.txt`, marked with the source filename) and never re-read. Extraction is cached — re-running reconcile on a folder costs ~0 reading tokens. Capture tip for the candidate: paste answer text into `application-answers.txt` when convenient, screenshots when not.
 
 **Anecdote harvest → `04-TAILOR/cover-letter/anecdote-bank.md` (direct entry, tagged).** Personal stories and lived details found in submitted letters/answers — especially ones the candidate added by hand (visible in the diff) — are their own words: observed facts, not inferences. They enter the bank directly, tagged with their source application (no queue gate; the queue remains for style/rule inferences). The bank tracks `Used in` per story so the writer never repeats a story to the same company. The bank is a generation-time canon file (writer + evaluator read it); reconcile appends entries and usage lines but never rewrites existing story text.
 
-**Answers lane (harvest-only) → `04-TAILOR/learning/answer-bank.md`.** No baseline exists for application answers (nothing drafts them yet), so there is nothing to diff — reconcile harvests question+answer pairs keyed by archetype (why-this-company, how-you-use-AI, …), condensing long answers to argument + anecdote slugs. This bank seeds future answer drafting; if an answer-drafting lane is built later, it gains a baseline and joins the diff-based learning like cover letters.
+**Answers lane (harvest-only) → `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/learning/answer-bank.md`.** No baseline exists for application answers (nothing drafts them yet), so there is nothing to diff — reconcile harvests question+answer pairs keyed by archetype (why-this-company, how-you-use-AI, …), condensing long answers to argument + anecdote slugs. This bank seeds future answer drafting; if an answer-drafting lane is built later, it gains a baseline and joins the diff-based learning like cover letters.
 
 **Model discipline:** discovery on a small/fast model; one mid-tier agent per folder (reads extracts + diff, not PDFs); one mid-tier synthesis writer. Screenshots read once, in the folder agent, only when the manifest says their content is missing.

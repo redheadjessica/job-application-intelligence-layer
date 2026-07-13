@@ -17,7 +17,7 @@ openpyxl>=3.1
 # Cover letters (optional module): builds the .docx paste source (04-TAILOR/cover-letter/make_cover_letter_docx.py):
 python-docx>=1.1
 
-# Reconcile: one-time PDF extraction of submitted applications (04-TAILOR/learning/extract_submission.py):
+# Reconcile: one-time PDF extraction of submitted applications (ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/extract_submission.py):
 pypdf>=4.0
 
 # The Playwright-based fallback fetcher (ENGINE__PUBLIC_GIT_TRACKED/02-PREP/prep_job_urls_playwright.py) is

@@ -19,13 +19,13 @@ None — straightforward fit. This role maps directly to Jordan's core positioni
 - **Active job folder:** `__READY TO REVIEW/06-25-26/2 - Tailored Resumes/Thornbury - Sr PMM AI Workflows/`
 - **Job file read:** `thornbury__senior-product-marketing-manager-ai-workflows.txt` (~1 KB, plain text)
 - **System files read:**
-  - `04-TAILOR/01-profile.md` (~252 lines)
-  - `04-TAILOR/02-resume-index.md` (~76 lines)
-  - `04-TAILOR/03-approved-truths-and-boundary-rules.md` (~31 lines)
-  - `04-TAILOR/04-experience-bank.md` (~225 lines)
-  - `04-TAILOR/05-summary-quick.md` (~42 lines)
-  - `04-TAILOR/06-skills-quick.md` (~93 lines)
-  - `04-TAILOR/00-job_application_agent.md` (~1297 lines)
+  - `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/01-profile.md` (~252 lines)
+  - `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/02-resume-index.md` (~76 lines)
+  - `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/03-approved-truths-and-boundary-rules.md` (~31 lines)
+  - `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/04-experience-bank.md` (~225 lines)
+  - `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/05-summary-quick.md` (~42 lines)
+  - `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/06-skills-quick.md` (~93 lines)
+  - `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/00-job_application_agent.md` (~1297 lines)
   - `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/resume-jordan-lee.md` (~36 lines)
 - **Anchor resumes considered:** Jordan Lee — Senior PMM (2026) — the only registered base; all three families (AI Product Marketing, GTM Strategy, Lifecycle/Growth) start from it.
 - **Chosen base:** Jordan Lee — Senior PMM · `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/resume-jordan-lee.md` (.md format). AI Product Marketing family.

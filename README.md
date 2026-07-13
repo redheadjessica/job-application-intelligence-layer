@@ -59,7 +59,7 @@ That's the whole loop. Re-run it whenever you've collected a few new postings.
 ## Folders (plain language)
 - **`ENGINE__PUBLIC_GIT_TRACKED/00-INTAKE/`** holds the intake READMEs + template; your materials + generated intake state live under **`PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/`**.
 - **`ENGINE__PUBLIC_GIT_TRACKED/01-INBOX/`** holds the public inbox template; your pasted URLs live in **`PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/`**.
-- **`ENGINE__PUBLIC_GIT_TRACKED/02-PREP/`**, **`ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/`**, **`04-TAILOR/`** — the engine (fetch, rank, tailor) + templates; your private 03-VETTING files live under **`PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/`**.
+- **`ENGINE__PUBLIC_GIT_TRACKED/02-PREP/`**, **`ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/`**, **`ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/`** — the engine (fetch, rank, tailor) + templates; your private 03-VETTING files live under **`PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/`**.
 - **`05-SUBMITTED-APPLICATIONS/`** — your private archive of submitted apps (gitignored).
 - **`__READY TO REVIEW/`** — the human-review hub: batches and intake/source-update reviews.
 - **`docs/`** — deeper docs (see below).

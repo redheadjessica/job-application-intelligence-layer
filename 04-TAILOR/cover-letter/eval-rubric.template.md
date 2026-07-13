@@ -48,7 +48,7 @@ Fit checks:
 - **Link selection:** are these the links writing-links.md's "best linked when…" guidance would
   pick for this role? Flag stronger swaps.
 - **Truthfulness spot-check:** claims traceable to the application canon; every rule in
-  `04-TAILOR/03-approved-truths-and-boundary-rules.md` respected; no invented stories.
+  `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/03-approved-truths-and-boundary-rules.md` respected; no invented stories.
 
 ## Eval 2 — Voice (score 1–5)
 

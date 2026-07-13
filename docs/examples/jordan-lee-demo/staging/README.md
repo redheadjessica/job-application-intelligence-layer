@@ -23,7 +23,7 @@ All of these are **already gitignored**, so staging into them will not accidenta
 | `__READY TO REVIEW/<batch>/` | prep report, rankings, tailored, source material | `__READY TO REVIEW/*/` |
 | `__READY TO REVIEW/<date> - Intake Review/` | staged intake review | `__READY TO REVIEW/*/` |
 | `05-SUBMITTED-APPLICATIONS/<year>/` | archived application | `05-SUBMITTED-APPLICATIONS/*` |
-| `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/*.md`, `04-TAILOR/0X-*.md` | instance source-of-truth files | 03-VETTING: wholesale (PRIVATE root); 04-TAILOR: per-file (until migrated) |
+| `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/*.md`, `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/*.md` | instance source-of-truth files | wholesale (PRIVATE root); cover-letter instances still per-file until Batch B |
 
 ### The inbox working copy
 

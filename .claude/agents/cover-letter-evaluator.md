@@ -28,9 +28,9 @@ Hard rules:
   energy relative to its predecessor scores LOWER (re-evaluation mode).
 - **Do not manufacture findings.** An empty must-fix list on a strong letter is a good outcome.
 - **Truthfulness spot-check is part of Fit:** flag any claim you can't trace to the application
-  canon (`04-TAILOR/01-profile.md`, `04-TAILOR/04-experience-bank.md`) or
+  canon (`PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/01-profile.md`, `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/04-experience-bank.md`) or
   `04-TAILOR/cover-letter/writing-links.md`, and any violation of
-  `04-TAILOR/03-approved-truths-and-boundary-rules.md`, as must-fix.
+  `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/03-approved-truths-and-boundary-rules.md`, as must-fix.
 - Check the links: right picks for this lane per writing-links.md's "best linked when…" guidance,
   quiet anchors, sentence survives without the link.
 

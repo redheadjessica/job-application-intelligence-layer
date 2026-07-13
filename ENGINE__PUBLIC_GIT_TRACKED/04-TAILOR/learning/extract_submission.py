@@ -18,7 +18,7 @@ The candidate's identity chrome (signature line, personal domains) is read from
 template header/contact lines never pollute the diff. Without that config, generic contact-line
 filters still apply.
 
-Usage: .venv/bin/python3 04-TAILOR/learning/extract_submission.py "<folder>" [--force]
+Usage: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/extract_submission.py "<folder>" [--force]
 Cached: exits immediately if _extracted/MANIFEST.txt exists (use --force to redo).
 Needs pypdf (in the .venv). Only writes inside <folder>/_extracted/.
 """
@@ -41,7 +41,7 @@ RESUME_MARKERS = ("experience", "skills", "education", "summary", "professional"
 
 def load_identity():
     """(signature_name, [personal domains]) from the cover-letter config, if set up."""
-    cfg_path = Path(__file__).resolve().parent.parent / "cover-letter" / "config.json"
+    cfg_path = Path(__file__).resolve().parents[3] / "04-TAILOR" / "cover-letter" / "config.json"
     if cfg_path.is_file():
         try:
             cfg = json.loads(cfg_path.read_text(encoding="utf-8"))

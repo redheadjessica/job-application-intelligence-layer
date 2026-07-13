@@ -1,4 +1,4 @@
-<!-- Intake review file — proposed, NOT yet saved. Promotes to: lane definitions → PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md; ids → jail.config.json; base hints → 04-TAILOR/02-resume-index.md. -->
+<!-- Intake review file — proposed, NOT yet saved. Promotes to: lane definitions → PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md; ids → jail.config.json; base hints → PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/02-resume-index.md. -->
 
 # 2 - Application Lanes
 

@@ -149,8 +149,8 @@ Rules:
 ## Truth rules (same discipline as the resume system)
 
 - **No fabrication, ever.** Every claim must be traceable to the application canon
-  (`04-TAILOR/01-profile.md`, `04-TAILOR/04-experience-bank.md`) or `writing-links.md`.
-- **Boundary rules apply:** everything in `04-TAILOR/03-approved-truths-and-boundary-rules.md`
+  (`PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/01-profile.md`, `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/04-experience-bank.md`) or `writing-links.md`.
+- **Boundary rules apply:** everything in `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/03-approved-truths-and-boundary-rules.md`
   is mandatory here too.
 - Numbers only as canon states them.
 - If the JD asks for something you don't have, the letter either reframes honestly (gap →

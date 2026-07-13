@@ -159,18 +159,18 @@ Promotion assembles some instances from more than one review file. Own the secti
 | Review file | Promotes to (generated instances) |
 |---|---|
 | `START HERE.md`, `7 - Open Questions.md` | (not promoted — orientation / questions) |
-| `1 - About You Review.md` | `04-TAILOR/01-profile.md`; identity/background → `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md` |
-| `2 - Application Lanes Review.md` | lanes → `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md` (Priority Lanes) + `jail.config.json` (`lanes`) + base-per-lane hints → `04-TAILOR/02-resume-index.md` |
-| `3 - Experience + Resume Inventory Review.md` | `04-TAILOR/04-experience-bank.md`, `04-TAILOR/02-resume-index.md`, `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/materials-inventory.md` |
-| `4 - Approved Truths & Boundary Rules Review.md` | `04-TAILOR/03-approved-truths-and-boundary-rules.md` (narrow — see below) |
+| `1 - About You Review.md` | `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/01-profile.md`; identity/background → `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md` |
+| `2 - Application Lanes Review.md` | lanes → `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md` (Priority Lanes) + `jail.config.json` (`lanes`) + base-per-lane hints → `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/02-resume-index.md` |
+| `3 - Experience + Resume Inventory Review.md` | `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/04-experience-bank.md`, `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/02-resume-index.md`, `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/materials-inventory.md` |
+| `4 - Approved Truths & Boundary Rules Review.md` | `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/03-approved-truths-and-boundary-rules.md` (narrow — see below) |
 | `5 - Job Preferences + Scoring Review.md` | `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/01-scoring-card.md`, constraints → `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md`, comp/location → `jail.config.json` |
-| `6 - Summary + Skills Review.md` | `04-TAILOR/05-summary-quick.md`, `04-TAILOR/06-skills-quick.md`, (optional) `04-TAILOR/10-bio-library.md` |
+| `6 - Summary + Skills Review.md` | `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/05-summary-quick.md`, `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/06-skills-quick.md`, (optional) `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/10-bio-library.md` |
 
-**Do not generate** the learning files (`05a-summary-library.md`, `06a-skills-library.md`, `04-TAILOR/learning/*`) — those are created later by `/reconcile`, not intake.
+**Do not generate** the learning files (`05a-summary-library.md`, `06a-skills-library.md`, `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/learning/*`) — those are created later by `/reconcile`, not intake.
 
 ## The narrow `03-approved-truths-and-boundary-rules.md`
 
-Generate the instance from its template (`04-TAILOR/03-approved-truths-and-boundary-rules.template.md`) — read the template, fill it, write the instance, stamp the marker. Keep it **narrow**: do-not-say/do-not-imply boundaries, claims that need evidence before use, recurring overreach to watch, directional figures, and (optionally) pinned wording for a sensitive recurring item. It is **not** a profile, skills list, metrics list, summary bank, or experience bank — role/project wording, bullets, and metrics live in `04-experience-bank.md`. If the person has no such boundaries, generate a minimal instance noting "none recorded yet" rather than padding it.
+Generate the instance from its template (`ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/03-approved-truths-and-boundary-rules.template.md`) — read the template, fill it, write the instance, stamp the marker. Keep it **narrow**: do-not-say/do-not-imply boundaries, claims that need evidence before use, recurring overreach to watch, directional figures, and (optionally) pinned wording for a sensitive recurring item. It is **not** a profile, skills list, metrics list, summary bank, or experience bank — role/project wording, bullets, and metrics live in `04-experience-bank.md`. If the person has no such boundaries, generate a minimal instance noting "none recorded yet" rather than padding it.
 
 ## `jail.config.json`
 

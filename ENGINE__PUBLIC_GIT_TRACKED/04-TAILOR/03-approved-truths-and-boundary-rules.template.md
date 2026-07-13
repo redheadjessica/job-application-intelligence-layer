@@ -2,7 +2,7 @@
 
 <!--
   TEMPLATE — the /intake skill fills this in and writes the result to the gitignored instance
-  `04-TAILOR/03-approved-truths-and-boundary-rules.md`. Read the template; never edit it in place.
+  `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/03-approved-truths-and-boundary-rules.md`. Read the template; never edit it in place.
 
   WHAT THIS FILE IS (keep it NARROW):
   The important truth rules — what is safe to say, what needs evidence, and what the model must NOT
