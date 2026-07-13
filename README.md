@@ -23,7 +23,7 @@ A ranked spreadsheet of the jobs you gave it (colored to *your* pay, location, a
 
 ```mermaid
 flowchart TD
-  A["Add your materials to 00-INTAKE/"] --> B["Run /intake"]
+  A["Add your materials (private intake folder)"] --> B["Run /intake"]
   B --> C["Review & approve the staged setup"]
   C --> D["Paste job URLs into your private inbox"]
   D --> E["Prep + rank a batch"]
@@ -40,8 +40,8 @@ flowchart TD
 2. **Open it in Claude Code** — Claude desktop app → **Code** tab → **Select folder** → the unzipped folder → **Local**. Type `/` and you should see `/intake`, `/run-batch`, `/archive`, `/reconcile`. <!-- TODO: screenshot [shot: open-folder] -->
 3. **Set up the Python bits (once)** — a couple of steps use small Python scripts (fetch job posts, build the spreadsheet). Just tell Claude **"Set up the Python environment for me"** and approve the installs. *(Savvy: `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`.)*
 4. **Add your materials** to the two intake folders:
-   - `00-INTAKE/01-about-you/` — **evidence**: resumes (any version), LinkedIn export, brag/wins docs, metrics, writing samples, and job descriptions for roles you've actually **held**.
-   - `00-INTAKE/02-where-you-want-to-go/` — **direction**: postings for roles you *want*. These shape your scoring and lanes; they're never treated as proof you've done that work.
+   - `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/` — **evidence**: resumes (any version), LinkedIn export, brag/wins docs, metrics, writing samples, and job descriptions for roles you've actually **held**.
+   - `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/` — **direction**: postings for roles you *want*. These shape your scoring and lanes; they're never treated as proof you've done that work.
    *(You can also just paste materials into the chat.)* <!-- TODO: screenshot [shot: intake-folders] -->
 5. **Run `/intake`.** It reads your materials, gives you a straight read, asks a few questions, and puts a **review folder** together — `__READY TO REVIEW/<date> - Intake Review/`. Open `START HERE.md`, check it over, and tell Claude when it looks right. **Nothing is saved to your source-of-truth files until you approve.** <!-- TODO: screenshot [shot: intake-review] -->
 6. **Add some jobs** — paste links into your private inbox `PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/paste-job-urls-to-rank-here.txt`, one per line. Then tell Claude: **"Start today's batch and tailor my top job."** *(Savvy: `python ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/new_batch.py <MM-DD-YY>`, run the prep command it prints, then `/run-batch {folder: "__READY TO REVIEW/<MM-DD-YY>", tailor: true, topN: 1}`.)*
@@ -57,7 +57,7 @@ That's the whole loop. Re-run it whenever you've collected a few new postings.
 ---
 
 ## Folders (plain language)
-- **`00-INTAKE/`** — your materials (the two folders above) + intake state.
+- **`ENGINE__PUBLIC_GIT_TRACKED/00-INTAKE/`** holds the intake READMEs + template; your materials + generated intake state live under **`PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/`**.
 - **`ENGINE__PUBLIC_GIT_TRACKED/01-INBOX/`** holds the public inbox template; your pasted URLs live in **`PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/`**.
 - **`02-PREP/`**, **`ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/`**, **`04-TAILOR/`** — the engine (fetch, rank, tailor) + templates; your private 03-VETTING files live under **`PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/`**.
 - **`05-SUBMITTED-APPLICATIONS/`** — your private archive of submitted apps (gitignored).

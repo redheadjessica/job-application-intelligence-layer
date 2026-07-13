@@ -10,8 +10,8 @@ Use the fictional persona **Jordan Lee — AI Product Marketing / GTM Strategy**
 The full synthetic kit lives in **`docs/examples/jordan-lee-demo/`** (committed, 100% fictional). To capture in-context shots, stage those committed fixtures into the real (gitignored) runtime folders, then clean up — see `docs/examples/jordan-lee-demo/staging/README.md`.
 
 - **Persona:** "Jordan Lee," a Senior Product Marketing Manager (B2B SaaS / workflow-tooling). Targeting AI Product Marketing, GTM Strategy, and Lifecycle/Growth roles at AI / tooling companies. Lanes: AI Product Marketing; GTM Strategy; Lifecycle/Growth.
-- **`00-INTAKE/01-about-you/`:** a fictional PMM resume (launches, positioning, customer research, sales enablement, adoption programs; used AI tools to accelerate research/messaging/enablement) and a brag-doc line or two — fictional and internally consistent.
-- **`00-INTAKE/02-where-you-want-to-go/`:** a fictional target JD (e.g. "Senior Product Marketing Manager, AI Workflows" at a fictional company).
+- **`PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/`:** a fictional PMM resume (launches, positioning, customer research, sales enablement, adoption programs; used AI tools to accelerate research/messaging/enablement) and a brag-doc line or two — fictional and internally consistent.
+- **`PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/`:** a fictional target JD (e.g. "Senior Product Marketing Manager, AI Workflows" at a fictional company).
 - **`PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/paste-job-urls-to-rank-here.txt`:** `https://example.com/jobs/...` placeholder links only.
 - **`jail.config.json`:** fictional comp / location / lane preferences (example copy committed under `docs/examples/jordan-lee-demo/fixtures/`).
 
@@ -20,8 +20,8 @@ The full synthetic kit lives in **`docs/examples/jordan-lee-demo/`** (committed,
 |---|---|---|---|
 | 1 | GitHub "Code → Download ZIP" | how to get the repo | `[shot: download-zip]` |
 | 2 | Open folder in Claude Code (Local) | pointing Claude at the folder | `[shot: open-folder]` |
-| 3 | Folder tree (`00-INTAKE` … `docs`) | the numbered structure | `[shot: folder-tree]` |
-| 4 | The two `00-INTAKE` folders | evidence vs. direction | `[shot: intake-folders]` |
+| 3 | Folder tree (`ENGINE__PUBLIC_GIT_TRACKED`, `PRIVATE__YOUR_FILES_GITIGNORED` … `docs`) | the numbered structure | `[shot: folder-tree]` |
+| 4 | The two `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO` folders | evidence vs. direction | `[shot: intake-folders]` |
 | 5 | `/intake` staged review (`… - Intake Review/`) | the review-before-save gate | `[shot: intake-review]` |
 | 6 | `__READY TO REVIEW/` hub | where everything to review lives | `[shot: review-hub]` |
 | 7 | Prep report (`0 - Prep Report/prep-report.md`) | usable vs. thin/failed/dupes | `[shot: prep-report]` |

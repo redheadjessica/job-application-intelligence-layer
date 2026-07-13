@@ -1,9 +1,9 @@
 # Materials Inventory  (TEMPLATE)
 
 <!--
-  TEMPLATE — copy to `00-INTAKE/materials-inventory.md` (gitignored); /intake maintains the instance.
+  TEMPLATE — copy to `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/materials-inventory.md` (gitignored); /intake maintains the instance.
   This file is the INDEX of every career material you've given intake. It does not store the materials
-  themselves — raw content lives as files under 00-INTAKE/01-about-you/ and 02-where-you-want-to-go/,
+  themselves — raw content lives as files under PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/ and PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/,
   or as saved pasted-text files. Append-only: add a row when material arrives; never delete — mark it
   `superseded` or `excluded` instead.
 

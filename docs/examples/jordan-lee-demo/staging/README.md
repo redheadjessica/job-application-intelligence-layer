@@ -17,8 +17,8 @@ All of these are **already gitignored**, so staging into them will not accidenta
 
 | Runtime path | Holds (synthetic) | Ignored by |
 |---|---|---|
-| `00-INTAKE/01-about-you/` | Jordan's resume + brag doc | `00-INTAKE/01-about-you/*` |
-| `00-INTAKE/02-where-you-want-to-go/` | target JD | `00-INTAKE/02-where-you-want-to-go/*` |
+| `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/` | Jordan's resume + brag doc | `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/*` |
+| `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/` | target JD | `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/*` |
 | `jail.config.json` | Jordan's preferences | `jail.config.json` |
 | `__READY TO REVIEW/<batch>/` | prep report, rankings, tailored, source material | `__READY TO REVIEW/*/` |
 | `__READY TO REVIEW/<date> - Intake Review/` | staged intake review | `__READY TO REVIEW/*/` |

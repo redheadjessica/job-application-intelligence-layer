@@ -31,8 +31,6 @@ jail.config.json
 
 # ── Generated candidate-specific INSTANCES (by /intake or /reconcile). ───────
 #    Templates (*.template.md) are tracked; these bare-name instances are not.
-00-INTAKE/materials-inventory.md
-00-INTAKE/resume-assessment.md
 04-TAILOR/01-profile.md
 04-TAILOR/02-resume-index.md
 04-TAILOR/03-approved-truths-and-boundary-rules.md
@@ -63,14 +61,6 @@ jail.config.json
 04-TAILOR/cover-letter/anecdote-bank.md
 04-TAILOR/cover-letter/exemplars/*
 !04-TAILOR/cover-letter/exemplars/README.md
-
-# ── Intake materials (personal). Keep the folder + its README tracked. ───────
-00-INTAKE/01-about-you/*
-!00-INTAKE/01-about-you/.gitkeep
-!00-INTAKE/01-about-you/README.md
-00-INTAKE/02-where-you-want-to-go/*
-!00-INTAKE/02-where-you-want-to-go/.gitkeep
-!00-INTAKE/02-where-you-want-to-go/README.md
 
 # ── Submitted-applications archive (personal). Keep the folder tracked. ──────
 05-SUBMITTED-APPLICATIONS/*

@@ -26,9 +26,9 @@ None — straightforward fit. This role maps directly to Jordan's core positioni
   - `04-TAILOR/05-summary-quick.md` (~42 lines)
   - `04-TAILOR/06-skills-quick.md` (~93 lines)
   - `04-TAILOR/00-job_application_agent.md` (~1297 lines)
-  - `00-INTAKE/01-about-you/resume-jordan-lee.md` (~36 lines)
+  - `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/resume-jordan-lee.md` (~36 lines)
 - **Anchor resumes considered:** Jordan Lee — Senior PMM (2026) — the only registered base; all three families (AI Product Marketing, GTM Strategy, Lifecycle/Growth) start from it.
-- **Chosen base:** Jordan Lee — Senior PMM · `00-INTAKE/01-about-you/resume-jordan-lee.md` (.md format). AI Product Marketing family.
+- **Chosen base:** Jordan Lee — Senior PMM · `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/resume-jordan-lee.md` (.md format). AI Product Marketing family.
 - **Resume base file status:** Copied and renamed to `Jordan Lee-Resume - Thornbury - Sr PMM AI Workflows.md` in the active job folder.
 
 ---
@@ -139,7 +139,7 @@ These are questions to help Jordan remember evidence he might not have thought t
 
 ## Resume Base Recommendation
 
-**Recommended primary base:** Jordan Lee — Senior PMM · `00-INTAKE/01-about-you/resume-jordan-lee.md`
+**Recommended primary base:** Jordan Lee — Senior PMM · `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/resume-jordan-lee.md`
 
 **Runner-up:** None — there is only one registered base. All three resume families (AI Product Marketing, GTM Strategy, Lifecycle/Growth) start from it. For this role, the AI Product Marketing family emphasis applies.
 

@@ -56,8 +56,8 @@ Job sourcing/scouting; LLM/web-search/API sourcing (Adzuna/JSearch/etc.); auto-a
 
 0. **Arrive at the public JAIL page** (`redheadjessica.com/jail`, separate from this repo). It explains what JAIL is, who it's for, what it does/doesn't do, that it's local, uses Claude Code, that truth is part of the product, that the user stays in control, that it's not a hosted web app, and that the user moves between chat and local files.
 1. **Get the repo** — clone, or Download ZIP → unzip → open the folder in Claude Code → run `/intake`.
-2. **Setup/orientation in Claude Code** — chat is the control surface; files are durable context; `__READY TO REVIEW` holds things needing human eyes; `00-INTAKE` holds career/direction materials; `PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO` holds your active job URLs (public template under `ENGINE__PUBLIC_GIT_TRACKED/01-INBOX`); editing files doesn't trigger work unless you tell Claude; nothing submits applications. *When in doubt, tell Claude in chat what you added/changed/approved or want to do next.*
-3. **Gather intake materials** into `00-INTAKE/01-about-you/` (evidence) and `00-INTAKE/02-where-you-want-to-go/` (direction). See §7.
+2. **Setup/orientation in Claude Code** — chat is the control surface; files are durable context; `__READY TO REVIEW` holds things needing human eyes; `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO` holds your career/direction materials; `PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO` holds your active job URLs (public template under `ENGINE__PUBLIC_GIT_TRACKED/01-INBOX`); editing files doesn't trigger work unless you tell Claude; nothing submits applications. *When in doubt, tell Claude in chat what you added/changed/approved or want to do next.*
+3. **Gather intake materials** into `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/` (evidence) and `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/` (direction). See §7.
 4. **Run `/intake`** — reads materials, saves durable pasted facts when relevant, updates a materials inventory, asks clarifying questions, separates facts from direction. Supports first-run and (later) update behavior from one command.
 5. **Define application lanes** — one or several. Becomes a shared taxonomy across intake, vetting, resume index, tailoring, reconcile. See §8.
 6. **Staged intake review** — Claude writes proposals into `__READY TO REVIEW/MM-DD-YY - Intake Review/` (with `START HERE.md` and numbered review files), not directly into canonical files, and summarizes in chat.
@@ -83,7 +83,7 @@ Job sourcing/scouting; LLM/web-search/API sourcing (Adzuna/JSearch/etc.); auto-a
 ```mermaid
 flowchart TD
   P["Public page / README"] --> DL["Download the repo"]
-  DL --> M["Add materials: 00-INTAKE/01-about-you (evidence) + 02-where-you-want-to-go (direction)"]
+  DL --> M["Add materials to your private intake folders (evidence + direction)"]
   M --> IN["Run /intake"]
   IN --> SR["Staged review: __READY TO REVIEW/MM-DD-YY - Intake Review/"]
   SR --> AP["Approve -> private generated source files"]
@@ -102,12 +102,12 @@ flowchart TD
 ```text
 jail.config.template.json        (tracked)   jail.config.json  (gitignored instance)
 
-00-INTAKE/
-  README.md
-  01-about-you/        (evidence; gitignored except README/.gitkeep)
-  02-where-you-want-to-go/  (direction; gitignored except README/.gitkeep)
-  materials-inventory.template.md   →  materials-inventory.md  (instance)
-  resume-assessment.md              (instance, no template)
+ENGINE__PUBLIC_GIT_TRACKED/00-INTAKE/   (public)
+  README.md · materials-inventory.template.md
+  01-about-you/README.md · 02-where-you-want-to-go/README.md   (what to provide)
+PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/   (your data)
+  01-about-you/  (evidence)  ·  02-where-you-want-to-go/  (direction)
+  materials-inventory.md · resume-assessment.md   (instances, written by /intake)
 
 ENGINE__PUBLIC_GIT_TRACKED/01-INBOX/
   paste-job-urls-to-rank-here.template.txt  (tracked)

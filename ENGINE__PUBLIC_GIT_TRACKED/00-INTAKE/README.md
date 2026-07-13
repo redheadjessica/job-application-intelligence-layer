@@ -10,7 +10,7 @@ Run **`/intake`** once before vetting or tailoring. It reads your career materia
 
 **3. Your voice:** writing samples, a portfolio, published work — used only for voice and credibility.
 
-**Where they go:** families 1 and 3 (about you + your voice) go in `00-INTAKE/01-about-you/`; family 2 (direction) goes in `00-INTAKE/02-where-you-want-to-go/`. Each folder has a short README.
+**Where they go:** families 1 and 3 (about you + your voice) go in `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/`; family 2 (direction) goes in `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/`. Each folder has a short README.
 
 > A job description only counts as *your experience* if you held that role. Intake will confirm which is which before using any of them — it never guesses.
 >
@@ -20,11 +20,11 @@ Run **`/intake`** once before vetting or tailoring. It reads your career materia
 
 - **Paste or attach right here in the chat** — the simplest, no files to move.
 - **Point intake at a folder you already keep** (e.g. your existing resume folder) — it's read-only; your files are never moved or edited.
-- **Drop files into the intake folders:** evidence about you in `00-INTAKE/01-about-you/`; roles you're aiming for in `00-INTAKE/02-where-you-want-to-go/` (direction only — each folder has a short README).
+- **Drop files into the intake folders:** evidence about you in `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/`; roles you're aiming for in `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/` (direction only — each folder has a short README).
 - **Give URLs** for public writing or a portfolio — intake fetches them for you.
 - **LinkedIn:** export it (on your profile, **More → Save to PDF**, or **Settings → Get a copy of your data**) and share the file — intake will walk you through it. (LinkedIn blocks profile scraping, so export is the reliable path.)
 
-Anything you share stays local: the `00-INTAKE/01-about-you/` and `00-INTAKE/02-where-you-want-to-go/` folders, the generated `resume-assessment.md`, and your filled source files are all gitignored, so your personal data is never committed.
+Anything you share stays local: the `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/` and `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/` folders, the generated `resume-assessment.md`, and your filled source files are all gitignored, so your personal data is never committed.
 
 ## Then run `/intake`
 

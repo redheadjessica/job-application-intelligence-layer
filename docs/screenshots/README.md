@@ -5,7 +5,7 @@ Committed screenshot PNGs for the JAIL README and the website handoff copy. All 
 ## Rules
 
 - **Synthetic content only.** Never commit a screenshot containing real candidate data, real companies, real URLs, or anyone's real job search.
-- Screenshots of **runtime folders** (`__READY TO REVIEW/`, `05-SUBMITTED-APPLICATIONS/`, the `00-INTAKE` folders) are allowed **only** when populated with synthetic Jordan Lee data; the runtime folders stay gitignored, only the PNG is committed here.
+- Screenshots of **runtime folders** (`__READY TO REVIEW/`, `05-SUBMITTED-APPLICATIONS/`, the `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO` folders) are allowed **only** when populated with synthetic Jordan Lee data; the runtime folders stay gitignored, only the PNG is committed here.
 - **Never** commit images from the real-URL smoke test. **Never** fake/mock a product UI — if a shot isn't captured yet, leave it out.
 
 ## Contents

@@ -17,8 +17,8 @@ And the rule that governs everything: **never invent.** If a resume claims an ou
 
 There are **two** intake folders, and the wall between them is the most important rule in the whole system:
 
-- **`00-INTAKE/01-about-you/` — EVIDENCE.** The real record of what they've actually done: resumes (every version), LinkedIn export, brag/wins docs, reviews, metrics, project/launch docs, writing samples, and **job descriptions for roles they actually held**. This builds their profile and experience bank.
-- **`00-INTAKE/02-where-you-want-to-go/` — DIRECTION.** Roles they want, dream jobs, reaching-for postings, "more of this / less of this," target titles/industries/company-types, comp/location/workstyle preferences.
+- **`PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/` — EVIDENCE.** The real record of what they've actually done: resumes (every version), LinkedIn export, brag/wins docs, reviews, metrics, project/launch docs, writing samples, and **job descriptions for roles they actually held**. This builds their profile and experience bank.
+- **`PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/` — DIRECTION.** Roles they want, dream jobs, reaching-for postings, "more of this / less of this," target titles/industries/company-types, comp/location/workstyle preferences.
 
 > **The firewall, stated plainly and repeated in the review files:** materials in `02-where-you-want-to-go/` shape **direction, scoring, and target lanes. They are NOT evidence that the candidate has done those things.** Wanting a role never puts its requirements on a resume. A job description is evidence **only** for a role they tell you they **held** — every other JD is direction only. When a JD's family is unclear, **ask before using it**; never guess, because guessing here means inventing experience.
 
@@ -36,14 +36,14 @@ It runs in **two tiers** so they get value before fatigue. **Tier 1 — Vetting-
 
 At the very start, detect which mode you're in:
 
-- **Look for an approved intake:** check whether `00-INTAKE/materials-inventory.md` exists and whether any generated instance (e.g. `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/01-scoring-card.md`) carries a `<!-- jail-approved: ... -->` marker.
+- **Look for an approved intake:** check whether `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/materials-inventory.md` exists and whether any generated instance (e.g. `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/01-scoring-card.md`) carries a `<!-- jail-approved: ... -->` marker.
 - **No approved instances → FIRST RUN.** Say: *"Looks like this is your first intake. I'll help you set up your source of truth."* Then run the full flow.
 - **Approved instances exist → UPDATE.** Say: *"Looks like you already have an approved intake. I'll check for new or changed materials and help you update your source of truth."* Then run **update mode** (below).
 
 **Update mode rules (important):**
 - The user does **not** start over, and you do **not** delete their old materials by default.
 - They add new materials to the right folder (`01-about-you/` or `02-where-you-want-to-go/`) — or paste in chat — and re-run `/intake`.
-- You **scan both folders**, compare against `00-INTAKE/materials-inventory.md`, and **detect what's new or changed** (new files, or files modified since their inventory `Added` date).
+- You **scan both folders**, compare against `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/materials-inventory.md`, and **detect what's new or changed** (new files, or files modified since their inventory `Added` date).
 - You stage **only the delta** — the new/changed materials and the instances they actually affect — not a full regeneration.
 - You ask for review, and **promote only after approval**, exactly like a first run.
 
@@ -63,7 +63,7 @@ Offer all of these; moving files is the hard part for many people.
 
 - **Paste or attach right here in chat.** Default suggestion. Save durable pasted facts (don't let them live only in the thread) — note them in the inventory with source `pasted-<YYYY-MM-DD>`.
 - **Point me at a folder they keep** — read it **read-only**; never move, rename, or edit their files.
-- **Drop files into the intake folders:** evidence in `00-INTAKE/01-about-you/`; direction in `00-INTAKE/02-where-you-want-to-go/`.
+- **Drop files into the intake folders:** evidence in `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/`; direction in `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/`.
 - **Give me URLs** for public writing/portfolio — fetch with `02-PREP/prep_job_urls.py` and friends.
 - **LinkedIn:** can't be scraped — *help them export it* (profile → **More → Save to PDF**, or **Settings → Get a copy of your data**), then read the file.
 
@@ -76,7 +76,7 @@ Offer all of these; moving files is the hard part for many people.
 
 ## The materials inventory
 
-Maintain `00-INTAKE/materials-inventory.md` (generated instance; copy structure from `materials-inventory.template.md`). It is the **index** of every material — not the content store. Append-only: add a row when material arrives; never delete — mark `superseded` / `excluded` instead.
+Maintain `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/materials-inventory.md` (generated instance; copy structure from `materials-inventory.template.md`). It is the **index** of every material — not the content store. Append-only: add a row when material arrives; never delete — mark `superseded` / `excluded` instead.
 
 Columns: **ID** (stable, e.g. `M001`) · **Source** (filename under a folder, `pasted-YYYY-MM-DD`, or URL) · **Family** · **Added** (`date +%Y-%m-%d`) · **Status** · **Fed into** (which instances it informed, or `—`) · **Notes**.
 
@@ -99,7 +99,7 @@ Lanes are **one shared taxonomy**: the rich human-readable definitions go in `PR
 ## The flow
 
 ### Step 0 — Detect mode + frame it
-Detect first-run vs update (above) and say the matching line. Then, plainly: *"Share whatever you've got — resumes (even old or rough), your LinkedIn, writing, target roles. Paste it here, point me at a folder, or drop it in the `00-INTAKE` folders. I'll make sense of it, give you a straight read, ask a few questions, then put a review folder together for you to check before anything is saved. I'd rather be useful than flattering."*
+Detect first-run vs update (above) and say the matching line. Then, plainly: *"Share whatever you've got — resumes (even old or rough), your LinkedIn, writing, target roles. Paste it here, point me at a folder, or drop it in your private intake folders (`PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/`). I'll make sense of it, give you a straight read, ask a few questions, then put a review folder together for you to check before anything is saved. I'd rather be useful than flattering."*
 
 ### Step 1 — Ingest + inventory
 Invite materials into the two folders (or chat). Read `.txt`/`.md` directly; `.pdf` via the **pdf** skill; `.docx` via the **docx** skill; `.pages` → ask them to export to PDF or paste; public URLs via the prep fetcher. As things come in, **classify each into a family and add/update its inventory row.** In update mode, only process new/changed materials.
@@ -108,7 +108,7 @@ Invite materials into the two folders (or chat). Read `.txt`/`.md` directly; `.p
 Dedupe + order by recency, find the strongest resume, flag contradictions, build the union of proof from the **evidence** family only. Let **direction** materials inform what they *want*, never what they've *done*.
 
 ### Step 3 — Form your own honest read
-Judge the **evidence** against concrete signals: **Positioning · Proof · Buried lead · Signal-to-noise · Recency/consistency · Defensibility**, plus the **gap** between where they're headed and what they've proven. Write this into `00-INTAKE/resume-assessment.md` (shape at the end). Be specific, not a vibe.
+Judge the **evidence** against concrete signals: **Positioning · Proof · Buried lead · Signal-to-noise · Recency/consistency · Defensibility**, plus the **gap** between where they're headed and what they've proven. Write this into `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/resume-assessment.md` (shape at the end). Be specific, not a vibe.
 
 ### Step 4 — Define lanes
 Ask the one-or-several lanes question; infer from their direction materials and confirm. Draft the lane taxonomy (fields above).
@@ -161,7 +161,7 @@ Promotion assembles some instances from more than one review file. Own the secti
 | `START HERE.md`, `7 - Open Questions.md` | (not promoted — orientation / questions) |
 | `1 - About You Review.md` | `04-TAILOR/01-profile.md`; identity/background → `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md` |
 | `2 - Application Lanes Review.md` | lanes → `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md` (Priority Lanes) + `jail.config.json` (`lanes`) + base-per-lane hints → `04-TAILOR/02-resume-index.md` |
-| `3 - Experience + Resume Inventory Review.md` | `04-TAILOR/04-experience-bank.md`, `04-TAILOR/02-resume-index.md`, `00-INTAKE/materials-inventory.md` |
+| `3 - Experience + Resume Inventory Review.md` | `04-TAILOR/04-experience-bank.md`, `04-TAILOR/02-resume-index.md`, `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/materials-inventory.md` |
 | `4 - Approved Truths & Boundary Rules Review.md` | `04-TAILOR/03-approved-truths-and-boundary-rules.md` (narrow — see below) |
 | `5 - Job Preferences + Scoring Review.md` | `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/01-scoring-card.md`, constraints → `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md`, comp/location → `jail.config.json` |
 | `6 - Summary + Skills Review.md` | `04-TAILOR/05-summary-quick.md`, `04-TAILOR/06-skills-quick.md`, (optional) `04-TAILOR/10-bio-library.md` |
@@ -206,6 +206,6 @@ Batch related questions; don't drip them. Prefer concrete choices over essays. E
 
 Never invent a metric, title, scope, or outcome. A job description is proof of experience only for a role they held — never one they want. When proof is missing, ask; if it stays missing, the claim stays honest and modest. Record claim boundaries (→ the narrow `03` file) so the tailor step can't drift into fiction.
 
-## `00-INTAKE/resume-assessment.md` — shape
+## `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/resume-assessment.md` — shape
 
 A short, honest, useful document: **The straight read** (2–4 sentences) · **What's working** (real strengths, specifically) · **What's weak** (concrete problems with examples) · **The gap** (where targets outrun proof) · **What I need from you** (the proof/answers that most raise their ceiling) · **The plan** (what the pipeline will do). Honest and useful — not cruel, not flattering. (Generated instance; gitignored.)

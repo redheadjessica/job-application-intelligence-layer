@@ -1,4 +1,4 @@
-<!-- Intake review file — proposed, NOT yet saved. Promotes to: 04-TAILOR/04-experience-bank.md, 04-TAILOR/02-resume-index.md, 00-INTAKE/materials-inventory.md. -->
+<!-- Intake review file — proposed, NOT yet saved. Promotes to: 04-TAILOR/04-experience-bank.md, 04-TAILOR/02-resume-index.md, PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/materials-inventory.md. -->
 
 # 3 - Experience + Resume Inventory
 

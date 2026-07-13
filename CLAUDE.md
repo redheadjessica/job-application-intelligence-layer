@@ -10,7 +10,7 @@ Clone this repo, run **`/intake`** once to generate your own personal files from
 
 ## Repo layout (numbered in workflow order)
 
-- **`00-INTAKE/`** — your career materials + intake state. Two input folders: **`01-about-you/`** (evidence — resumes, LinkedIn, held-role JDs, metrics, writing samples) and **`02-where-you-want-to-go/`** (direction — target/dream roles; shapes scoring/direction, but **never** becomes claims about your experience). Also holds the generated `materials-inventory.md` and `resume-assessment.md`.
+- **`ENGINE__PUBLIC_GIT_TRACKED/00-INTAKE/`** (public READMEs + template) + **`PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/`** (your materials + generated intake state). Two input folders: **`01-about-you/`** (evidence — resumes, LinkedIn, held-role JDs, metrics, writing samples) and **`02-where-you-want-to-go/`** (direction — target/dream roles; shapes scoring/direction, but **never** becomes claims about your experience). Also holds the generated `materials-inventory.md` and `resume-assessment.md`.
 - **`ENGINE__PUBLIC_GIT_TRACKED/01-INBOX/`** (public template) + **`PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/`** (your data) — active job URLs to rank. Paste one per line into the private **`paste-job-urls-to-rank-here.txt`** (a gitignored working copy, created from the tracked `.template.txt` on first run).
 - **`02-PREP/`** — **Prep.** Fetch each job URL into a clean job `.txt`: `prep_job_urls.py`, the Playwright fallback `prep_job_urls_playwright.py`, and the ATS-aware `ats_fetchers.py` (Greenhouse / Lever / Ashby / Workday / LinkedIn-guest). PII-free; no dependency on your profile.
 - **`ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/`** (engine) + **`PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/`** (your scoring card + profile) — **Vet.** Triage only: score and rank which jobs are worth applying to, using your scoring card + candidate profile. Writes a ranked CSV + Markdown + a formatted XLSX. See `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/CLAUDE.md`.
@@ -33,7 +33,7 @@ If a required instance is missing, the engine tells you to **run `/intake` first
 
 ## Setup — run this first
 
-Run **`/intake`** before anything else. It reads your materials (from `00-INTAKE/01-about-you/` + `00-INTAKE/02-where-you-want-to-go/`, or pasted/attached in chat), asks a few targeted questions, and generates your instance files **from the templates**:
+Run **`/intake`** before anything else. It reads your materials (from `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/` + `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/02-where-you-want-to-go/`, or pasted/attached in chat), asks a few targeted questions, and generates your instance files **from the templates**:
 
 - `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/01-scoring-card.md` — your rubric (4 weighted dimensions + 1–2 custom factors)
 - `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md` — who you are, your priority lanes, practical constraints

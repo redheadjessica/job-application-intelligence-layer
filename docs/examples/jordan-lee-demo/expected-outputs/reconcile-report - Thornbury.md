@@ -18,7 +18,7 @@
 
 ## 1. What the Agent Recommended
 
-- **Base:** Jordan Lee — Senior PMM · `00-INTAKE/01-about-you/resume-jordan-lee.md` (AI Product Marketing family)
+- **Base:** Jordan Lee — Senior PMM · `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/01-about-you/resume-jordan-lee.md` (AI Product Marketing family)
 - **Summary:** Three options offered. Option 1 = Family A workhorse ("turn complex products into clear positioning…"). Option 2 = anti-hype / grounded-claims angle ("I'm a senior PMM who actually talks to customers…"). Option 3 = hybrid dual-buyer framing (longer). Agent flagged Option 2 as the strongest cultural match for Thornbury's "grounded in real customer outcomes" language.
 - **Tilebridge AI bullet:** Replace the base bullet ("Adopted AI assistants…") with the [variant-ai] bullet: "Built an AI-assisted enablement-drafting workflow (I write the brief and edit; the model drafts) that roughly halved first-draft cycle time (directional) — a practitioner's use of AI tools, not ML engineering."
 - **Win-loss / roadmap-owner bullet:** Full text recommended: "Run quarterly win-loss and customer-discovery interviews (~40/yr); fed themes into roadmap conversations and the messaging hierarchy (as an input partner, not the roadmap owner)."
