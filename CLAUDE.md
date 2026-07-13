@@ -77,3 +77,9 @@ A local, git-tracked workspace — routine file changes are reversible, so optim
 
 - **Resume bases** can be Word (`.docx`), PDF, plain text/Markdown, or Apple Pages — point intake at whatever you use (Google Docs: export to `.docx`/PDF first). The Tailor step reads each format with the right tool (docx/pdf skills; `.txt`/`.md` directly; `.pages` via the bullet previews in the resume index) and copies the base in its native format, keeping the original extension.
 - Python parts (`ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/new_batch.py`, `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/make_rankings_xlsx.py`, `ENGINE__PUBLIC_GIT_TRACKED/02-PREP/`) need a local `.venv` with the deps in `requirements.txt` (notably `openpyxl` for the XLSX, and Playwright for the JS-rendered fetch fallback).
+
+---
+
+## Repo changelog
+
+`docs/changelog.md` is this repo's own project history (separate from anything the pipeline produces for a user). Add a rough dated entry there during meaningful work; run `python3 scripts/doc_synthesis.py` to consolidate entries into readable threads and refresh `docs/v2-end-to-end-workflow.md`. See `scripts/README.md`.
