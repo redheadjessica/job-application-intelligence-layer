@@ -80,6 +80,12 @@ A local, git-tracked workspace — routine file changes are reversible, so optim
 
 ---
 
-## Repo changelog
+## Repo changelog (required — applies to every coding agent)
 
-`docs/changelog.md` is this repo's own project history (separate from anything the pipeline produces for a user). Add a rough dated entry there during meaningful work; run `python3 scripts/doc_synthesis.py` to consolidate entries into readable threads and refresh `docs/v2-end-to-end-workflow.md`. See `scripts/README.md`.
+`docs/changelog.md` is this repo's own project history (separate from anything the pipeline produces for a user). **Any coding agent working in this repo — Claude Code, Codex, or otherwise — must add a rough dated entry to `docs/changelog.md` in the same turn as any meaningful change, or explicitly say in the reply that no entry is warranted and why. This is part of finishing the work, not an optional follow-up or something the user needs to request.**
+
+- **Entry required:** new or changed pipeline behavior, engine/template changes, workflow or skill changes, privacy/security-relevant changes (the gitignore root split, the pre-commit denylist firewall, `/archive` or `/reconcile` behavior), architecture or structure changes, documentation that changes how the system is understood, and explorations that reached a real conclusion even when nothing shipped.
+- **No entry needed:** typo fixes, formatting/comment-only edits, tiny visual tweaks, and other purely mechanical maintenance.
+- Capture what changed and, when you know it, why — the user problem, confusion, or test result that prompted it, a privacy/trust concern, a simplification or complexity-removal decision, or a case where real use contradicted the plan. Rough and unpolished is fine; keep it dated and terse. Don't wait for synthesis to clean it up before capturing it.
+- If you're committing the related work, commit the changelog entry in the same commit.
+- **Synthesis** (consolidating rough entries into readable threads and refreshing `docs/v2-end-to-end-workflow.md`) is a separate, occasional pass that only runs when the user asks for it — see `scripts/README.md`. Don't run it automatically as part of ordinary work, and don't wait for it before capturing a rough entry.

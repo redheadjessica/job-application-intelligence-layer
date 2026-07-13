@@ -8,7 +8,7 @@ Add rough entries here during normal work (see `scripts/README.md` for the forma
 Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads.
 
 
-<!-- changelog-processed-through: c1e6fcd02497edae596fed33d71aa10c971b0bfc -->
+<!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
 ## Pre-2026-07-13 — Everything before the changelog existed

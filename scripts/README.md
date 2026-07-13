@@ -6,65 +6,69 @@ Repo-maintenance scripts. Not part of the job-application pipeline itself.
 
 ## doc_synthesis.py
 
-Turns rough, in-the-moment changelog entries plus Git history into readable project
-memory, and keeps `docs/v2-end-to-end-workflow.md` in sync with what actually shipped.
+Keeps `docs/changelog.md` readable and `docs/v2-end-to-end-workflow.md` current, using
+rough changelog entries plus Git history as evidence. **This script never calls an AI
+API.** Synthesis (the actual rewrite) is performed by whichever coding agent — Claude
+Code, Codex, or otherwise — you ask to run it, inside that agent's own session. The
+script only handles the deterministic parts: gathering evidence, validating/sorting
+changelog structure, and managing the hidden processed-commit marker.
 
 ### Adding a rough entry during normal work
 
-While making a meaningful change, add a short dated bullet (or a new `## YYYY-MM-DD —
-Title` section if none exists yet for today) directly to `docs/changelog.md`, above the
+This is not optional — see `CLAUDE.md` → "Repo changelog". While making a meaningful
+change, add a short dated bullet (or a new `## YYYY-MM-DD — Title` section if none
+exists yet for today) directly to `docs/changelog.md`, above the
 `<!-- changelog-processed-through -->` marker. Rough and unpolished is fine — synthesis
 cleans it up later. Skip trivial edits (typos, formatting, comment-only changes).
 
-### Running synthesis
+### Requesting synthesis
+
+Synthesis is occasional and user-initiated — nothing runs it automatically. When you
+want it, ask an active Claude Code or Codex session something like "run changelog
+synthesis" or "consolidate the changelog." The agent should:
+
+```bash
+# 1. See what's changed since the last processed commit
+python3 scripts/doc_synthesis.py
+
+# 2. Consolidate the printed rough entries into readable change threads directly in
+#    docs/changelog.md (preserving already-curated older history), and update
+#    docs/v2-end-to-end-workflow.md if the curated changelog changed meaningfully.
+
+# 3. Validate structure and ordering
+python3 scripts/doc_synthesis.py --normalize-only
+
+# 4. Advance the baseline once satisfied
+python3 scripts/doc_synthesis.py --mark-current
+```
+
+Other flags:
 
 ```bash
 # One-time setup after manually approving the current changelog
 python3 scripts/doc_synthesis.py --mark-current
 
-# Structure and ordering check only — no AI call
-python3 scripts/doc_synthesis.py --normalize-only
-
-# Live AI run — consolidates entries, writes docs/changelog.md,
-# docs/v2-end-to-end-workflow.md, and docs/doc-status.md
-python3 scripts/doc_synthesis.py
-
-# AI run without writing anything
-python3 scripts/doc_synthesis.py --dry-run
-
-# Verbose — show Claude prompt sizes and model used
-python3 scripts/doc_synthesis.py --verbose
-
-# Force a pass even when Git finds no meaningful changed files
+# Print evidence even when Git finds no meaningful changed files
 python3 scripts/doc_synthesis.py --force
 ```
 
 ### Requirements
 
-- Python 3.9+ (stdlib only — no new dependency; `requirements.txt` is untouched)
-- `ANTHROPIC_API_KEY` set in your environment or a `.env` file at the repo root, for AI
-  passes only (`--normalize-only` and `--mark-current` never call the API)
-- Optional `ANTHROPIC_MODEL` override; otherwise the current Claude Sonnet is used
+- Python 3.9+ (stdlib only — no dependency, no API key, nothing in `requirements.txt`
+  changes for this)
 - Run from the repo root
-
-### What it writes
-
-| File | What changes |
-|---|---|
-| `docs/changelog.md` | New rough entries consolidated into readable change threads; processed-commit marker advanced |
-| `docs/v2-end-to-end-workflow.md` | Updated from the curated changelog (JAIL's current-state workflow doc) |
-| `docs/doc-status.md` | Latest documentation drift report (advisory only) |
 
 ### What it does NOT do
 
-- Never modifies `README.md` directly — only flags drift in `docs/doc-status.md`
+- Never calls any AI API or requires an API key
+- Never rewrites the changelog's prose itself — that's the acting agent's job
+- Never modifies `README.md` or `docs/v2-end-to-end-workflow.md` directly — the agent
+  does that as part of the synthesis pass, if warranted
 - Never commits or pushes
-- Never invents a stage, feature, or file that the changelog and Git evidence don't
-  support
-- Performs a true no-op (no file writes, no AI call) when nothing meaningful changed
-  since the last processed commit
-- Never lets its own maintenance commits (this script, its tests, the changelog, the
-  drift report) count as "meaningful work" and re-trigger itself
+- Performs a true no-op (no output beyond a confirmation, no file writes) when nothing
+  meaningful changed since the last processed commit
+- Never lets its own maintenance commits (this script, its tests, the changelog) count
+  as "meaningful work" and re-trigger itself
 
 ### Tests
 
