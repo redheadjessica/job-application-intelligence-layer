@@ -16,7 +16,7 @@ otherwise clobber the On-Ice tracking.
 
 Usage:
   python apply_on_ice.py --rankings "__READY TO REVIEW/<batch>/1 - Rankings/<batch>-rankings.xlsx"
-                         [--companies 03-VETTING/on-ice-companies.txt]
+                         [--companies PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/on-ice-companies.txt]
 """
 import argparse
 import csv
@@ -57,7 +57,7 @@ def is_applied(company, applied):
 def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("--rankings", required=True)
-    ap.add_argument("--companies", default="03-VETTING/on-ice-companies.txt")
+    ap.add_argument("--companies", default="PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/on-ice-companies.txt")
     a = ap.parse_args(argv[1:])
     applied = load_companies(a.companies)
 

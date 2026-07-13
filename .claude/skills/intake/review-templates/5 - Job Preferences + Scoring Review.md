@@ -1,4 +1,4 @@
-<!-- Intake review file — proposed, NOT yet saved. Promotes to: 03-VETTING/01-scoring-card.md, constraints → 03-VETTING/02-candidate-profile.md, comp/location → jail.config.json. -->
+<!-- Intake review file — proposed, NOT yet saved. Promotes to: PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/01-scoring-card.md, constraints → PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md, comp/location → jail.config.json. -->
 
 # 5 - Job Preferences + Scoring
 

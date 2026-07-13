@@ -33,9 +33,6 @@ jail.config.json
 #    Templates (*.template.md) are tracked; these bare-name instances are not.
 00-INTAKE/materials-inventory.md
 00-INTAKE/resume-assessment.md
-03-VETTING/01-scoring-card.md
-03-VETTING/02-candidate-profile.md
-03-VETTING/on-ice-companies.txt
 04-TAILOR/01-profile.md
 04-TAILOR/02-resume-index.md
 04-TAILOR/03-approved-truths-and-boundary-rules.md

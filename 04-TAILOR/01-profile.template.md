@@ -86,7 +86,7 @@ These are not the default lane but are viable when the company, mission, and sco
 ## Lower-Fit Role Shapes
 - {{a role shape that's a weak fit and usually not worth pursuing}}
 - {{a role shape that's a weak fit}}
-<!-- intake: be honest about what isn't your lane. This keeps the 03-VETTING/tailoring from overreaching. -->
+<!-- intake: be honest about what isn't your lane. This keeps the vetting and tailoring from overreaching. -->
 
 ---
 

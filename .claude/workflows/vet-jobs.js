@@ -1,7 +1,7 @@
 export const meta = {
   name: 'vet-jobs',
   description: 'Score a dated batch folder of job descriptions in parallel (one agent per job), then assemble CSV + Markdown rankings into that same folder',
-  whenToUse: 'Run a job-vetting batch fast. Pass the batch folder path as args, e.g. {folder: "03-VETTING/06-02-26"}.',
+  whenToUse: 'Run a job-vetting batch fast. Pass the batch folder path as args, e.g. {folder: "__READY TO REVIEW/06-02-26"}.',
   phases: [
     { title: 'Discover', detail: 'list job files in the batch folder', model: 'haiku' },
     { title: 'Score', detail: 'one agent per job, scored concurrently', model: 'sonnet' },
@@ -15,16 +15,16 @@ let A = args
 if (typeof A === 'string') { try { A = JSON.parse(A) } catch (_) { /* leave as raw string */ } }
 const FOLDER = (A && typeof A === 'object' && A.folder) ? A.folder : A
 if (!FOLDER || typeof FOLDER !== 'string') {
-  throw new Error('Pass the batch folder path as args, e.g. {folder: "03-VETTING/06-02-26"} or just "03-VETTING/Old Runs/04-09-26".')
+  throw new Error('Pass the batch folder path as args, e.g. {folder: "__READY TO REVIEW/06-02-26"} or just "__READY TO REVIEW/04-09-26".')
 }
 // Optional: write the rankings somewhere OTHER than the scored folder (e.g. a sibling
 // "1 - Rankings/" tier), and name them after the batch rather than the source subfolder.
 const OUT_DIR = (A && typeof A === 'object' && A.outDir) ? A.outDir : null
 const BATCH_NAME = (A && typeof A === 'object' && A.batchName) ? A.batchName : null
 
-// Rubric + profile live in the 03-VETTING/ subfolder of the merged project.
-const RUBRIC = '03-VETTING/01-scoring-card.md'
-const PROFILE = '03-VETTING/02-candidate-profile.md'
+// Rubric + profile are the candidate's private instances under PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/.
+const RUBRIC = 'PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/01-scoring-card.md'
+const PROFILE = 'PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md'
 
 // ---- Schemas ----
 const DISCOVER_SCHEMA = {
@@ -139,7 +139,7 @@ Also extract the FOUR dimension weights from the scoring card's section headers,
 const haveRefs = !!(refs && refs.rubric && refs.profile)
 if (!haveRefs) {
   return {
-    error: "I can't vet yet — your scoring card and candidate profile haven't been generated. They're created when you run /intake. Run /intake first to produce 03-VETTING/01-scoring-card.md and 03-VETTING/02-candidate-profile.md, then re-run this batch.",
+    error: "I can't vet yet — your scoring card and candidate profile haven't been generated. They're created when you run /intake. Run /intake first to produce PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/01-scoring-card.md and PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md, then re-run this batch.",
     missing: [RUBRIC, PROFILE].filter((p, i) => !(i === 0 ? (refs && refs.rubric) : (refs && refs.profile))),
   }
 }
@@ -369,7 +369,7 @@ const XLSX_SCHEMA = {
 const xlsxRes = await agent(
   `Run this EXACT shell command from the project root to build the formatted spreadsheet (it uses the project venv if present, else python3):
 
-PY=".venv/bin/python"; [ -x "$PY" ] || PY="python3"; "$PY" 03-VETTING/make_rankings_xlsx.py "${csvPath}" "${xlsxPath}" --config jail.config.json --quarantined ${quarantinedN}
+PY=".venv/bin/python"; [ -x "$PY" ] || PY="python3"; "$PY" ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/make_rankings_xlsx.py "${csvPath}" "${xlsxPath}" --config jail.config.json --quarantined ${quarantinedN}
 
 Do not edit the script. Return ok:true if it printed a "Wrote ..." line with no Python traceback; otherwise ok:false with the error text in message.`,
   { phase: 'Assemble', model: 'haiku', schema: XLSX_SCHEMA, label: 'build xlsx' }

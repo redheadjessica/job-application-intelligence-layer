@@ -1,4 +1,4 @@
-<!-- Intake review file — proposed, NOT yet saved. Talk feedback to Claude in chat, or edit directly and tell Claude when done. Promotes to: 04-TAILOR/01-profile.md (+ identity → 03-VETTING/02-candidate-profile.md). -->
+<!-- Intake review file — proposed, NOT yet saved. Talk feedback to Claude in chat, or edit directly and tell Claude when done. Promotes to: 04-TAILOR/01-profile.md (+ identity → PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md). -->
 
 # 1 - About You
 

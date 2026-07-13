@@ -11,7 +11,7 @@ trafilatura>=1.8
 # trafilatura -> justext imports lxml.html.clean, which newer lxml split out:
 lxml_html_clean>=0.1
 
-# Vetting: builds the formatted, conditionally-formatted rankings .xlsx (03-VETTING/make_rankings_xlsx.py):
+# Vetting: builds the formatted, conditionally-formatted rankings .xlsx (ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/make_rankings_xlsx.py):
 openpyxl>=3.1
 
 # Cover letters (optional module): builds the .docx paste source (04-TAILOR/cover-letter/make_cover_letter_docx.py):

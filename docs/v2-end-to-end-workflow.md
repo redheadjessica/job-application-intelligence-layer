@@ -116,10 +116,11 @@ PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/
 
 02-PREP/                 prep_job_urls.py · prep_job_urls_playwright.py · ats_fetchers.py
 
-03-VETTING/
-  CLAUDE.md · new_batch.py · make_rankings_xlsx.py
-  01-scoring-card.template.md       →  01-scoring-card.md       (instance)
-  02-candidate-profile.template.md  →  02-candidate-profile.md  (instance)
+ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/   (public)
+  CLAUDE.md · new_batch.py · make_rankings_xlsx.py · apply_on_ice.py
+  01-scoring-card.template.md · 02-candidate-profile.template.md · on-ice-companies.template.txt
+PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/   (your data)
+  01-scoring-card.md · 02-candidate-profile.md · on-ice-companies.txt
 
 04-TAILOR/
   00-job_application_agent.md       (engine)

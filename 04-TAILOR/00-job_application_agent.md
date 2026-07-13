@@ -563,7 +563,7 @@ You are given **one** target job file inside the current batch (the autonomous a
 - A dated job batch lives under `__READY TO REVIEW/MM-DD-YY/`.
 - The job posts you tailor against are in that batch's `3 - Source Material/`.
 - Your tailored output goes in the batch's `2 - Tailored Resumes/[Company] - [Role]/`.
-- The candidate's source files are the **generated instances** under `03-VETTING/` and `04-TAILOR/` (never the `*.template.md` files).
+- The candidate's source files are the **generated instances** under `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/` and `04-TAILOR/` (never the `*.template.md` files).
 
 Infer the company and role from the job file, create the `[Company] - [Role]` output folder, and copy the job file into it. Do not modify the source job file, and do not invent folders for a job you weren't given. The detailed folder-creation and naming mechanics live in `.claude/agents/job-applier.md`.
 

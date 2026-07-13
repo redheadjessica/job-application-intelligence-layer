@@ -36,7 +36,7 @@ It runs in **two tiers** so they get value before fatigue. **Tier 1 — Vetting-
 
 At the very start, detect which mode you're in:
 
-- **Look for an approved intake:** check whether `00-INTAKE/materials-inventory.md` exists and whether any generated instance (e.g. `03-VETTING/01-scoring-card.md`) carries a `<!-- jail-approved: ... -->` marker.
+- **Look for an approved intake:** check whether `00-INTAKE/materials-inventory.md` exists and whether any generated instance (e.g. `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/01-scoring-card.md`) carries a `<!-- jail-approved: ... -->` marker.
 - **No approved instances → FIRST RUN.** Say: *"Looks like this is your first intake. I'll help you set up your source of truth."* Then run the full flow.
 - **Approved instances exist → UPDATE.** Say: *"Looks like you already have an approved intake. I'll check for new or changed materials and help you update your source of truth."* Then run **update mode** (below).
 
@@ -92,7 +92,7 @@ People rarely apply in one crisp lane. Ask, or infer-and-confirm: **"Are you tar
 
 For each lane capture: **name · priority · target titles · target industries/company-types · what fits · what doesn't fit · preferred resume base (if known) · summary/skills emphasis · notes/tradeoffs.**
 
-Lanes are **one shared taxonomy**: the rich human-readable definitions go in `03-VETTING/02-candidate-profile.md` (Priority Lanes), and the **id/name/priority** are mirrored in `jail.config.json` (`lanes`). Do **not** build lane-aware ranking or tailoring yet — just create the taxonomy.
+Lanes are **one shared taxonomy**: the rich human-readable definitions go in `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md` (Priority Lanes), and the **id/name/priority** are mirrored in `jail.config.json` (`lanes`). Do **not** build lane-aware ranking or tailoring yet — just create the taxonomy.
 
 ---
 
@@ -159,11 +159,11 @@ Promotion assembles some instances from more than one review file. Own the secti
 | Review file | Promotes to (generated instances) |
 |---|---|
 | `START HERE.md`, `7 - Open Questions.md` | (not promoted — orientation / questions) |
-| `1 - About You Review.md` | `04-TAILOR/01-profile.md`; identity/background → `03-VETTING/02-candidate-profile.md` |
-| `2 - Application Lanes Review.md` | lanes → `03-VETTING/02-candidate-profile.md` (Priority Lanes) + `jail.config.json` (`lanes`) + base-per-lane hints → `04-TAILOR/02-resume-index.md` |
+| `1 - About You Review.md` | `04-TAILOR/01-profile.md`; identity/background → `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md` |
+| `2 - Application Lanes Review.md` | lanes → `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md` (Priority Lanes) + `jail.config.json` (`lanes`) + base-per-lane hints → `04-TAILOR/02-resume-index.md` |
 | `3 - Experience + Resume Inventory Review.md` | `04-TAILOR/04-experience-bank.md`, `04-TAILOR/02-resume-index.md`, `00-INTAKE/materials-inventory.md` |
 | `4 - Approved Truths & Boundary Rules Review.md` | `04-TAILOR/03-approved-truths-and-boundary-rules.md` (narrow — see below) |
-| `5 - Job Preferences + Scoring Review.md` | `03-VETTING/01-scoring-card.md`, constraints → `03-VETTING/02-candidate-profile.md`, comp/location → `jail.config.json` |
+| `5 - Job Preferences + Scoring Review.md` | `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/01-scoring-card.md`, constraints → `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md`, comp/location → `jail.config.json` |
 | `6 - Summary + Skills Review.md` | `04-TAILOR/05-summary-quick.md`, `04-TAILOR/06-skills-quick.md`, (optional) `04-TAILOR/10-bio-library.md` |
 
 **Do not generate** the learning files (`05a-summary-library.md`, `06a-skills-library.md`, `04-TAILOR/learning/*`) — those are created later by `/reconcile`, not intake.

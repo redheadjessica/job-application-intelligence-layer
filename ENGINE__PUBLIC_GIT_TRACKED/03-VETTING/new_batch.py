@@ -16,8 +16,8 @@ Every file a run produces lands inside that one dated folder:
 Run this FIRST, then fetch into the source folder, then run the vetting front door.
 It prints the exact next commands to copy-paste.
 
-    python 03-VETTING/new_batch.py            # uses today's date
-    python 03-VETTING/new_batch.py 06-04-26   # explicit MM-DD-YY
+    python ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/new_batch.py            # uses today's date
+    python ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/new_batch.py 06-04-26   # explicit MM-DD-YY
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SRC_SUBPATH = "3 - Source Material/All Job Posts (full text)"
 TIERS = (
     "0 - Prep Report",

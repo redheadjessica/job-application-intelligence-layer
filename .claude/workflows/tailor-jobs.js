@@ -18,7 +18,7 @@ if (!raw || raw.length === 0) {
 const picks = raw.map((j) => (typeof j === 'string' ? { abs_path: j } : j))
 
 // Consolidated review home: __READY TO REVIEW/<batch>/. Derive <batch> from each job file's
-// parent folder (e.g. 03-VETTING/06-02-26/foo.txt -> 06-02-26) so hand-picked jobs land alongside
+// parent folder (e.g. __READY TO REVIEW/06-02-26/foo.txt -> 06-02-26) so hand-picked jobs land alongside
 // their batch. Falls back to "manual" if the path has no recognizable parent.
 // A job batch is ONLY a date-shaped folder (MM-DD-YY). Non-batch review folders under
 // __READY TO REVIEW (e.g. "06-02-26 - Intake Review", "06-02-26 - Source Update Review")

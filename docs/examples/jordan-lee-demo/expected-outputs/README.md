@@ -11,7 +11,7 @@ The user asked for this to be explicit. Honest labels:
 | Artifact | What it is | How it was produced |
 |---|---|---|
 | `rankings.csv` | the ranked job table (durable source) | **Real `vet-jobs` workflow** — LLM scored the 4 usable posts; final-score/status computed by the workflow |
-| `rankings.xlsx` | the colored tracker spreadsheet (**the product artifact + the screenshot/hero subject**) | **Real `03-VETTING/make_rankings_xlsx.py`** rendered it from `rankings.csv` + `jail.config.json` (candidate-relative comp/location colors) |
+| `rankings.xlsx` | the colored tracker spreadsheet (**the product artifact + the screenshot/hero subject**) | **Real `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/make_rankings_xlsx.py`** rendered it from `rankings.csv` + `jail.config.json` (candidate-relative comp/location colors) |
 | `rankings.md` | readable markdown rankings | **Real `vet-jobs` workflow** |
 | `prep-report.md` | prep summary (usable / thin / failed / dupes) | **Hand-curated** to match `02-PREP/prep_common.py`'s exact output format. Prep was **not** run on the synthetic local posts; live fetch is the separate, disposable Unit 6 real-URL smoke test |
 | `prep-manifest.json` | machine-readable prep manifest | **Hand-curated** to the real manifest schema |
@@ -31,7 +31,7 @@ The user asked for this to be explicit. Honest labels:
 The `.xlsx` is a deterministic render of `rankings.csv`. To refresh it:
 
 ```
-.venv/bin/python 03-VETTING/make_rankings_xlsx.py \
+.venv/bin/python ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/make_rankings_xlsx.py \
   "docs/examples/jordan-lee-demo/expected-outputs/rankings.csv" \
   "docs/examples/jordan-lee-demo/expected-outputs/rankings.xlsx" \
   --config jail.config.json --quarantined 1

@@ -89,7 +89,7 @@ docs/screenshots/            ← committed screenshot PNGs (synthetic content on
 
 ## Notes on specific artifacts
 
-- **The `.xlsx` is an approved committed demo artifact.** The ranking spreadsheet is a core product output; committing it (small, inspectable) lets public reviewers open it. It renders deterministically from the committed CSV via `03-VETTING/make_rankings_xlsx.py`.
+- **The `.xlsx` is an approved committed demo artifact.** The ranking spreadsheet is a core product output; committing it (small, inspectable) lets public reviewers open it. It renders deterministically from the committed CSV via `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/make_rankings_xlsx.py`.
 - **Screenshots** captured from this kit are committed under **`docs/screenshots/`** (visible content must be synthetic).
 - **Real-URL smoke** (live fetch) is a later, separate, disposable step — see `docs/testing-and-caveats.md`.
 
