@@ -58,7 +58,7 @@ I'm Jessica — I build practical AI workflows for product and personal systems.
 - GitHub: `github.com/redheadjessica/job-application-intelligence-layer`
 - LinkedIn: `linkedin.com/in/redheadjessica`
 
-## Screenshot placeholders (synthetic "Jordan Lee" persona — see `docs/screenshots-plan.md`)
+## Screenshot placeholders (synthetic "Jordan Lee" persona — see `docs/screenshots/screenshots-plan.md`)
 - `[shot: ranking-xlsx]` — the ranked spreadsheet (the payoff visual)
 - `[shot: intake-review]` — the staged intake review
 - `[shot: tailored-output]` — a tailored draft with its Questions section
