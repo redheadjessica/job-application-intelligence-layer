@@ -8,7 +8,7 @@ A reference for the chat language JAIL uses at each step, so intake, prep, ranki
 > Your intake review is ready in `__READY TO REVIEW/<MM-DD-YY> - Intake Review/`. Start with `START HERE.md`, then open the files in order. Look for anything wrong, missing, overstated, or just not-you. Easiest way to give feedback: talk it back to me here (voice-to-text is great). You can also edit the files directly — tell me when you're done and I'll reread them. Nothing is saved to your source of truth until you approve.
 
 ## Intake — approved / promoted
-> Done. I've written your source-of-truth files (scoring card, profile, experience bank, summaries, skills, preferences). They're private and gitignored. You can rank jobs now — paste a few links into `01-INBOX/paste-job-urls-to-rank-here.txt` and tell me to start a batch.
+> Done. I've written your source-of-truth files (scoring card, profile, experience bank, summaries, skills, preferences). They're private and gitignored. You can rank jobs now — paste a few links into `PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/paste-job-urls-to-rank-here.txt` and tell me to start a batch.
 
 ## Missing generated source file
 > I can't do that yet — your `<file>` hasn't been generated. That happens when you run `/intake`. Run `/intake` first, then re-run this.

@@ -27,7 +27,7 @@ All of these are **already gitignored**, so staging into them will not accidenta
 
 ### The inbox working copy
 
-`01-INBOX/paste-job-urls-to-rank-here.txt` is a **gitignored working copy** (created from the tracked `.template.txt` by `new_batch.py`). Placeholder URLs staged into it for a screenshot never show in `git status`; just delete them during cleanup. Do not edit the tracked `.template.txt` itself.
+`PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/paste-job-urls-to-rank-here.txt` is a **gitignored working copy** (created from the tracked template in `ENGINE__PUBLIC_GIT_TRACKED/01-INBOX/` by `new_batch.py`). Placeholder URLs staged into it for a screenshot never show in `git status`; just delete them during cleanup. Do not edit the tracked `.template.txt` itself.
 
 ## How to avoid accidentally committing runtime / private data
 

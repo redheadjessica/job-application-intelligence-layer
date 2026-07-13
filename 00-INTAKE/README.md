@@ -14,7 +14,7 @@ Run **`/intake`** once before vetting or tailoring. It reads your career materia
 
 > A job description only counts as *your experience* if you held that role. Intake will confirm which is which before using any of them — it never guesses.
 >
-> **Not here:** the jobs you're vetting tonight. Those go in `01-INBOX/paste-job-urls-to-rank-here.txt` and get *scored* by the pipeline — intake assumes nothing about you from them.
+> **Not here:** the jobs you're vetting tonight. Those go in `PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/paste-job-urls-to-rank-here.txt` and get *scored* by the pipeline — intake assumes nothing about you from them.
 
 ## How to share it — whatever's easiest
 

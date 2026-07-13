@@ -1,5 +1,6 @@
-# TEMPLATE (tracked). Your working copy is "paste-job-urls-to-rank-here.txt" (same folder,
-# gitignored) — 03-VETTING/new_batch.py creates it from this template on first run, or just ask
+# TEMPLATE (tracked, in ENGINE__PUBLIC_GIT_TRACKED/01-INBOX/). Your private working copy is
+# "paste-job-urls-to-rank-here.txt" under PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/
+# (gitignored) — 03-VETTING/new_batch.py creates it from this template on first run, or just ask
 # Claude. Your pasted URLs are private data and must never be committed; the gitignore handles it.
 #
 # Paste the job-posting URLs you want to rank into the working copy — one per line.

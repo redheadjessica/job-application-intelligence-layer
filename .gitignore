@@ -20,11 +20,14 @@ node_modules/
 # Batch run outputs (keep the empty review folder, ignore generated batches)
 __READY TO REVIEW/*/
 
+# ── New explicit-root layout (migration in progress). Everything under the PRIVATE
+#    root and the generated-output root is your data — ignored wholesale. Templates and
+#    mechanism live under ENGINE__PUBLIC_GIT_TRACKED/ and stay tracked. ─────────────────
+PRIVATE__YOUR_FILES_GITIGNORED/
+__READY_TO_REVIEW__PRIVATE_GITIGNORED/
+
 # ── Root config: generated instance (by setup/intake). Template is tracked. ──
 jail.config.json
-
-# ── Inbox working copy (your pasted job URLs — private). Template is tracked. ──
-01-INBOX/paste-job-urls-to-rank-here.txt
 
 # ── Generated candidate-specific INSTANCES (by /intake or /reconcile). ───────
 #    Templates (*.template.md) are tracked; these bare-name instances are not.

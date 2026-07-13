@@ -24,7 +24,7 @@ There are **two** intake folders, and the wall between them is the most importan
 
 There's also a third family, **voice** (writing samples, portfolio, published work) — it lives in `01-about-you/` and is used only for voice and "selected writing" credibility, never blended into factual extraction.
 
-**Not part of intake:** the jobs they're ranking tonight. Those go in `01-INBOX/paste-job-urls-to-rank-here.txt` and get *scored* by the pipeline — infer nothing about the person from them.
+**Not part of intake:** the jobs they're ranking tonight. Those go in `PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/paste-job-urls-to-rank-here.txt` and get *scored* by the pipeline — infer nothing about the person from them.
 
 ## How this works (and how to keep it from being exhausting)
 

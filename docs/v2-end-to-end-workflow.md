@@ -56,14 +56,14 @@ Job sourcing/scouting; LLM/web-search/API sourcing (Adzuna/JSearch/etc.); auto-a
 
 0. **Arrive at the public JAIL page** (`redheadjessica.com/jail`, separate from this repo). It explains what JAIL is, who it's for, what it does/doesn't do, that it's local, uses Claude Code, that truth is part of the product, that the user stays in control, that it's not a hosted web app, and that the user moves between chat and local files.
 1. **Get the repo** — clone, or Download ZIP → unzip → open the folder in Claude Code → run `/intake`.
-2. **Setup/orientation in Claude Code** — chat is the control surface; files are durable context; `__READY TO REVIEW` holds things needing human eyes; `00-INTAKE` holds career/direction materials; `01-INBOX` holds active job URLs; editing files doesn't trigger work unless you tell Claude; nothing submits applications. *When in doubt, tell Claude in chat what you added/changed/approved or want to do next.*
+2. **Setup/orientation in Claude Code** — chat is the control surface; files are durable context; `__READY TO REVIEW` holds things needing human eyes; `00-INTAKE` holds career/direction materials; `PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO` holds your active job URLs (public template under `ENGINE__PUBLIC_GIT_TRACKED/01-INBOX`); editing files doesn't trigger work unless you tell Claude; nothing submits applications. *When in doubt, tell Claude in chat what you added/changed/approved or want to do next.*
 3. **Gather intake materials** into `00-INTAKE/01-about-you/` (evidence) and `00-INTAKE/02-where-you-want-to-go/` (direction). See §7.
 4. **Run `/intake`** — reads materials, saves durable pasted facts when relevant, updates a materials inventory, asks clarifying questions, separates facts from direction. Supports first-run and (later) update behavior from one command.
 5. **Define application lanes** — one or several. Becomes a shared taxonomy across intake, vetting, resume index, tailoring, reconcile. See §8.
 6. **Staged intake review** — Claude writes proposals into `__READY TO REVIEW/MM-DD-YY - Intake Review/` (with `START HERE.md` and numbered review files), not directly into canonical files, and summarizes in chat.
 7. **User reviews and corrects** — paste/voice feedback in chat, or edit staged files directly (Claude rereads before promoting). Silence is never approval. The explicit truth gate: *"Accurate enough to start ranking jobs, or do you want to add/correct anything first?"*
 8. **Promote approved source of truth** — on approval, Claude writes the durable instance files (scoring card, candidate profile, `jail.config.json`, profile, resume index, approved truths & boundary rules, experience bank, summary quick, skills quick, materials inventory) and marks them approved. No required generation file remains placeholder-filled.
-9. **Add jobs to rank** — paste URLs into `01-INBOX/paste-job-urls-to-rank-here.txt`, or paste in chat (Claude saves them; they don't stay thread-only).
+9. **Add jobs to rank** — paste URLs into `PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/paste-job-urls-to-rank-here.txt`, or paste in chat (Claude saves them; they don't stay thread-only).
 10. **Prep fetches job posts** — dedupe exact + normalized URLs, soft-flag company/title dupes, avoid filename collisions, fetch full text, retry thin/failed non-ATS posts, quarantine failed/thin posts so they aren't ranked, write a prep manifest, return a prep summary in chat. A `0 - Prep Report/` folder appears when useful.
 11. **Rank jobs** — into `__READY TO REVIEW/MM-DD-YY/` with `START HERE.md`, `0 - Prep Report/`, `1 - Rankings/`, `3 - Source Material/`. The rankings are a **tracker**: editable columns first (Applied Date, Status, Have Intro, Notes, Decline/Down Date), then the job's **Lane** (what the role is), company, title/link, working location, comp, final score, the four sub-scores, mission/scope notes, top reasons, top concerns, and the candidate-relative **Lane Fit / Location Fit / Comp Fit**. Rows ship **grouped into Status sections**. Coloring is **candidate-relative** (location vs the user's stated preference, comp vs floor/target, Lane vs matched-lane priority, scores vs rubric — no hardcoded "remote is always green").
 12. **User chooses jobs to tailor** — selected, top N, one at a time, or a manual set.
@@ -87,7 +87,7 @@ flowchart TD
   M --> IN["Run /intake"]
   IN --> SR["Staged review: __READY TO REVIEW/MM-DD-YY - Intake Review/"]
   SR --> AP["Approve -> private generated source files"]
-  AP --> URL["Paste job URLs -> 01-INBOX/"]
+  AP --> URL["Paste job URLs -> your private inbox"]
   URL --> PR["Prep: fetch, dedupe, quarantine thin/failed, report"]
   PR --> RK["Rank: candidate-relative spreadsheet"]
   RK --> TL["Tailor selected jobs"]
@@ -109,8 +109,10 @@ jail.config.template.json        (tracked)   jail.config.json  (gitignored insta
   materials-inventory.template.md   →  materials-inventory.md  (instance)
   resume-assessment.md              (instance, no template)
 
-01-INBOX/
-  paste-job-urls-to-rank-here.template.txt  (tracked)  →  paste-job-urls-to-rank-here.txt  (gitignored working copy; created by new_batch.py)
+ENGINE__PUBLIC_GIT_TRACKED/01-INBOX/
+  paste-job-urls-to-rank-here.template.txt  (tracked)
+PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/
+  paste-job-urls-to-rank-here.txt  (gitignored working copy; created by new_batch.py)
 
 02-PREP/                 prep_job_urls.py · prep_job_urls_playwright.py · ats_fetchers.py
 

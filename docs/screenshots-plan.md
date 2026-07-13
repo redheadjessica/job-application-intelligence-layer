@@ -12,7 +12,7 @@ The full synthetic kit lives in **`docs/examples/jordan-lee-demo/`** (committed,
 - **Persona:** "Jordan Lee," a Senior Product Marketing Manager (B2B SaaS / workflow-tooling). Targeting AI Product Marketing, GTM Strategy, and Lifecycle/Growth roles at AI / tooling companies. Lanes: AI Product Marketing; GTM Strategy; Lifecycle/Growth.
 - **`00-INTAKE/01-about-you/`:** a fictional PMM resume (launches, positioning, customer research, sales enablement, adoption programs; used AI tools to accelerate research/messaging/enablement) and a brag-doc line or two — fictional and internally consistent.
 - **`00-INTAKE/02-where-you-want-to-go/`:** a fictional target JD (e.g. "Senior Product Marketing Manager, AI Workflows" at a fictional company).
-- **`01-INBOX/paste-job-urls-to-rank-here.txt`:** `https://example.com/jobs/...` placeholder links only.
+- **`PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/paste-job-urls-to-rank-here.txt`:** `https://example.com/jobs/...` placeholder links only.
 - **`jail.config.json`:** fictional comp / location / lane preferences (example copy committed under `docs/examples/jordan-lee-demo/fixtures/`).
 
 ## Shot list
