@@ -64,13 +64,29 @@ def main(argv):
     wb = openpyxl.load_workbook(a.rankings)
     ws = wb.active
     H = {ws.cell(1, c).value: c for c in range(1, ws.max_column + 1)}
-    sc, co, jf, fc = H["Status?"], H["Company"], H["job_file"], H["final_score"]
+    # Header names match the current tracker layout (vet-jobs.js HEADERS). "Final Score" is looked up
+    # by prefix/contains rather than an exact literal, since the score-column LABEL is dynamic
+    # (score-dimensions.json / the candidate's scoring card) and the engine-owned default is
+    # "FINAL Weighted Score" today but may not always be — this keeps the on-ice pass from breaking
+    # again the next time that label changes.
+    final_col_name = next((h for h in H if h and "final" in h.lower()), None)
+    if final_col_name is None:
+        sys.stderr.write("Could not find a Final-Score-like column header in the rankings sheet\n"); sys.exit(1)
+    sc, co, jf, fc = H["Status? [You Change]"], H["Company"], H["Job File"], H[final_col_name]
 
     def fs(r):
         v = ws.cell(r, fc).value
         return int(v) if v not in (None, "") and str(v).lstrip("-").isdigit() else 0
 
-    rows = [(r, ws.cell(r, co).value, fs(r)) for r in range(2, ws.max_row + 1)]
+    # Job rows end at the first blank Company cell — make_rankings_xlsx.py appends a blank gap row
+    # plus a merged section-color legend block below the data, which must NOT be iterated (writing
+    # to a merged, non-anchor cell raises AttributeError; it also isn't job data).
+    last_data_row = 1
+    for r in range(2, ws.max_row + 1):
+        if not (ws.cell(r, co).value or "").strip():
+            break
+        last_data_row = r
+    rows = [(r, ws.cell(r, co).value, fs(r)) for r in range(2, last_data_row + 1)]
     changed = {}  # job_file -> new status
 
     # Rule 1: applied companies -> all roles On Ice
@@ -99,8 +115,8 @@ def main(argv):
         recs = list(csv.DictReader(open(csvp, newline="", encoding="utf-8")))
         if recs:
             fields = list(recs[0].keys())
-            stf = next((k for k in fields if k and k.strip().lower() in ("status?", "status")), None)
-            jff = next((k for k in fields if k == "job_file"), None)
+            stf = next((k for k in fields if k and k.strip().lower().startswith("status?")), None)
+            jff = next((k for k in fields if k == "Job File"), None)
             if stf and jff:
                 for row in recs:
                     if row.get(jff) in changed:

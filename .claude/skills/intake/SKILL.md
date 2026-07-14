@@ -107,6 +107,8 @@ Invite materials into the two folders (or chat). Read `.txt`/`.md` directly; `.p
 ### Step 2 — Make sense of the mess
 Dedupe + order by recency, find the strongest resume, flag contradictions, build the union of proof from the **evidence** family only. Let **direction** materials inform what they *want*, never what they've *done*.
 
+**Cross-material consistency check (do this on every run, first- or update-mode).** Compare facts across every evidence-family resume/material and against any already-approved instance: education/degree wording, dates, titles, scale/metrics for the same role, seniority framing, and any skill claim that appears in one material but is absent or contradicted in another. When two sources disagree — different degree wording, a metric that changed between resume versions, a title/date mismatch, a resume showing a qualification the current profile doesn't reflect, or a profile claiming something no supplied material supports — **do not silently pick one.** Surface it in `7 - Open Questions.md` (or, in update mode, call it out directly) and ask which is current. Note the discrepancy in the relevant canonical file even after the user answers, so the resolution stays visible rather than disappearing.
+
 ### Step 3 — Form your own honest read
 Judge the **evidence** against concrete signals: **Positioning · Proof · Buried lead · Signal-to-noise · Recency/consistency · Defensibility**, plus the **gap** between where they're headed and what they've proven. Write this into `PRIVATE__YOUR_FILES_GITIGNORED/00-INTAKE__YOUR_PRIVATE_INFO/resume-assessment.md` (shape at the end). Be specific, not a vibe.
 
@@ -114,7 +116,7 @@ Judge the **evidence** against concrete signals: **Positioning · Proof · Burie
 Ask the one-or-several lanes question; infer from their direction materials and confirm. Draft the lane taxonomy (fields above).
 
 ### Step 5 — Ask (sharp, batched)
-Lead with: **"Before I tell you what I see — how do you feel about your resume right now?"** Then batch the Tier-1 gaps the materials can't answer, preferring choices over essays: **priority lanes** (confirm/reorder) · **comp** (target + floor) · **location/workstyle** (home metro + aliases; rate each setup — remote / hybrid-near / onsite-near / hybrid-elsewhere / onsite-elsewhere — as preferred/ok/stretch/no; relocate?; hard nos) · **custom factors** (1–2 idiosyncratic must-haves) · **weights** (default 35/30/20/15 across Want-it / Fit / Culture / Practicality). These answers also feed `jail.config.json`.
+Lead with: **"Before I tell you what I see — how do you feel about your resume right now?"** Then batch the Tier-1 gaps the materials can't answer, preferring choices over essays: **priority lanes** (confirm/reorder) · **comp** (target + floor) · **location/workstyle** (home metro + aliases; rate each setup — remote / hybrid-near / onsite-near / hybrid-elsewhere / onsite-elsewhere — as preferred/ok/stretch/no; relocate?; hard nos; if they'd have a preference among multiple office-city options — e.g. "NYC over SF over other cities" — capture that order as `location.city_priority`, else leave it empty) · **custom factors** (1–2 idiosyncratic must-haves) · **weights** (default 35/30/20/15 across Want-it / Fit / Culture / Practicality). These answers also feed `jail.config.json`.
 
 ### Step 6 — STAGE the review folder (do NOT write canonical instances yet)
 Create `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<MM-DD-YY> - Intake Review/` (folder via `date +%m-%d-%y`). Instantiate the review files **from the tracked skeletons in `.claude/skills/intake/review-templates/`** — copy each, then fill it with the actual proposed content for the person. Write all of:
@@ -145,7 +147,7 @@ After staging, tell the user, clearly and warmly:
 If they give corrections (chat or voice), update the staged files and **show what changed**. If they edited staged files directly, **reread those files from disk** before doing anything. If they add materials, log them in the inventory and re-stage the affected files. Loop until they're happy. Then ask the explicit truth gate: **"Do you feel like this is accurate enough to start ranking jobs, or do you want to add or correct anything first?"**
 
 ### Step 9 — PROMOTE on approval
-Only after explicit approval: **reread every staged review file from disk**, then write the **generated instances** by faithfully transcribing the reviewed content (see *Promotion discipline* and the map below). Stamp each with the approval marker. Generate the Tier-1 instances always; Tier-2 instances if you got that far (including **`05-summary-quick.md` and `06-skills-quick.md`** — these are required by tailoring). Update the inventory's "Fed into" column.
+Only after explicit approval: **reread every staged review file from disk**, then write the **generated instances** by faithfully transcribing the reviewed content (see *Promotion discipline* and the map below). Stamp each with the approval marker. Generate the Tier-1 instances always — the candidate profile must clear the **Candidate-profile quality bar** (below) before promotion; Tier-2 instances if you got that far (including **`05-summary-quick.md` and `06-skills-quick.md`** — these are required by tailoring). Update the inventory's "Fed into" column.
 
 ### Step 10 — Wrap
 Summarize what was promoted, what's strong, what to revisit, and the next move (add job URLs → run a batch → review rankings → tailor the top few). Remind them their instance files hold personal data and are gitignored, so they're never committed.
@@ -197,6 +199,16 @@ Stamp every promoted instance so the system can tell approved source-of-truth fr
 - **Never silently overwrite an approved instance.** In update mode, changes go through the staged review + approval first.
 - **Write instances, never templates.** Targets are the bare `.md` / `.json` paths (gitignored).
 - **Only defensible content.** If something isn't backed by evidence, it stays in `7 - Open Questions.md`, not in an instance.
+
+## Candidate-profile quality bar (Tier-1 — derive it, review it, don't promote a thin one)
+
+`PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md` is read on **every** job the pipeline scores, so a thin or preference-mixed profile quietly degrades every ranking. Hold it to this bar.
+
+**Derive first (from evidence, not a blank skeleton).** From the resume(s), experience materials, portfolio, and answers, derive: professional snapshot; seniority band (the real ceiling — do not undersell it); anchor employers + scope + scale; product types + industries; **core strengths, each with a proof anchor** (company / scale / outcome / artifact — never a bare label); **direct vs. transferable** evidence; current **technical + AI position** (grade AI by level — tool-fluency / hands-on building / production-scale / model-infra / eval-system — do not collapse to one binary); **management nuance** (separate leadership, mentoring, and founder-level hiring from sustained formal management of PM direct reports); **education**; and **narrow, genuine gaps** (precise, day-one — not a broad category that contradicts a demonstrated strength). Keep evidence and **opportunity preferences** (lanes, company/role/manager preferences, comp/location) in clearly separate sections; preferences never feed Profile Fit.
+
+**Then review with the user** — show the derived profile and ask focused questions (don't make them recreate what their materials already show): *What important capability is missing? What feels overstated? What looks too vague? Any area where you have hands-on but not production-scale experience? Do the gaps reflect real gaps or just missing evidence? Does the seniority match the roles you pursue? Does the management summary separate leadership/mentoring from formal direct-report management? Are the opportunity preferences accurate?*
+
+**Completeness gate (before promoting to canonical).** Do **not** silently promote a profile that: has generic strength labels with **no proof anchors**; **omits education**; **omits seniority**; omits scale/scope the materials clearly support; lists **detailed gaps but only vague strengths**; has no current-positioning context; **conflates a preference with a qualification**; contains a **broad gap that contradicts demonstrated evidence** (e.g. "no AI" for a hands-on AI builder); has **no review/approval marker**; or is **suspiciously thin relative to the materials on hand**. Don't use a crude word count — a concise profile is good, an evidence-starved one is not. If it trips the gate, flag it in `7 - Open Questions.md`, fill or ask, and promote only once it clears **and the user has approved**.
 
 ## Question discipline
 

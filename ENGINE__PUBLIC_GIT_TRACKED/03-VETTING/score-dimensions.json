@@ -1,0 +1,32 @@
+{
+  "_README": "Engine-owned DEFAULT score metadata (labels/weights/definitions) for the rankings workbook. Read once per vetting run (by vet-jobs.js) and written into a per-run '<batch>-rankings.meta.json' alongside the CSV/MD, which make_rankings_xlsx.py then reads as the effective source for that run's Instructions tab. This file is the single default owner for all users — no personal data belongs here. A user's own scoring card can override the ACTUAL weights via its '(weight: NN%)' section headers (already parsed separately); label/definition text is not yet per-user-overridable — these defaults apply to everyone until that becomes a real need.",
+  "order": ["final", "market", "desire", "style", "practicality"],
+  "final": {
+    "label": "FINAL Weighted Score",
+    "definition": "The overall prioritization score, calculated from the current weights assigned to the four dimensions. Use it as a starting point for deciding which opportunities to review first, not as an automatic decision."
+  },
+  "desire": {
+    "label": "Your Desire Score",
+    "schema_key": "desire_score",
+    "default_weight": 35,
+    "definition": "Estimates how much you'd likely want the role if hired and if logistics were workable. May consider mission, product, users, problems, scope, career direction, and personal interests. Should not primarily measure compensation, location, or whether the employer is likely to hire you."
+  },
+  "market": {
+    "label": "How They May See Your Profile",
+    "schema_key": "market_perception_score",
+    "default_weight": 30,
+    "definition": "Estimates how competitive and legible you may appear to this employer before tailoring, based on the canonical summary profile available during vetting and the job posting. It does not use the newly tailored resume. A preference for the company, mission, or lane is not evidence that the employer will see you as qualified."
+  },
+  "style": {
+    "label": "Culture Fit",
+    "schema_key": "company_style_score",
+    "default_weight": 20,
+    "definition": "Estimates how well the company's apparent working style, values, product culture, and environment may suit you, based on the evidence actually available. Job postings provide incomplete culture evidence. When little reliable information is available, this score should remain closer to neutral and should be treated as lower-confidence."
+  },
+  "practicality": {
+    "label": "Comp + Lifestyle Fit",
+    "schema_key": "practicality_score",
+    "default_weight": 15,
+    "definition": "Estimates how well compensation, location, work arrangement, travel, schedule, and other practical considerations fit your stated preferences. A lower score reduces the opportunity's priority but is not automatically a veto."
+  }
+}

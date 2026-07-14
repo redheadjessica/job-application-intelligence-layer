@@ -183,6 +183,10 @@ Even when ready, the actual edit to a canonical file is **always a separate, del
 
 ---
 
+## 8a. Profile-Fit-relevant learnings must also reach the VETTING candidate profile
+
+Reconcile's §8 "never edit canonical files" list (`01-profile.md`, `02-resume-index.md`, `03-approved-truths-and-boundary-rules.md`, `04-experience-bank.md`, `05-summary-quick.md`, `06-skills-quick.md`) is **tailoring-side only**. It does not include the **vetting** candidate profile (`PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md`) — which means, without this rule, a confirmed correction (education, seniority band, a narrowed or resolved gap, a new demonstrated strength) can update the tailoring canon and still never reach the file the vetting scorer actually reads. **Fix:** whenever a proposed source-update item would also change how the candidate is scored on Profile Fit or Company Style's Generalist-Fit sub-factor (education, seniority, AI positioning, management nuance, a strength or gap addition/removal), the queue item must **also** name `03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md` as a second target file. This follows the exact same gating as every other queue item (§9: confirmation or 2nd occurrence to reach "ready-to-apply"; the actual edit is always a separate human action) — it only ensures the *vetting* file isn't silently skipped because it lives outside the tailoring folder.
+
 ## 9a. Single occurrence is NOT moot (preservation + base/template candidates)
 
 The ≥2-occurrence threshold governs **only** the auto-promotion of *unconfirmed rule edits*. It does **not** mean a single-occurrence insight is discarded. Two things must always hold:

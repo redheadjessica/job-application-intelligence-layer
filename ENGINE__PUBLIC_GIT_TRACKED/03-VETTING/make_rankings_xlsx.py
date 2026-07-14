@@ -54,13 +54,46 @@ H_COMPANY = "Company"
 H_TITLE = "Job Post Title + Link"
 H_WORKLOC = "Working Location"
 H_COMPRANGE = "Comp Range"
-H_FINAL = "Final Score"
 H_LANEFIT = "Lane Fit"
 H_LOCFIT = "Location Fit"
 H_COMPFIT = "Comp Fit"
-SUB_SCORE_COLS = ["Desire Score", "Market Perception Score", "Company Style Score", "Practicality Score"]
-SCORE_COLS = [H_FINAL] + SUB_SCORE_COLS
 LEGEND_MERGE_TO = 10  # section bars merge A:J (columns 1..10 — the human-facing block)
+
+# ---- Score-column labels/weights/definitions are DYNAMIC (see load_meta / DEFAULT_METADATA below).
+# H_FINAL / SUB_SCORE_COLS / SCORE_COLS are no longer module-level constants — they are resolved once
+# per run inside build() from the per-run "<batch>-rankings.meta.json" written by vet-jobs.js (or this
+# DEFAULT_METADATA fallback, kept in sync with the engine-owned ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/
+# score-dimensions.json, if no meta file is found — e.g. when this script is run standalone). ----
+DEFAULT_METADATA = {
+    "order": ["final", "market", "desire", "style", "practicality"],
+    "final": {"label": "FINAL Weighted Score"},
+    "desire": {"label": "Your Desire Score", "weight_pct": 35,
+               "definition": "Estimates how much you'd likely want the role if hired and if logistics were workable. May consider mission, product, users, problems, scope, career direction, and personal interests. Should not primarily measure compensation, location, or whether the employer is likely to hire you."},
+    "market": {"label": "How They May See Your Profile", "weight_pct": 30,
+               "definition": "Estimates how competitive and legible you may appear to this employer before tailoring, based on the canonical summary profile available during vetting and the job posting. It does not use the newly tailored resume. A preference for the company, mission, or lane is not evidence that the employer will see you as qualified."},
+    "style": {"label": "Culture Fit", "weight_pct": 20,
+              "definition": "Estimates how well the company's apparent working style, values, product culture, and environment may suit you, based on the evidence actually available. Job postings provide incomplete culture evidence. When little reliable information is available, this score should remain closer to neutral and should be treated as lower-confidence."},
+    "practicality": {"label": "Comp + Lifestyle Fit", "weight_pct": 15,
+                     "definition": "Estimates how well compensation, location, work arrangement, travel, schedule, and other practical considerations fit your stated preferences. A lower score reduces the opportunity's priority but is not automatically a veto."},
+}
+
+
+def load_meta(csv_path) -> dict:
+    """Load the per-run '<batch>-rankings.meta.json' written by vet-jobs.js (sibling of the CSV).
+    Falls back to DEFAULT_METADATA per-key if the file is missing, unreadable, or incomplete —
+    this keeps the script usable standalone (tests, ad-hoc regeneration) without a meta file."""
+    p = Path(csv_path)
+    meta_path = p.with_name(p.stem + ".meta.json")
+    data = {}
+    try:
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        data = {}
+    merged = {}
+    for key in ("final", "desire", "market", "style", "practicality"):
+        merged[key] = {**DEFAULT_METADATA.get(key, {}), **(data.get(key) or {})}
+    merged["order"] = data.get("order") or DEFAULT_METADATA["order"]
+    return merged
 
 # ---- Status vocabulary: the 12 dropdown values (vet-jobs statusFor outputs are a subset). ----
 STATUS_VALUES = [
@@ -125,13 +158,17 @@ LOC_LABEL_ARR = {
     "Other hybrid": "other_hybrid", "Other onsite": "other_onsite",
 }
 
+# Structural (non-score) column widths — these header strings don't change with score relabeling.
 WIDTHS = {
     "Applied Date? [You Fill In]": 16, H_STATUS: 30, H_LANE: 22, H_COMPANY: 18, H_TITLE: 46,
-    H_WORKLOC: 22, H_COMPRANGE: 12, H_FINAL: 11, "Have Intro? [You Add]": 14, "Your Notes? [You Add]": 26,
-    "Decline/Down Date? [You Add]": 16, "Desire Score": 10, "Market Perception Score": 12,
-    "Company Style Score": 12, "Practicality Score": 12, "Mission Fit Notes": 40, "Scope Fit Notes": 40,
-    "Top Reasons Notes": 46, "Top Concerns": 46, H_LANEFIT: 22, H_LOCFIT: 18, H_COMPFIT: 16, "Job File": 28,
+    H_WORKLOC: 22, H_COMPRANGE: 12, "Have Intro? [You Add]": 14, "Your Notes? [You Add]": 26,
+    "Decline/Down Date? [You Add]": 16, "Mission Fit Notes": 40, "Scope Fit Notes": 40,
+    "Top Reasons Notes": 46, "Top Concerns": 46, "Job File": 28, "Base Resume Used": 26,
+    H_LANEFIT: 22, H_LOCFIT: 18, H_COMPFIT: 16,
 }
+# Score-column widths, keyed by dimension (not by the dynamic label string) — applied at runtime
+# once the effective labels are resolved, since the label text itself may change per-run.
+SCORE_WIDTHS_BY_KEY = {"final": 13, "market": 30, "desire": 11, "style": 12, "practicality": 16}
 
 
 # --------------------------------------------------------------------------- #
@@ -153,6 +190,18 @@ def config_complete_enough(cfg) -> bool:
     has_comp = comp.get("floor_base") is not None or comp.get("target_base") is not None
     has_loc = any(v is not None for v in loc.values())
     return has_comp or has_loc
+
+
+def resolve_submitted_applications_link(cfg):
+    """Explicit, config-owned destination ONLY — no directory scanning, no year inference, no
+    "latest folder" guessing. Returns (path_or_None, warning_or_None); caller renders a working link
+    when a path comes back, or a clear warning (never a silently-guessed alternate) when it doesn't."""
+    configured = ((cfg.get("archive") or {}).get("current_year_path") or "").strip()
+    if not configured:
+        return None, "No submitted-applications path is configured — set \"archive.current_year_path\" in jail.config.json to enable this link."
+    if not Path(configured).is_dir():
+        return None, f"Configured submitted-applications path does not exist: {configured} — check \"archive.current_year_path\" in jail.config.json."
+    return configured, None
 
 
 def comp_color(label) -> str:
@@ -219,9 +268,10 @@ def parse_title_link(val):
     return val.strip(), None
 
 
-def read_records(path):
+def read_records(path, score_cols):
     """Return (headers, records). Records are data dicts keyed by header, order preserved
-    (vet-jobs already sorted by final score). The CSV carries no divider rows."""
+    (vet-jobs already sorted by final score). The CSV carries no divider rows.
+    score_cols: the 5 effective score-column header strings (int-parsed for conditional formatting)."""
     with open(path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
     headers = [h.strip() for h in rows[0]]
@@ -230,7 +280,7 @@ def read_records(path):
         if not any(c.strip() for c in row):
             continue
         rec = {headers[i]: (row[i] if i < len(row) else "") for i in range(len(headers))}
-        for s in SCORE_COLS:
+        for s in score_cols:
             v = str(rec.get(s, "")).strip()
             rec[s] = int(v) if v.lstrip("-").isdigit() else (v or None)
         records.append(rec)
@@ -260,31 +310,76 @@ INSTRUCTIONS = [
     ("Colors & the dropdown", True),
     ("Status / Lane / Location Fit / Comp Fit cells are color-coded. In Google Sheets you can layer the native rounded \"chip\" dropdown on top if you prefer that look (that is a Sheets feature, not part of the file).", False),
     ("", False),
-    ("AI detail columns (to the right)", True),
-    ("Everything from \"Desire Score\" rightward is AI-generated.  \"Lane\" = what the job actually is;  \"Lane Fit\" = how that maps to your target lanes.", False),
+    ("AI detail columns", True),
+    ("The score block (below) and the notes/detail columns to the right of it are AI-generated.  \"Lane\" = what the job actually is;  \"Lane Fit\" = how that maps to your target lanes.", False),
     ("", False),
     ("CSV companion", True),
     ("A matching .csv has the same columns + job rows (no colors, dropdown, legend, or tabs).", False),
 ]
 
 
-def build_instructions(ws):
+def build_score_section(meta):
+    """The dynamic 'How to read these rankings' section — labels, weights, and definitions come from
+    the per-run meta (score-dimensions.json defaults, or the candidate's scoring card where weights
+    override it), NOT hardcoded here, so this stays correct if a user changes their scoring system."""
+    order = meta.get("order") or DEFAULT_METADATA["order"]
+    rows = [("How to read these rankings", True),
+            ("Jobs are scored across four independent dimensions. A high or low score in one area should not automatically pull the other scores toward it.", False),
+            ("", False)]
+    for key in order:
+        dim = meta.get(key) or DEFAULT_METADATA.get(key, {})
+        label = dim.get("label", key)
+        weight = dim.get("weight_pct")
+        header = f"{label}" + (f"  (weight: {weight}%)" if key != "final" and weight is not None else "")
+        rows.append((header, True))
+        if dim.get("definition"):
+            rows.append((dim["definition"], False))
+        rows.append(("", False))
+    return rows
+
+
+def build_instructions(ws, meta=None, archive_link=None, archive_warning=None):
+    meta = meta or DEFAULT_METADATA
     ws.column_dimensions["A"].width = 110
     t = ws.cell(1, 1, "How to use this tracker")
     t.font = Font(name=FONT, bold=True, size=14, color="305496")
     r = 3
-    for text, is_header in INSTRUCTIONS:
+    for text, is_header in INSTRUCTIONS + build_score_section(meta):
         c = ws.cell(r, 1, text)
         c.font = Font(name=FONT, bold=is_header, size=11, color=("305496" if is_header else "000000"))
         c.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
         r += 1
+    r += 1
+    hdr = ws.cell(r, 1, "Submitted Applications")
+    hdr.font = Font(name=FONT, bold=True, size=11, color="305496")
+    r += 1
+    if archive_link:
+        link_cell = ws.cell(r, 1, archive_link)
+        link_cell.hyperlink = f"file://{archive_link}"
+        link_cell.font = Font(name=FONT, size=11, color="0563C1", underline="single")
+        link_cell.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+    else:
+        note = ws.cell(r, 1, archive_warning or "Submitted-applications link not configured.")
+        note.font = Font(name=FONT, italic=True, size=10, color=("C00000" if archive_warning else "808080"))
+        note.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
 
 
 def build(input_csv, output_xlsx, config_path=None, quarantined=0):
     if not HAVE_OPENPYXL:
         raise RuntimeError("openpyxl is required to build the .xlsx (install requirements.txt in the venv).")
     cfg = load_config(config_path)
-    headers, records = read_records(input_csv)
+    meta = load_meta(input_csv)
+    order = meta.get("order") or DEFAULT_METADATA["order"]
+    # Effective score-column header strings for THIS run, in the requested display order — resolved
+    # from meta (the scoring card's actual weights + score-dimensions.json's labels), not hardcoded.
+    label_of = {k: meta[k]["label"] for k in order}
+    H_FINAL = label_of["final"]
+    SUB_SCORE_COLS = [label_of[k] for k in order if k != "final"]
+    SCORE_COLS = [H_FINAL] + SUB_SCORE_COLS
+    for key in order:
+        WIDTHS[label_of[key]] = SCORE_WIDTHS_BY_KEY.get(key, 14)
+
+    headers, records = read_records(input_csv, SCORE_COLS)
     ncols = len(headers)
     letter = {h: get_column_letter(i + 1) for i, h in enumerate(headers)}
     legend_letter = get_column_letter(LEGEND_MERGE_TO)
@@ -292,7 +387,8 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
     wb = Workbook()
     ws = wb.active
     ws.title = "Job Rankings"
-    build_instructions(wb.create_sheet("Instructions"))   # second tab
+    archive_link, archive_warning = resolve_submitted_applications_link(cfg)
+    build_instructions(wb.create_sheet("Instructions"), meta=meta, archive_link=archive_link, archive_warning=archive_warning)   # second tab
 
     THIN = Side(style="thin", color="D9D9D9")
     BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -410,7 +506,7 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         cell = ws.cell(br, 1, label)
         cell.fill = solid(fill_hex)
         cell.font = Font(name=FONT, bold=True, size=11, color=font_hex)
-        cell.alignment = Alignment(horizontal="left", vertical="center")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
         ws.row_dimensions[br].height = 20
 
     wb.save(output_xlsx)

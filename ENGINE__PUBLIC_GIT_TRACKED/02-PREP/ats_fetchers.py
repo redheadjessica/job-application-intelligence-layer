@@ -62,6 +62,8 @@ def fetch_via_ats(url: str, timeout: int = 20) -> Optional[dict]:
             return _fetch_ashby(url, timeout=timeout)
         if host.endswith("greenhouse.io"):
             return _fetch_greenhouse(url, timeout=timeout)
+        if host.endswith("lever.co"):
+            return _fetch_lever(url, timeout=timeout)
         if "linkedin.com" in host:
             return _fetch_linkedin(url, timeout=timeout)
     except Exception:
@@ -383,6 +385,182 @@ def _fetch_greenhouse(url: str, timeout: int = 20) -> Optional[dict]:
         "text": text,
         "source": "greenhouse-boards-api",
     }
+
+
+# --------------------------------------------------------------------------- #
+# Lever
+# --------------------------------------------------------------------------- #
+
+def _lever_ids(url: str):
+    """Return (company, posting_id) for a Lever URL: jobs.lever.co/{company}/{uuid}[/apply][?...]."""
+    parsed = urlparse(url)
+    parts = [unquote(p) for p in parsed.path.split("/") if p]
+    if not parts:
+        return None, None
+    company = parts[0]
+    posting_id = None
+    for p in parts[1:]:
+        if UUID_RE.fullmatch(p):
+            posting_id = p.lower()
+            break
+    if posting_id is None:
+        m = UUID_RE.search(url)
+        posting_id = m.group(0).lower() if m else None
+    return company, posting_id
+
+
+def _fetch_lever(url: str, timeout: int = 20) -> Optional[dict]:
+    """Fetch a Lever job posting from its public per-posting JSON endpoint:
+    https://api.lever.co/v0/postings/{company}/{postingId}?mode=json
+    """
+    company_slug, posting_id = _lever_ids(url)
+    if not company_slug or not posting_id:
+        return None
+
+    resp = requests.get(
+        f"https://api.lever.co/v0/postings/{company_slug}/{posting_id}",
+        params={"mode": "json"},
+        headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+        timeout=timeout,
+    )
+    if resp.status_code != 200:
+        return None
+    job = resp.json()
+    if not isinstance(job, dict):
+        return None
+
+    cats = job.get("categories") or {}
+    location = cats.get("location")
+    employment_type = cats.get("commitment")
+
+    body_html = "\n".join(
+        part for part in [job.get("descriptionPlain"), job.get("description")] if part
+    ) if not job.get("lists") else None
+    # Lever splits the body into a top description + labeled "lists" (Responsibilities, etc).
+    parts_html = [job.get("description") or ""]
+    for section in (job.get("lists") or []):
+        text = section.get("text") or ""
+        content = section.get("content") or ""
+        parts_html.append(f"{text}\n{content}")
+    if job.get("additional"):
+        parts_html.append(job["additional"])
+    body = _html_to_text("\n".join(p for p in parts_html if p)) or (body_html or "")
+    if not body:
+        return None
+
+    comp = None
+    salary = job.get("salaryRange") or job.get("compensation")
+    if isinstance(salary, dict):
+        lo, hi, cur = salary.get("min"), salary.get("max"), salary.get("currency") or ""
+        if lo or hi:
+            comp = f"{cur} {lo or ''}-{hi or ''}".strip()
+    elif isinstance(salary, str):
+        comp = salary
+
+    company = _prettify_slug(company_slug)
+    text = _compose_lever_text(location, employment_type, comp, body)
+
+    return {
+        "title": (job.get("text") or "").strip() or "Unknown Title",
+        "company": company,
+        "location": location,
+        "employment_type": employment_type,
+        "remote": None,
+        "compensation": comp,
+        "apply_url": job.get("applyUrl") or job.get("hostedUrl") or url,
+        "text": text,
+        "source": "lever-postings-api",
+    }
+
+
+def _compose_lever_text(location, employment_type, comp, body: str) -> str:
+    lines = []
+    if location:
+        lines.append(f"Location: {location}")
+    if employment_type:
+        lines.append(f"Employment Type: {employment_type}")
+    if comp:
+        lines.append(f"Compensation: {comp}")
+    header = "\n".join(lines)
+    return f"{header}\n\n{body}".strip() if header else body
+
+
+# --------------------------------------------------------------------------- #
+# Generic JSON-LD JobPosting (schema.org) — for non-ATS company career sites.
+# Safe because it's the page's own structured data for THIS job, never a sibling/
+# related-jobs sidebar (unlike a raw text search for a city name, which can pick up
+# an unrelated posting listed elsewhere on the page).
+# --------------------------------------------------------------------------- #
+
+_JSONLD_RE = re.compile(
+    r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', re.I | re.S
+)
+
+
+def extract_jsonld_jobposting(html: str) -> Optional[dict]:
+    """Scan <script type="application/ld+json"> blocks for a schema.org JobPosting and
+    return {"location": str|None, "employment_type": str|None, "compensation": str|None},
+    or None if no JobPosting block is found. Handles a bare object, an @graph array, or a
+    top-level JSON array of blocks."""
+    import json as _json
+
+    for raw in _JSONLD_RE.findall(html or ""):
+        try:
+            data = _json.loads(html.unescape(raw.strip()))
+        except Exception:
+            continue
+        candidates = data if isinstance(data, list) else [data]
+        for c in candidates:
+            if isinstance(c, dict) and isinstance(c.get("@graph"), list):
+                candidates = candidates + c["@graph"]
+        for node in candidates:
+            if not isinstance(node, dict):
+                continue
+            types = node.get("@type")
+            types = types if isinstance(types, list) else [types]
+            if not any(str(t).lower() == "jobposting" for t in types if t):
+                continue
+            location = _jsonld_location(node.get("jobLocation"))
+            employment_type = node.get("employmentType")
+            if isinstance(employment_type, list):
+                employment_type = ", ".join(str(e) for e in employment_type)
+            comp = _jsonld_compensation(node.get("baseSalary"))
+            if location or employment_type or comp:
+                return {"location": location, "employment_type": employment_type, "compensation": comp}
+    return None
+
+
+def _jsonld_location(job_location) -> Optional[str]:
+    nodes = job_location if isinstance(job_location, list) else [job_location]
+    parts = []
+    for n in nodes:
+        if not isinstance(n, dict):
+            continue
+        addr = n.get("address") or {}
+        if isinstance(addr, dict):
+            locality = addr.get("addressLocality")
+            region = addr.get("addressRegion")
+            piece = ", ".join(p for p in [locality, region] if p)
+            if piece:
+                parts.append(piece)
+    if parts:
+        return "; ".join(dict.fromkeys(parts))  # dedupe, preserve order
+    # applicantLocationRequirements (remote postings sometimes use this instead)
+    return None
+
+
+def _jsonld_compensation(base_salary) -> Optional[str]:
+    if not isinstance(base_salary, dict):
+        return None
+    val = base_salary.get("value") or {}
+    if not isinstance(val, dict):
+        return None
+    lo, hi, unit = val.get("minValue"), val.get("maxValue"), val.get("unitText") or ""
+    currency = base_salary.get("currency") or ""
+    if lo or hi:
+        rng = f"{lo or ''}-{hi or ''}".strip("-")
+        return f"{currency} {rng} {unit}".strip()
+    return None
 
 
 # --------------------------------------------------------------------------- #

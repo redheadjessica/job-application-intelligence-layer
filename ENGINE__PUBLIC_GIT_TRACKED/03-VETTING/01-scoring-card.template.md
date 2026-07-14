@@ -46,3 +46,29 @@
      Only treat on-site as a burden when the posting actually requires it (and weigh the day count). -->
 <!-- The structured comp numbers + location/workstyle preferences ALSO live in jail.config.json (the machine-readable
      source for later candidate-relative ranking/coloring). Intake fills both from the same answers; keep them in sync. -->
+
+---
+
+## Fair-scoring rules — apply to every dimension
+
+<!-- GENERAL scoring protections, identical for every user. Intake copies this block verbatim into the
+     generated instance; keep it, and do NOT personalize it with names, companies, or salary numbers. -->
+
+**Use the full 0–100 range.** Don't compress most jobs into a narrow middle. Reserve very low scores for fundamental or multiple central mismatches and very high scores for unusually strong matches. The goal is realistic *differentiation* — never force a batch to contain high scores, and never inflate a weak match.
+
+**Fit — how strong a candidate you'd look to them:**
+- Score from EVIDENCE of qualification, **not** from how much the candidate *wants* the role, lane, or mission. Being outside a preferred lane is not a weaker fit.
+- Distinguish evidence strength: direct · transferable · light · absent · unknown. Give real credit for strong **transferable** evidence.
+- **Omission ≠ absence:** a summary profile that doesn't mention something is not proof the candidate lacks it — treat a requirement with no signal as *unknown*, not *failed*.
+- **Count one gap once** — don't deduct the same underlying gap across several sub-factors; let the weakest *central* requirement set the ceiling.
+- **Imperfect ≠ implausible.** A missing nice-to-have costs a few points, not twenty.
+- **Day-one gate vs. learnable:** if the posting says an area isn't required or can be grown into, don't score it as a hard gate.
+- **AI is not binary:** distinguish (1) AI-tool fluency · (2) hands-on AI building · (3) production-scale deployment · (4) model/infra ownership · (5) mature eval-system operation. Wanting (1)–(2) is a fair-to-strong fit for a hands-on builder; only years of (3)–(5) required at day one should pull a candidate without them materially down.
+- **Education:** "a degree" or "business/product degree accepted" is satisfied by a business degree; "CS preferred" is a modest concern at most; only "CS required" / "former-engineer / regular production coding" is a material gate. A missing CS degree is not a universal PM weakness.
+
+**Culture — how well their style suits you:**
+- A job posting is thin evidence of real culture. When it reveals little, **score neutrally and treat confidence as low** — don't manufacture a vibe from generic corporate adjectives, don't assume published values equal lived culture, and don't infer manager quality with no manager evidence.
+- Grind language ("fast-paced," "ambitious," "high performance") is not automatically negative — score down only for relentless hustle, normalized overwork, aggression, or contempt for boundaries.
+- **Mission ≠ culture:** don't reward Culture just because the candidate likes the mission (that's "Want it"), and don't let mission or culture move the Fit score.
+
+**Practicality:** low comp is a **penalty, not a veto** — reflect the hit, but don't disqualify a strong opportunity on comp alone. Skill/qualification gaps belong in Fit, never here.

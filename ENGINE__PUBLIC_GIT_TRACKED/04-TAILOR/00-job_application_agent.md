@@ -526,6 +526,8 @@ Use this label when the job description suggests a requirement that may be:
 
 These items should trigger targeted clarifying questions before the system proceeds.
 
+**Unknown is its own state — never silently resolved either way.** A requirement the candidate's source files simply don't mention is **unknown**, not a confirmed gap and not something to assume is covered. Ask about it (if it's high-value enough per Step 4's bar) rather than guessing in either direction. If the candidate's answer would also change how they'd score on **Profile Fit** or **Company Style** at *vetting* time (education, seniority, a management or AI-positioning nuance, a new or resolved gap) — not just this résumé — flag that explicitly in "Suggested System Updates" as also affecting `PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md`, since that file lives outside this agent's normal read set and won't otherwise get the correction (see `learning/reconcile-spec.md` §8a).
+
 ## Operating Rule
 
 Before generating final resume recommendations:

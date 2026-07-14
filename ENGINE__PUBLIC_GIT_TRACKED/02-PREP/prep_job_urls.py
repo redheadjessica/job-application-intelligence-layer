@@ -20,7 +20,7 @@ import trafilatura
 from bs4 import BeautifulSoup
 
 import prep_common
-from ats_fetchers import ats_company_from_url, fetch_via_ats
+from ats_fetchers import ats_company_from_url, extract_jsonld_jobposting, fetch_via_ats
 
 HEADERS = {
     "User-Agent": (
@@ -36,16 +36,34 @@ def fetch_html(url: str, timeout: int = 20) -> str:
     return resp.text
 
 
+_OG_TITLE_ROLE_RE = re.compile(r"(?:is (?:looking for|hiring))\s+(?:an?\s+)?(.+?)\.?\s*$", re.I)
+
+
 def extract_title(html: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     og = soup.find("meta", attrs={"property": "og:title"})
     if og and og.get("content"):
-        return og["content"].strip()
+        og_text = og["content"].strip()
+        # Some board pages (e.g. Jobvite) write og:title as a full sentence like
+        # "<Company> is looking for <Role>." — pull the actual role out of that pattern
+        # instead of using the sentence verbatim (which buries the role at the end).
+        m = _OG_TITLE_ROLE_RE.search(og_text)
+        if m and m.group(1).strip():
+            return m.group(1).strip()
+        return og_text
+    # h1 is sometimes the BOARD/company chrome ("Acme Careers"), not the job title, with the
+    # real title in a following h2 — prefer h2 when h1 looks like company/site chrome rather
+    # than a role (no digits/role-ish words) and a distinct, shorter h2 exists.
+    h1 = soup.find("h1")
+    h1_text = h1.get_text(" ", strip=True) if h1 else ""
+    h2 = soup.find("h2")
+    h2_text = h2.get_text(" ", strip=True) if h2 else ""
+    if h1_text and h2_text and h2_text.lower() not in h1_text.lower() and re.search(r"(?i)career|jobs?\b", h1_text):
+        return h2_text
     if soup.title and soup.title.string:
         return soup.title.string.strip()
-    h1 = soup.find("h1")
-    if h1:
-        return h1.get_text(" ", strip=True)
+    if h1_text:
+        return h1_text
     return "Unknown Title"
 
 
@@ -88,6 +106,18 @@ def fetch_one(url: str) -> dict:
         title = extract_title(html)
         company = detect_company(url, title)
         body = extract_clean_text(html, url)
+        # Non-ATS sites often carry their own structured JobPosting data (schema.org, for SEO)
+        # that trafilatura's main-content extraction can drop (it favors the article body over
+        # header/metadata regions). Prepend it as a "Location:" line, same shape the ATS
+        # fetchers already use, so the scorer treats it as ground truth either way.
+        jobposting = extract_jsonld_jobposting(html)
+        if jobposting and jobposting.get("location") and "location:" not in body[:200].lower():
+            header_lines = [f"Location: {jobposting['location']}"]
+            if jobposting.get("employment_type"):
+                header_lines.append(f"Employment Type: {jobposting['employment_type']}")
+            if jobposting.get("compensation"):
+                header_lines.append(f"Compensation: {jobposting['compensation']}")
+            body = "\n".join(header_lines) + "\n\n" + body
         return {"ok": True, "title": title, "company": company, "body": body,
                 "method": "requests", "error": None}
     except Exception as e:

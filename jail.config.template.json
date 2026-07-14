@@ -1,12 +1,13 @@
 {
-  "_README": "Copy to jail.config.json (gitignored); /intake fills it. The engine reads the instance, never this template. comp.*_base are in thousands. location.arrangements ratings use the vocabulary: preferred | ok | stretch | no | null (unknown). location.relocate uses: never | exceptional | yes | null. lanes mirror the profile's priority lanes as {id, name, priority}.",
+  "_README": "Copy to jail.config.json (gitignored); /intake fills it. The engine reads the instance, never this template. comp.*_base are in thousands. location.arrangements ratings use the vocabulary: preferred | ok | stretch | no | null (unknown). location.relocate uses: never | exceptional | yes | null. lanes mirror the profile's priority lanes as {id, name, priority}. archive.current_year_path is the ONE explicit folder the rankings workbook links to for 'Submitted Applications' — set it to your actual current submitted-applications folder (e.g. this year's subfolder under archive.path); the workbook never scans for it or guesses a 'latest' folder, so update this value yourself when you start a new year/period. location.city_priority is an ORDERED list of your preferred cities (short form, e.g. ['NYC','SF']) — when a posting offers a choice of multiple office cities, the vetter lists them in THIS priority order first (any other named cities follow, in the order the posting listed them). Leave empty ([]) if you have no city preference beyond home_metro.",
   "schema_version": 1,
   "approved": null,
-  "archive": { "path": "PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO", "year_subfolders": true },
+  "archive": { "path": "PRIVATE__YOUR_FILES_GITIGNORED/05-SUBMITTED-APPLICATIONS__YOUR_PRIVATE_INFO", "year_subfolders": true, "current_year_path": null },
   "comp": { "currency": "USD", "target_base": null, "floor_base": null },
   "location": {
     "home_metro": null,
     "home_metro_aliases": [],
+    "city_priority": [],
     "relocate": null,
     "arrangements": {
       "remote": null,

@@ -61,9 +61,9 @@ const SCORE_SCHEMA = {
   properties: {
     company: { type: 'string' },
     title_and_link: { type: 'string', description: 'Role Title | URL, or just the title if no URL' },
-    location: { type: 'string', description: 'Normalized location. RULES: fully remote -> "Remote". Remote but restricted to certain US states -> "Remote (states: CA/NY/TX/...)". In-office/hybrid in NYC -> "IRL NYC - N days" where N is the required in-office days per week if stated, else "unknown days"; append specific days if named, e.g. "IRL NYC - 3 days (Mon/Tue/Thu standard)". In-office elsewhere -> "IRL <City> - N days". Unknown -> "Unknown". ALWAYS use "IRL" (never "Hybrid"). A bare "Location: <City>" line is usually the company HQ, NOT a relocation requirement -> only treat as in-office if the posting actually requires on-site presence; otherwise look for the real workplace type (Remote/Hybrid/On-site) and the exact required day count.' },
+    location: { type: 'string', description: 'Normalized location. RULES: fully remote -> "Remote". Remote but restricted to certain US states -> "Remote (states: CA/NY/TX/...)". In-office/hybrid in NYC -> "IRL NYC - N days" where N is the required in-office days per week if stated, else "unknown days"; append specific days if named, e.g. "IRL NYC - 3 days (Mon/Tue/Thu standard)". In-office elsewhere -> "IRL <City> - N days" (or "IRL <City> - unknown days" if arrangement/day-count is not stated). ABBREVIATE major cities to their common short form: "New York City"/"New York, NY" -> "NYC", "San Francisco" -> "SF" (use other standard short forms similarly, e.g. "LA", "DC" — only when unambiguous; keep less-common city names spelled out). MULTI-CITY postings (the role can be based in any of several named cities): join them with "/" in the candidate's preferred order (see the <preferences> location.city_priority list — candidate-priority cities first, in that order, then any other named cities in the posting\'s own order), e.g. "NYC/SF/Austin - 3 days". IMPORTANT: if a city or office location is named ANYWHERE in the posting (title, header, comp-transparency line, etc.) but the remote/hybrid/onsite arrangement or day count is not stated, still use "IRL <City> - unknown days" — do NOT fall back to bare "Unknown" just because the arrangement type is unclear; a named city is real signal, not nothing. Only use "Unknown" when the posting gives NO location signal at all — no city, no remote/hybrid/onsite mention, nothing. ALWAYS use "IRL" (never "Hybrid"). A bare "Location: <City>" line is usually the company HQ, NOT a relocation requirement -> only treat as in-office if the posting actually requires on-site presence; otherwise look for the real workplace type (Remote/Hybrid/On-site) and the exact required day count.' },
     comp_range: { type: 'string', description: 'lowest-highest in thousands, no $ or commas, e.g. 190-210, or ?? if unknown' },
-    lane: { type: 'string', description: 'The job’s ACTUAL category/lane, in the job’s OWN terms (2-5 words) — what the role IS, independent of the candidate. Do NOT map it to the candidate’s lanes. E.g. "AI Product Marketing", "Developer Tools PM", "Product Strategy / AI Research", "Lifecycle Marketing".' },
+    lane: { type: 'string', description: 'The job’s category as "<Bucket> - <Subcategory>", in the job’s OWN terms, independent of the candidate. Bucket = the closest fit from this small, reusable set: Health, Consumer, Work Tools, Other (introduce a new bucket only if truly none of these fit — keep the bucket set small). Subcategory = the most specific 1-4 word descriptor for what the job actually IS within that bucket. Examples: "Health - DTC Supplements", "Health - Provider Tools", "Health - Consumer Wellness", "Consumer - Home Sharing", "Work Tools - Legal", "Work Tools - Collaboration", "Work Tools - Consumer Research", "Other - Fintech". Reuse an existing subcategory phrasing across jobs with the same fit rather than inventing near-duplicate wording (always "Work Tools - Collaboration" for general collab/productivity software, not sometimes "Work Tools - Collab Software") — the point is a consistent, scalable taxonomy, not a one-off description.' },
     lane_fit: {
       type: 'object', additionalProperties: false,
       required: ['primary_lane', 'secondary_lane', 'confidence', 'note'],
@@ -107,12 +107,14 @@ log(`Found ${discovery.jobs.length} jobs in ${discovery.root} — scoring in par
 
 // Load rubric + profile ONCE and inline them into every scoring prompt, instead of
 // having all N scoring agents each re-read the same two files (N x 2 redundant reads).
+const DIMENSIONS_FILE = 'ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/score-dimensions.json'
 const REFS_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['rubric', 'profile', 'weights'],
   properties: {
     rubric: { type: 'string' },
     profile: { type: 'string' },
     config: { type: 'string', description: 'Full raw contents of jail.config.json (structured candidate preferences), or "" if the file does not exist' },
+    dimensions: { type: 'string', description: `Full raw JSON text of ${DIMENSIONS_FILE} (engine-owned default score labels/weights/definitions), or "" if it cannot be read` },
     weights: {
       type: 'object', additionalProperties: false,
       required: ['desire', 'market', 'style', 'practicality'],
@@ -129,10 +131,38 @@ const refs = await agent(
 - ${RUBRIC}  -> field "rubric"
 - ${PROFILE} -> field "profile"
 - jail.config.json -> field "config" (the candidate's structured preferences; if the file does not exist, return "" for config)
+- ${DIMENSIONS_FILE} -> field "dimensions" (engine-owned default score labels/weights/definitions; if it cannot be read, return "" for dimensions)
 
 Also extract the FOUR dimension weights from the scoring card's section headers, which look like "(weight: NN%)". Return them as raw percentages in "weights", in the order the dimensions appear: 1st -> weights.desire, 2nd -> weights.market, 3rd -> weights.style, 4th -> weights.practicality (e.g. 35, 30, 20, 15). If the card does not clearly state weights, return 0 for all four.`,
-  { phase: 'Discover', model: 'haiku', schema: REFS_SCHEMA, label: 'load rubric+profile' }
+  { phase: 'Discover', model: 'haiku', schema: REFS_SCHEMA, label: 'load rubric+profile+dimensions' }
 )
+
+// ---- Resolve score-column labels + definitions from the engine's shared metadata file ----
+// score-dimensions.json is the single default owner (see that file's _README). This literal object
+// is a DEFENSIVE FALLBACK only, kept in sync with it, used if the file can't be read at runtime.
+const FALLBACK_DIMS = {
+  order: ['final', 'market', 'desire', 'style', 'practicality'],
+  final: { label: 'FINAL Weighted Score' },
+  desire: { label: 'Your Desire Score', schema_key: 'desire_score', default_weight: 35,
+    definition: "Estimates how much you'd likely want the role if hired and if logistics were workable. May consider mission, product, users, problems, scope, career direction, and personal interests. Should not primarily measure compensation, location, or whether the employer is likely to hire you." },
+  market: { label: 'How They May See Your Profile', schema_key: 'market_perception_score', default_weight: 30,
+    definition: 'Estimates how competitive and legible you may appear to this employer before tailoring, based on the canonical summary profile available during vetting and the job posting. It does not use the newly tailored resume. A preference for the company, mission, or lane is not evidence that the employer will see you as qualified.' },
+  style: { label: 'Culture Fit', schema_key: 'company_style_score', default_weight: 20,
+    definition: "Estimates how well the company's apparent working style, values, product culture, and environment may suit you, based on the evidence actually available. Job postings provide incomplete culture evidence. When little reliable information is available, this score should remain closer to neutral and should be treated as lower-confidence." },
+  practicality: { label: 'Comp + Lifestyle Fit', schema_key: 'practicality_score', default_weight: 15,
+    definition: "Estimates how well compensation, location, work arrangement, travel, schedule, and other practical considerations fit your stated preferences. A lower score reduces the opportunity's priority but is not automatically a veto." },
+}
+let DIMS = FALLBACK_DIMS
+try {
+  if (refs && refs.dimensions && refs.dimensions.trim()) {
+    const parsed = JSON.parse(refs.dimensions)
+    if (parsed && parsed.final && parsed.desire && parsed.market && parsed.style && parsed.practicality) DIMS = parsed
+  }
+} catch (_) { /* keep FALLBACK_DIMS */ }
+const LABELS = {
+  final: DIMS.final.label, desire: DIMS.desire.label, market: DIMS.market.label,
+  style: DIMS.style.label, practicality: DIMS.practicality.label,
+}
 // Required-file guard (V2 template/instance split): the rubric + profile are GENERATED
 // instances produced by /intake, not tracked templates. If they're missing/empty, stop with
 // an actionable message rather than scoring against nothing.
@@ -167,6 +197,22 @@ ${refs.profile}
 let CFG = {}
 try { CFG = (refs && refs.config && refs.config.trim()) ? JSON.parse(refs.config) : {} } catch (_) { CFG = {} }
 
+// ---- First-run completeness nudge ----
+// Comp Fit / Location Fit / Lane coloring all fall back to neutral/grey when these are missing —
+// silently, unless someone happens to open the xlsx and notice the Instructions-tab comment. Flag
+// it loudly up front instead, especially useful for a brand-new user's very first batch.
+{
+  const comp = (CFG && CFG.comp) || {}
+  const locArr = (CFG && CFG.location && CFG.location.arrangements) || {}
+  const hasComp = comp.floor_base != null || comp.target_base != null
+  const hasLoc = Object.values(locArr).some((v) => v != null)
+  const hasLanes = Array.isArray(CFG && CFG.lanes) && CFG.lanes.length > 0
+  if (!hasComp || !hasLoc || !hasLanes) {
+    const missing = [!hasComp && 'comp target/floor', !hasLoc && 'location arrangement ratings', !hasLanes && 'lanes'].filter(Boolean).join(', ')
+    log(`⚠ jail.config.json is missing: ${missing}. Comp Fit / Location Fit / Lane coloring will be neutral until this is filled in — run /intake (or its update mode) to complete it.`)
+  }
+}
+
 // ---- Phase 2: score each job concurrently ----
 phase('Score')
 const scored = await parallel(discovery.jobs.map((job) => async () => {
@@ -187,9 +233,9 @@ Scoring rules:
 - Do NOT compute the final score or status — that is handled downstream. Just return the four sub-scores and the fields below.
 - Be decisive. Don't over-index on title. Reflect comp/location tradeoffs in practicality_score, not by skipping.
 - comp_range: lowest-highest base across all bands shown, in whole thousands, no $ or commas (e.g. 190-210); "??" if unknown.
-- location: normalize per the schema rules. CAREFULLY determine the real workplace type from the posting: look for explicit Remote / Hybrid / On-site tags, the exact required in-office DAYS PER WEEK, and any US-state hiring restrictions. Use "IRL NYC - N days" with the exact day count when stated ("unknown days" if not) — NEVER just "Hybrid". Treat a bare "Location: <City>" line as the company HQ, not a relocation requirement, unless the posting actually requires on-site presence. If remote but restricted to specific US states, list them as "Remote (states: ...)".
+- location: normalize per the schema rules. CAREFULLY determine the real workplace type from the posting: look for explicit Remote / Hybrid / On-site tags, the exact required in-office DAYS PER WEEK, and any US-state hiring restrictions. Use "IRL NYC - N days" with the exact day count when stated ("unknown days" if not) — NEVER just "Hybrid". Abbreviate major cities to their common short form (NYC, SF, LA, DC, etc. — only when unambiguous). If the posting names MULTIPLE candidate office cities, join them with "/" in the candidate's city_priority order from <preferences> (priority cities first, in that order; any other named cities after, in the posting's own order) — e.g. "NYC/SF/Austin - 3 days". If a city/office location is named ANYWHERE in the posting but the arrangement or day count isn't stated, still output "IRL <City> - unknown days" — a named city is real signal; do NOT collapse it to bare "Unknown". Only use "Unknown" when the posting gives no location signal at all. **If the file has its own "Location: ..." line at the very top (before "--- JOB TEXT START ---") — the fetcher's own structured field for this posting — treat it as authoritative ground truth for the city/region; don't second-guess or override it from body text.** For a bare "Location: <City>" line found INSIDE the job description body (not that top structured field), treat it as the company HQ, not a relocation requirement, unless the posting actually requires on-site presence. If remote but restricted to specific US states, list them as "Remote (states: ...)".
 - title_and_link: "Role Title | URL" if a URL is present, else just the title.
-- lane: the job's ACTUAL category/lane in the job's OWN terms — what the role IS, NOT mapped to the candidate's lanes. A product-management role is "Product Management" (or more specific, e.g. "Product Strategy / AI Research") even if the candidate is in marketing. 2-5 words. Descriptive, not a fit judgment.
+- lane: the job's category as "<Bucket> - <Subcategory>", in the job's OWN terms — NOT mapped to the candidate's lanes. Bucket = closest fit from Health / Consumer / Work Tools / Other (add a new bucket only if truly none fit — keep this set small and reusable). Subcategory = the most specific 1-4 word descriptor, e.g. "Health - DTC Supplements", "Health - Provider Tools", "Health - Consumer Wellness", "Consumer - Home Sharing", "Work Tools - Legal", "Work Tools - Collaboration", "Work Tools - Consumer Research", "Other - Fintech". Reuse existing subcategory phrasing for the same kind of job rather than inventing near-duplicate wording — consistency across jobs matters more than precision on any one job.
 - lane_fit: how that job-lane maps to the CANDIDATE's priority lanes — candidate-relative and honest. { primary_lane: EXACTLY one of the candidate's priority-lane names (verbatim from the profile), or "Outside lanes" if it fits none; secondary_lane (or null); confidence ("high"/"medium"/"low"); note (one short phrase) }. If the role is not one of the candidate's lanes, primary_lane = "Outside lanes" (even when the domain sounds related). Do NOT inflate — it is surfaced for the candidate, not added to the score.
 - mission_fit_notes / scope_fit_notes: one tight phrase each.
 - top_reasons / top_concerns: semicolon-separated phrases, concise and concrete.
@@ -243,7 +289,10 @@ function locationFitLabel(text, cfg) {
   const aliases = ((locp.home_metro_aliases) || []).filter(Boolean).map((a) => a.toLowerCase())
   const home = (locp.home_metro || '').trim().toLowerCase()
   if (home) aliases.push(home)
-  if (!loc || loc.includes('unknown') || loc.includes('unclear')) return 'Unclear'
+  // Check IRL/onsite/hybrid BEFORE the "unknown"/"unclear" bail-out — a value like
+  // "IRL NYC - unknown days" has a real, known city with only the day-count missing, and must not
+  // be short-circuited to Unclear just because the substring "unknown" appears in "unknown days".
+  if (!loc) return 'Unclear'
   if (loc.includes('remote')) return loc.includes('state') ? 'Remote (state-restricted)' : 'Remote'
   if (['irl', 'onsite', 'on-site', 'hybrid', 'in-office', 'in office'].some((k) => loc.includes(k))) {
     const m = loc.match(/(\d+)\s*day/)
@@ -254,6 +303,7 @@ function locationFitLabel(text, cfg) {
     if (aliases.length) return `Other ${mode}`
     return `${mode.charAt(0).toUpperCase()}${mode.slice(1)} (home metro not set)`
   }
+  if (loc.includes('unknown') || loc.includes('unclear')) return 'Unclear'
   return 'Unclear'
 }
 
@@ -284,14 +334,18 @@ function csvCell(v) {
 }
 const laneFitStr = (lf) => lf ? `${lf.primary_lane} (${lf.confidence})${lf.secondary_lane ? ' · +' + lf.secondary_lane : ''}` : ''
 
-// 23-column tracker layout: human-editable columns (the "? [You ...]" convention) first, AI
-// scoring/detail to the right. CSV and XLSX share this exact header set + order.
+// 24-column tracker layout, exact order: essential job info -> the 3 human-editable workflow
+// columns (positions 8-10) -> the SCORE BLOCK (5 columns, contiguous at positions 11-15) -> notes ->
+// Job File -> Base Resume Used (filled later by the tailor step; blank at vet time) -> AI fit detail.
+// CSV and XLSX share this exact header set + order. The 5 score-column labels are DYNAMIC — resolved
+// above from score-dimensions.json (or the candidate's scoring card, where it overrides weights).
 const HEADERS = [
   'Applied Date? [You Fill In]', 'Status? [You Change]', 'Lane', 'Company', 'Job Post Title + Link',
-  'Working Location', 'Comp Range', 'Final Score', 'Have Intro? [You Add]', 'Your Notes? [You Add]',
-  'Decline/Down Date? [You Add]', 'Desire Score', 'Market Perception Score', 'Company Style Score',
-  'Practicality Score', 'Mission Fit Notes', 'Scope Fit Notes', 'Top Reasons Notes', 'Top Concerns',
-  'Lane Fit', 'Location Fit', 'Comp Fit', 'Job File',
+  'Working Location', 'Comp Range',
+  'Have Intro? [You Add]', 'Your Notes? [You Add]', 'Decline/Down Date? [You Add]',
+  LABELS.final, LABELS.market, LABELS.desire, LABELS.style, LABELS.practicality,
+  'Mission Fit Notes', 'Scope Fit Notes', 'Top Reasons Notes', 'Top Concerns',
+  'Job File', 'Base Resume Used', 'Lane Fit', 'Location Fit', 'Comp Fit',
 ]
 // The CSV is CLEAN DATA ONLY — header + one row per job, in final-score order. No section-divider
 // rows and no pre-grouping: that keeps the data sortable (no merged cells) and lets a user paste
@@ -300,10 +354,11 @@ const HEADERS = [
 function dataCells(r) {
   return [
     '', r.status, r.lane, r.company, r.title_and_link,
-    r.location, r.comp_range, r.final_score, '', '',
-    '', r.desire_score, r.market_perception_score, r.company_style_score,
-    r.practicality_score, r.mission_fit_notes, r.scope_fit_notes, r.top_reasons, r.top_concerns,
-    laneFitStr(r.lane_fit), r._loc_fit, r._comp_fit, r.job_file,
+    r.location, r.comp_range,
+    '', '', '',
+    r.final_score, r.market_perception_score, r.desire_score, r.company_style_score, r.practicality_score,
+    r.mission_fit_notes, r.scope_fit_notes, r.top_reasons, r.top_concerns,
+    r.job_file, '', laneFitStr(r.lane_fit), r._loc_fit, r._comp_fit,
   ]
 }
 const csvLines = [HEADERS.map(csvCell).join(',')]
@@ -321,7 +376,7 @@ for (const r of rows) {
 - **Status:** ${r.status}
 - **Lane:** ${r.lane}  |  **Lane fit:** ${laneFitStr(r.lane_fit)}
 - **Location:** ${r.location}  |  **Comp:** ${r.comp_range}
-- **Scores:** Desire ${r.desire_score} / Market ${r.market_perception_score} / Style ${r.company_style_score} / Practicality ${r.practicality_score} → **Final ${r.final_score}**
+- **Scores:** ${LABELS.desire} ${r.desire_score} / ${LABELS.market} ${r.market_perception_score} / ${LABELS.style} ${r.company_style_score} / ${LABELS.practicality} ${r.practicality_score} → **${LABELS.final} ${r.final_score}**
 - **Mission fit:** ${r.mission_fit_notes}
 - **Scope fit:** ${r.scope_fit_notes}
 - **Top reasons:** ${r.top_reasons}
@@ -338,15 +393,28 @@ const folderName = BATCH_NAME || discovery.root.replace(/\/+$/, '').split('/').p
 const outRoot = (OUT_DIR || discovery.root).replace(/\/+$/, '')
 const csvPath = `${outRoot}/${folderName}-rankings.csv`
 const mdPath = `${outRoot}/${folderName}-rankings.md`
+const metaPath = `${outRoot}/${folderName}-rankings.meta.json`
 
-// ---- Phase 3: write the two files ----
+// ---- Per-run score metadata (the bridge to make_rankings_xlsx.py, a separate Python process that
+// can't share JS objects directly) — the EFFECTIVE labels/weights/definitions for THIS run, so the
+// Instructions tab can render them dynamically instead of hardcoding a second copy. ----
+const metaContent = JSON.stringify({
+  order: DIMS.order || FALLBACK_DIMS.order,
+  final: { label: LABELS.final },
+  desire: { label: LABELS.desire, definition: DIMS.desire.definition, weight_pct: Math.round(W.desire * 100) },
+  market: { label: LABELS.market, definition: DIMS.market.definition, weight_pct: Math.round(W.market * 100) },
+  style: { label: LABELS.style, definition: DIMS.style.definition, weight_pct: Math.round(W.style * 100) },
+  practicality: { label: LABELS.practicality, definition: DIMS.practicality.definition, weight_pct: Math.round(W.practicality * 100) },
+}, null, 2) + '\n'
+
+// ---- Phase 3: write the three files ----
 phase('Assemble')
 const WRITE_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['wrote'],
   properties: { wrote: { type: 'array', items: { type: 'string' } } },
 }
 await agent(
-  `Write these two files EXACTLY as given, overwriting if they exist. Do not modify the content.
+  `Write these three files EXACTLY as given, overwriting if they exist. Do not modify the content.
 
 === FILE 1: ${csvPath} ===
 ${csvContent}
@@ -355,6 +423,10 @@ ${csvContent}
 === FILE 2: ${mdPath} ===
 ${mdContent}
 === END FILE 2 ===
+
+=== FILE 3: ${metaPath} ===
+${metaContent}
+=== END FILE 3 ===
 
 Return the list of paths you wrote.`,
   { phase: 'Assemble', model: 'haiku', schema: WRITE_SCHEMA, label: 'write outputs' }
@@ -381,6 +453,7 @@ return {
   quarantined: quarantinedN,
   csv: csvPath,
   markdown: mdPath,
+  meta: metaPath,
   xlsx: (xlsxRes && xlsxRes.ok) ? xlsxPath : null,
   top: rows.slice(0, 5).map((r) => `${r.final_score} ${r.company} — ${r.status}`),
   // Full ranking (desc) so a parent workflow can pick which jobs to tailor.

@@ -21,7 +21,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 import prep_common
-from ats_fetchers import ats_company_from_url, fetch_via_ats
+from ats_fetchers import ats_company_from_url, extract_jsonld_jobposting, fetch_via_ats
 
 LIKELY_SELECTORS = [
     "main", "article", "[data-testid*='job']", "[class*='job-description']",
@@ -106,6 +106,21 @@ def make_fetch_one(browser):
                         text = clean_text(page.locator("body").inner_text(timeout=5000))
                     except Exception:
                         text = ""
+                # JS-rendered sites sometimes inject their own schema.org JobPosting JSON-LD
+                # client-side (not present in the raw HTML the plain fetcher sees). Safe to use —
+                # it's the page's own structured data for this job, not sidebar/related-jobs noise.
+                try:
+                    rendered_html = page.content()
+                    jobposting = extract_jsonld_jobposting(rendered_html)
+                except Exception:
+                    jobposting = None
+                if jobposting and jobposting.get("location") and "location:" not in text[:200].lower():
+                    header_lines = [f"Location: {jobposting['location']}"]
+                    if jobposting.get("employment_type"):
+                        header_lines.append(f"Employment Type: {jobposting['employment_type']}")
+                    if jobposting.get("compensation"):
+                        header_lines.append(f"Compensation: {jobposting['compensation']}")
+                    text = "\n".join(header_lines) + "\n\n" + text
                 return {"ok": True, "title": title, "company": company, "body": text,
                         "method": "playwright", "error": None}
             finally:
