@@ -23,6 +23,12 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
   implementation), but the actual workflow asks an active Claude Code or Codex session
   to perform synthesis itself. The script now only gathers Git evidence and manages
   the deterministic structure/marker; no API key is needed anywhere in this repo.
+- The private Writing home this repo symlinks canon from was reorganized (see its own
+  git history) — three symlinks under `PRIVATE__YOUR_FILES_GITIGNORED/
+  04-TAILOR__YOUR_PRIVATE_INFO/` were repointed to match: the two Ascend canon files
+  and `cover-letter/writing-links.md`. Verified with a real lint run through the
+  updated symlink chain — resolved and read cleanly, no path errors. The other 12
+  symlinks in that folder were unaffected (their targets didn't move).
 
 ## Pre-2026-07-13 — Everything before the changelog existed
 
