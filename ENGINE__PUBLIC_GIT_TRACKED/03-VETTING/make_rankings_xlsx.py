@@ -138,6 +138,14 @@ STATUS_COLORS = {
     "Interviewed: Rejected":                                                 ("7B3F00", "FFFFFF"),
 }
 
+# HARD-STOP row marker (Jessica, 7/16/26): vet-jobs.js sets this exact status string, never a
+# score, when its scoring agent could not verify a job file actually contains real posting
+# content (see the 488KB-Microsoft-boilerplate incident this fixes). This must be impossible to
+# miss — the whole row gets this loud fill, not just the Status cell, and it overrides every
+# other per-cell color below (lane, comp, location) since none of that data is trustworthy either.
+NEEDS_REFETCH_STATUS = "⚠️ NEEDS RE-FETCH — content not verified"
+NEEDS_REFETCH_FILL = "FF00FF"  # magenta — deliberately jarring, shouldn't blend with anything else
+
 # Sub-score 0-100 ramp.
 SCORE_BUCKETS = [
     ("85+", "5CE05C"), ("80-84", "88E888"), ("75-79", "D9EAD3"), ("70-74", "FCF3CE"),
@@ -164,7 +172,7 @@ WIDTHS = {
     H_WORKLOC: 22, H_COMPRANGE: 12, "Have Intro? [You Add]": 14, "Your Notes? [You Add]": 26,
     "Decline/Down Date? [You Add]": 16, "Mission Fit Notes": 40, "Scope Fit Notes": 40,
     "Top Reasons Notes": 46, "Top Concerns": 46, "Job File": 28, "Base Resume Used": 26,
-    H_LANEFIT: 22, H_LOCFIT: 18, H_COMPFIT: 16,
+    H_LANEFIT: 22, H_LOCFIT: 18, H_COMPFIT: 16, "Cover Letter?": 12,
 }
 # Score-column widths, keyed by dimension (not by the dynamic label string) — applied at runtime
 # once the effective labels are resolved, since the label text itself may change per-run.
@@ -216,9 +224,33 @@ def loc_color(label, cfg) -> str:
     return RATING_COLORS.get(arr.get(key), GREY)
 
 
-def lane_color(lane_fit_str, cfg):
-    """Color the (job-centric) Lane cell by how well it maps to the candidate's lanes, reading the
-    Lane Fit string ("Primary (confidence) ..."). p1 lane -> green, p2+ -> amber, Outside -> red/grey."""
+# Lane color is keyed to the HEALTH DOMAIN itself (Jessica's rule, 7/16/26), not lane-priority
+# matching: green is reserved for health jobs only, so it reads as a domain signal at a glance
+# rather than colliding with "this matches one of my priority lanes" (which used to also paint
+# non-health p1 lanes green). Mental Health gets a distinctly brighter green than other health
+# subcategories; nothing outside "Health - ..." is ever colored green.
+MENTAL_HEALTH_GREEN = "00B050"
+OTHER_HEALTH_GREEN = "C6E0B4"
+
+
+def lane_color(lane_str, cfg=None):
+    """Color the (job-centric) Lane cell purely from the Lane text's own bucket — "Health - ..." only.
+    Bright green for "Health - Mental Health" (normalized exactly by vet-jobs.js), a lighter green for
+    every other Health subcategory, and no fill at all for every non-Health bucket."""
+    s = (lane_str or "").strip()
+    if not s.lower().startswith("health"):
+        return None
+    if s.strip().lower() == "health - mental health":
+        return MENTAL_HEALTH_GREEN
+    return OTHER_HEALTH_GREEN
+
+
+def lane_fit_color(lane_fit_str, cfg):
+    """Color the (candidate-relative) Lane Fit cell by how well it maps to the candidate's priority
+    lanes, reading the Lane Fit string ("Primary (confidence) ..."). p1 lane -> green, p2+ -> amber,
+    Outside -> red/grey. Independent of lane_color() above, which is the job-centric Lane cell and is
+    now keyed to the health domain instead — the two columns answer different questions and can
+    legitimately show different colors on the same row."""
     s = (lane_fit_str or "").strip()
     if not s:
         return None
@@ -393,6 +425,15 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
     THIN = Side(style="thin", color="D9D9D9")
     BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
     ALIGN = Alignment(horizontal="center", vertical="top", wrap_text=True)
+    LEFT_ALIGN = Alignment(horizontal="left", vertical="top", wrap_text=True)
+    # Free-text columns read left-to-right like prose — left-align them (Jessica, 7/16/26). Everything
+    # else (dates, scores, short fit labels) stays centered.
+    LEFT_ALIGN_HEADERS = {
+        H_LANE, H_COMPANY, H_TITLE, H_WORKLOC,
+        "Have Intro? [You Add]", "Your Notes? [You Add]", "Decline/Down Date? [You Add]",
+        "Mission Fit Notes", "Scope Fit Notes", "Top Reasons Notes", "Top Concerns",
+        "Job File", "Base Resume Used", H_LANEFIT, H_LOCFIT, H_COMPFIT,
+    }
     base_font = Font(name=FONT, size=10, color="000000")
     link_font = Font(name=FONT, size=10, color="0563C1", underline="single")
 
@@ -403,7 +444,7 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         cell = ws.cell(1, c, h)
         cell.fill = hdr_fill
         cell.font = hdr_font
-        cell.alignment = ALIGN
+        cell.alignment = LEFT_ALIGN if h in LEFT_ALIGN_HEADERS else ALIGN
         cell.border = BORDER
     ws.row_dimensions[1].height = 30
 
@@ -425,7 +466,7 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
                 val = ""
             cell = ws.cell(r, c)
             cell.border = BORDER
-            cell.alignment = ALIGN
+            cell.alignment = LEFT_ALIGN if h in LEFT_ALIGN_HEADERS else ALIGN
             if h == H_TITLE and val:
                 title, url = parse_title_link(str(val))
                 cell.value = title
@@ -442,16 +483,27 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
             fh, foh = STATUS_COLORS[st]
             ws[f"{letter[H_STATUS]}{r}"].fill = solid(fh)
             ws[f"{letter[H_STATUS]}{r}"].font = Font(name=FONT, size=10, bold=True, color=foh)
-        lc = lane_color(rec.get(H_LANEFIT, ""), cfg)
+        lc = lane_color(rec.get(H_LANE, ""))
         if lc:
             ws[f"{letter[H_LANE]}{r}"].fill = solid(lc)
-            ws[f"{letter[H_LANEFIT]}{r}"].fill = solid(lc)
+        lfc = lane_fit_color(rec.get(H_LANEFIT, ""), cfg)
+        if lfc:
+            ws[f"{letter[H_LANEFIT]}{r}"].fill = solid(lfc)
         cc = comp_color(rec.get(H_COMPFIT, ""))
         ws[f"{letter[H_COMPRANGE]}{r}"].fill = solid(cc)
         ws[f"{letter[H_COMPFIT]}{r}"].fill = solid(cc)
         loc = loc_color(rec.get(H_LOCFIT, ""), cfg)
         ws[f"{letter[H_WORKLOC]}{r}"].fill = solid(loc)
         ws[f"{letter[H_LOCFIT]}{r}"].fill = solid(loc)
+
+        # HARD-STOP override: wins over every other fill above — none of a NEEDS-RE-FETCH row's
+        # data (lane, comp, location, scores) is trustworthy, so the whole row gets flagged, not
+        # just the Status cell.
+        if st == NEEDS_REFETCH_STATUS:
+            for c in range(1, ncols + 1):
+                cell = ws.cell(r, c)
+                cell.fill = solid(NEEDS_REFETCH_FILL)
+                cell.font = Font(name=FONT, size=10, bold=True, color="FFFFFF")
 
     n = len(records)
     last_data_row = n + 1  # header is row 1

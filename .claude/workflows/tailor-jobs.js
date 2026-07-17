@@ -2,7 +2,10 @@ export const meta = {
   name: 'tailor-jobs',
   description: 'Prepare resume drafts for a hand-picked set of jobs (sequential, in the order given). Use after a vet-only run when the candidate has chosen exactly which jobs to pursue.',
   whenToUse: 'Pass {jobs: ["path/to/jobA.txt", "path/to/jobB.txt"]} — the specific job files to tailor.',
-  phases: [{ title: 'Tailor', detail: 'one resume draft per chosen job, in order' }],
+  phases: [
+    { title: 'Tailor', detail: 'one resume draft per chosen job, in order' },
+    { title: 'Record', detail: 'write each chosen base back into the batch rankings' },
+  ],
 }
 
 // Named-workflow invocation can deliver `args` as a JSON string; parse it back to a value first.
@@ -76,7 +79,46 @@ re-derive, don't ratify the old draft.`,
   if (res) tailored.push({ order: i + 1, ...p, ...res })
 }
 
+// ---- Write each chosen base back into the batch's rankings (added 7/16/26) ----
+// The agent has always returned `recommended_base`; until now it was discarded, so the tracker's
+// "Base Resume Used" column was blank in every batch ever produced and had to be reconstructed by
+// hand from the per-job .md files. Match by URL first (the same posting gets re-fetched under
+// different filenames across batches), falling back to the job filename.
+const jobFileOf = (p) => String(p || '').split('/').pop()
+const urlOf = (t) => { const m = /https?:\/\/\S+/.exec(String(t || '')); return m ? m[0] : null }
+
+if (tailored.length) {
+  phase('Record')
+  const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`   // safe single-quoted shell arg
+  const cmds = tailored.filter((t) => t.recommended_base).map((t) => {
+    const batchDir = `__READY_TO_REVIEW__PRIVATE_GITIGNORED/${batchOf(t.abs_path)}`
+    const url = urlOf(t.title_and_link)
+    return [
+      `PY=".venv/bin/python3"; [ -x "$PY" ] || PY="python3"; "$PY"`,
+      `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/update_rankings_row.py`,
+      `--batch ${shq(batchDir)}`,
+      `--job-file ${shq(jobFileOf(t.abs_path))}`,
+      url ? `--url ${shq(url)}` : '',
+      `--base ${shq(t.recommended_base)}`,
+    ].filter(Boolean).join(' ')
+  })
+  if (cmds.length) {
+    await agent(
+      `Record each tailored job's chosen resume base back into its batch rankings.
+
+Run these EXACT shell commands from the project root, in order, and report each one's output verbatim:
+
+${cmds.join('\n')}
+
+Each prints either "Updated ..." (success) or a line starting with "WARNING: no rankings row matched".
+Do NOT treat a WARNING as fatal and do NOT retry or "fix" it — just report it. Return a short summary:
+how many updated, and the full text of any WARNING lines.`,
+      { phase: 'Record', model: 'haiku', label: 'record bases in rankings' }
+    )
+  }
+}
+
 return {
   tailored,
-  note: `Prepared ${tailored.length} resume draft(s) in __READY_TO_REVIEW__PRIVATE_GITIGNORED/. Open each job folder's "application_resume_output - [Company] - [Role].md", starting with the "Questions for the candidate" section.`,
+  note: `Prepared ${tailored.length} resume draft(s) in __READY_TO_REVIEW__PRIVATE_GITIGNORED/. Open each job folder's "application_resume_output - [Company] - [Role].md", starting with the "Questions for the candidate" section. Each job's chosen base was also written back into its batch's "Base Resume Used" column.`,
 }

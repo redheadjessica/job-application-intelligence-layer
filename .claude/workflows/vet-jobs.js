@@ -54,16 +54,24 @@ const SCORE_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: [
+    'content_verified', 'content_issue',
     'company', 'title_and_link', 'location', 'comp_range', 'lane', 'lane_fit',
     'desire_score', 'market_perception_score', 'company_style_score', 'practicality_score',
     'mission_fit_notes', 'scope_fit_notes', 'top_reasons', 'top_concerns',
   ],
   properties: {
+    // HARD STOP (Jessica, 7/16/26): a job must never be scored against content nobody
+    // has confirmed is the real posting. Fill these FIRST, before any scoring. If false,
+    // still fill every score field below with your best-effort honest read AS FAR AS THE
+    // TEXT ALLOWS — the assembler below is what actually blanks the scores and flags the
+    // row; you must not silently fabricate confident-looking numbers from a title alone.
+    content_verified: { type: 'boolean', description: 'true only if this file contains an ACTUAL job posting body you can read — real responsibilities/qualifications/role description, not just navigation chrome, theme/config JSON, a login/apply shell, or a title with no body. If you cannot find genuine posting content in the file, set this to false.' },
+    content_issue: { type: ['string', 'null'], description: 'If content_verified is false, describe exactly what is wrong (e.g. "file is ~490KB of JS theme config and navbar JSON, no responsibilities/qualifications text found") so a human knows this needs a re-fetch. Null if content_verified is true.' },
     company: { type: 'string' },
     title_and_link: { type: 'string', description: 'Role Title | URL, or just the title if no URL' },
-    location: { type: 'string', description: 'Normalized location. RULES: fully remote -> "Remote". Remote but restricted to certain US states -> "Remote (states: CA/NY/TX/...)". In-office/hybrid in NYC -> "IRL NYC - N days" where N is the required in-office days per week if stated, else "unknown days"; append specific days if named, e.g. "IRL NYC - 3 days (Mon/Tue/Thu standard)". In-office elsewhere -> "IRL <City> - N days" (or "IRL <City> - unknown days" if arrangement/day-count is not stated). ABBREVIATE major cities to their common short form: "New York City"/"New York, NY" -> "NYC", "San Francisco" -> "SF" (use other standard short forms similarly, e.g. "LA", "DC" — only when unambiguous; keep less-common city names spelled out). MULTI-CITY postings (the role can be based in any of several named cities): join them with "/" in the candidate's preferred order (see the <preferences> location.city_priority list — candidate-priority cities first, in that order, then any other named cities in the posting\'s own order), e.g. "NYC/SF/Austin - 3 days". IMPORTANT: if a city or office location is named ANYWHERE in the posting (title, header, comp-transparency line, etc.) but the remote/hybrid/onsite arrangement or day count is not stated, still use "IRL <City> - unknown days" — do NOT fall back to bare "Unknown" just because the arrangement type is unclear; a named city is real signal, not nothing. Only use "Unknown" when the posting gives NO location signal at all — no city, no remote/hybrid/onsite mention, nothing. ALWAYS use "IRL" (never "Hybrid"). A bare "Location: <City>" line is usually the company HQ, NOT a relocation requirement -> only treat as in-office if the posting actually requires on-site presence; otherwise look for the real workplace type (Remote/Hybrid/On-site) and the exact required day count.' },
+    location: { type: 'string', description: 'Normalized location. RULES: fully remote -> "Remote". Remote but restricted to certain US states -> "Remote (states: CA/NY/TX/...)". In-office/hybrid in NYC -> "IRL NYC - N days" where N is the required in-office days per week if stated, else "unknown days"; append specific days if named, e.g. "IRL NYC - 3 days (Mon/Tue/Thu standard)". In-office elsewhere -> "IRL <City> - N days" (or "IRL <City> - unknown days" if arrangement/day-count is not stated). ABBREVIATE major cities to their common short form: "New York City"/"New York, NY" -> "NYC", "San Francisco" -> "SF" (use other standard short forms similarly, e.g. "LA", "DC" — only when unambiguous; keep less-common city names spelled out). MULTI-CITY postings (the role can be based in any of several named cities): join them with "/" in the candidate\'s preferred order (see the <preferences> location.city_priority list — candidate-priority cities first, in that order, then any other named cities in the posting\'s own order), e.g. "NYC/SF/Austin - 3 days". IMPORTANT: if a city or office location is named ANYWHERE in the posting (title, header, comp-transparency line, etc.) but the remote/hybrid/onsite arrangement or day count is not stated, still use "IRL <City> - unknown days" — do NOT fall back to bare "Unknown" just because the arrangement type is unclear; a named city is real signal, not nothing. Only use "Unknown" when the posting gives NO location signal at all — no city, no remote/hybrid/onsite mention, nothing. ALWAYS use "IRL" (never "Hybrid"). A bare "Location: <City>" line is usually the company HQ, NOT a relocation requirement -> only treat as in-office if the posting actually requires on-site presence; otherwise look for the real workplace type (Remote/Hybrid/On-site) and the exact required day count.' },
     comp_range: { type: 'string', description: 'lowest-highest in thousands, no $ or commas, e.g. 190-210, or ?? if unknown' },
-    lane: { type: 'string', description: 'The job’s category as "<Bucket> - <Subcategory>", in the job’s OWN terms, independent of the candidate. Bucket = the closest fit from this small, reusable set: Health, Consumer, Work Tools, Other (introduce a new bucket only if truly none of these fit — keep the bucket set small). Subcategory = the most specific 1-4 word descriptor for what the job actually IS within that bucket. Examples: "Health - DTC Supplements", "Health - Provider Tools", "Health - Consumer Wellness", "Consumer - Home Sharing", "Work Tools - Legal", "Work Tools - Collaboration", "Work Tools - Consumer Research", "Other - Fintech". Reuse an existing subcategory phrasing across jobs with the same fit rather than inventing near-duplicate wording (always "Work Tools - Collaboration" for general collab/productivity software, not sometimes "Work Tools - Collab Software") — the point is a consistent, scalable taxonomy, not a one-off description.' },
+    lane: { type: 'string', description: 'The job’s category as "<Bucket> - <Subcategory>", in the job’s OWN terms, independent of the candidate. Bucket = the closest fit from this small, reusable set: Health, Consumer, Work Tools, Other (introduce a new bucket only if truly none of these fit — keep the bucket set small). Subcategory = the most specific 1-4 word descriptor for what the job actually IS within that bucket. Examples: "Health - DTC Supplements", "Health - Provider Tools", "Health - Consumer Wellness", "Consumer - Home Sharing", "Work Tools - Legal", "Work Tools - Collaboration", "Work Tools - Consumer Research", "Other - Fintech". Reuse an existing subcategory phrasing across jobs with the same fit rather than inventing near-duplicate wording (always "Work Tools - Collaboration" for general collab/productivity software, not sometimes "Work Tools - Collab Software") — the point is a consistent, scalable taxonomy, not a one-off description. EXACT SPELLING REQUIRED for mental health: any job whose core product is mental/behavioral health must be lane EXACTLY "Health - Mental Health" — no extra qualifier words (not "Health - Consumer Mental Health", not "Health - Mental Health (Member Growth)"); put any extra nuance in scope_notes instead, never in the lane string.' },
     lane_fit: {
       type: 'object', additionalProperties: false,
       required: ['primary_lane', 'secondary_lane', 'confidence', 'note'],
@@ -78,8 +86,20 @@ const SCORE_SCHEMA = {
     market_perception_score: { type: 'integer', minimum: 0, maximum: 100 },
     company_style_score: { type: 'integer', minimum: 0, maximum: 100, description: 'How well the company culture, stage, and working style fit the candidate' },
     practicality_score: { type: 'integer', minimum: 0, maximum: 100, description: 'How practical/livable the job is — comp relative to targets, location/remote fit, logistics' },
-    mission_fit_notes: { type: 'string' },
-    scope_fit_notes: { type: 'string' },
+    // Human-readable, plain-English, ONE sentence each (Jessica, 7/16/26 — the previous style, with
+    // sub-factor math spelled out like "Mission 27/30 + Role 16/30 + Brand 11/20 = 69", read as
+    // dense and unfriendly). No "=", no fractions, no "+", no jargon — write it the way you'd
+    // explain your reasoning out loud to the candidate in one breath. This applies to every ranking
+    // run this engine produces, for any user, not just this one.
+    mission_fit_notes: { type: 'string', description: 'ONE plain-English sentence explaining the Desire score — why this pulls or doesn\'t pull the candidate. No sub-factor math, no "=", "/", or "+" notation. Example: "A strong AI-forward growth role at a brand they\'d be excited to join, though it\'s enterprise L&D work rather than their preferred consumer-product space." NOT: "Desire = 66 (Mission 11/30 + Role 25/30 + Brand 18/20 + Culture 10/15 + Stage 2/5)."' },
+    scope_fit_notes: { type: 'string', description: 'ONE plain-English sentence explaining the Profile Fit score — how convincingly the candidate\'s career tells the story this role wants. No sub-factor math, no "=", "/", or "+" notation. Example: "A platform-PM track record that maps closely onto this role\'s core asks, with AI-feature building the one area they\'d need to speak to via analogy rather than direct experience." NOT: "Profile Fit = 87. Hiring thesis: ... Thesis-defining centrals: (1) ... (2) ... (3) ..."' },
+    // Optional deeper reasoning — the sub-factor math / hiring-thesis breakdown that USED to live in
+    // mission_fit_notes/scope_fit_notes. Only the Markdown report shows this (indented, collapsible
+    // by not reading past the summary line); the CSV/XLSX tracker — what a human actually scans —
+    // never shows it. Fill it in when you want the detailed reasoning preserved for someone auditing
+    // the score later; null is fine when the one-sentence note already says everything worth saying.
+    mission_fit_detail: { type: ['string', 'null'], description: 'Optional: the full sub-factor math / detailed reasoning behind desire_score, for anyone auditing the score later. Markdown-report-only — never shown in the spreadsheet. Null if the one-sentence mission_fit_notes already covers it.' },
+    scope_fit_detail: { type: ['string', 'null'], description: 'Optional: the full hiring-thesis-test reasoning behind market_perception_score, for anyone auditing the score later. Markdown-report-only — never shown in the spreadsheet. Null if the one-sentence scope_fit_notes already covers it.' },
     top_reasons: { type: 'string', description: 'semicolon-separated phrases' },
     top_concerns: { type: 'string', description: 'semicolon-separated phrases' },
   },
@@ -224,6 +244,15 @@ ${refsBlock}
 Now read ONLY this job description file and score it:
 ${job.abs_path}
 
+⚠️ HARD STOP — do this FIRST, before any scoring: confirm the file actually contains a real
+job posting body (responsibilities, qualifications, role description — actual prose about the
+job). Fetches sometimes fail silently and capture something else entirely — website navigation
+chrome, a login/apply shell, or (seen in production) hundreds of KB of a JS-rendered page's
+theme/config JSON with zero real posting text. Length is NOT a proxy for real content — a huge
+file can still be 100% boilerplate. Set content_verified=false and describe the problem in
+content_issue if you cannot find genuine posting content, even if the file is large. If
+content_verified is true, set content_issue to null and proceed normally.
+
 Scoring rules:
 - Four scores, each an INTEGER 0-100: desire_score, market_perception_score, company_style_score, practicality_score.
   - desire_score: how much the candidate would want this role — mission fit, role excitement, domain alignment, personal pull.
@@ -235,9 +264,9 @@ Scoring rules:
 - comp_range: lowest-highest base across all bands shown, in whole thousands, no $ or commas (e.g. 190-210); "??" if unknown.
 - location: normalize per the schema rules. CAREFULLY determine the real workplace type from the posting: look for explicit Remote / Hybrid / On-site tags, the exact required in-office DAYS PER WEEK, and any US-state hiring restrictions. Use "IRL NYC - N days" with the exact day count when stated ("unknown days" if not) — NEVER just "Hybrid". Abbreviate major cities to their common short form (NYC, SF, LA, DC, etc. — only when unambiguous). If the posting names MULTIPLE candidate office cities, join them with "/" in the candidate's city_priority order from <preferences> (priority cities first, in that order; any other named cities after, in the posting's own order) — e.g. "NYC/SF/Austin - 3 days". If a city/office location is named ANYWHERE in the posting but the arrangement or day count isn't stated, still output "IRL <City> - unknown days" — a named city is real signal; do NOT collapse it to bare "Unknown". Only use "Unknown" when the posting gives no location signal at all. **If the file has its own "Location: ..." line at the very top (before "--- JOB TEXT START ---") — the fetcher's own structured field for this posting — treat it as authoritative ground truth for the city/region; don't second-guess or override it from body text.** For a bare "Location: <City>" line found INSIDE the job description body (not that top structured field), treat it as the company HQ, not a relocation requirement, unless the posting actually requires on-site presence. If remote but restricted to specific US states, list them as "Remote (states: ...)".
 - title_and_link: "Role Title | URL" if a URL is present, else just the title.
-- lane: the job's category as "<Bucket> - <Subcategory>", in the job's OWN terms — NOT mapped to the candidate's lanes. Bucket = closest fit from Health / Consumer / Work Tools / Other (add a new bucket only if truly none fit — keep this set small and reusable). Subcategory = the most specific 1-4 word descriptor, e.g. "Health - DTC Supplements", "Health - Provider Tools", "Health - Consumer Wellness", "Consumer - Home Sharing", "Work Tools - Legal", "Work Tools - Collaboration", "Work Tools - Consumer Research", "Other - Fintech". Reuse existing subcategory phrasing for the same kind of job rather than inventing near-duplicate wording — consistency across jobs matters more than precision on any one job.
+- lane: the job's category as "<Bucket> - <Subcategory>", in the job's OWN terms — NOT mapped to the candidate's lanes. Bucket = closest fit from Health / Consumer / Work Tools / Other (add a new bucket only if truly none fit — keep this set small and reusable). Subcategory = the most specific 1-4 word descriptor, e.g. "Health - DTC Supplements", "Health - Provider Tools", "Health - Consumer Wellness", "Consumer - Home Sharing", "Work Tools - Legal", "Work Tools - Collaboration", "Work Tools - Consumer Research", "Other - Fintech". Reuse existing subcategory phrasing for the same kind of job rather than inventing near-duplicate wording — consistency across jobs matters more than precision on any one job. Mental/behavioral health jobs MUST use the exact string "Health - Mental Health" — no extra qualifier words appended.
 - lane_fit: how that job-lane maps to the CANDIDATE's priority lanes — candidate-relative and honest. { primary_lane: EXACTLY one of the candidate's priority-lane names (verbatim from the profile), or "Outside lanes" if it fits none; secondary_lane (or null); confidence ("high"/"medium"/"low"); note (one short phrase) }. If the role is not one of the candidate's lanes, primary_lane = "Outside lanes" (even when the domain sounds related). Do NOT inflate — it is surfaced for the candidate, not added to the score.
-- mission_fit_notes / scope_fit_notes: one tight phrase each.
+- mission_fit_notes / scope_fit_notes: ONE plain-English sentence each, written the way you'd say it out loud — no sub-factor math, no "=", "/", or "+" notation, no "Mission 27/30 + Role 16/30..." breakdowns. If you want the detailed reasoning preserved for later auditing, put THAT in mission_fit_detail / scope_fit_detail instead (optional, null if not needed) — never in the human-facing notes fields.
 - top_reasons / top_concerns: semicolon-separated phrases, concise and concrete.
 - If PDF extraction is imperfect, make a best effort and note it in scope_fit_notes; do not fail.`,
     { phase: 'Score', model: 'sonnet', schema: SCORE_SCHEMA, label: job.file }
@@ -294,7 +323,12 @@ function locationFitLabel(text, cfg) {
   // be short-circuited to Unclear just because the substring "unknown" appears in "unknown days".
   if (!loc) return 'Unclear'
   if (loc.includes('remote')) return loc.includes('state') ? 'Remote (state-restricted)' : 'Remote'
-  if (['irl', 'onsite', 'on-site', 'hybrid', 'in-office', 'in office'].some((k) => loc.includes(k))) {
+  // A bare "<City> - N days" (no "IRL"/"hybrid"/"onsite" keyword) is still a real in-office signal —
+  // don't fall through to Unclear just because the agent skipped the "IRL" prefix. Detect it via the
+  // day-count pattern itself, or a recognized city name appearing without "remote".
+  const hasDayCount = /\d+\s*day/.test(loc)
+  const hasKnownCity = aliases.length && aliases.some((a) => loc.includes(a))
+  if (['irl', 'onsite', 'on-site', 'hybrid', 'in-office', 'in office'].some((k) => loc.includes(k)) || hasDayCount || hasKnownCity) {
     const m = loc.match(/(\d+)\s*day/)
     const days = m ? Number(m[1]) : null
     const onsite = loc.includes('onsite') || loc.includes('on-site') || (days != null && days >= 5)
@@ -314,18 +348,51 @@ function statusFor(score) {
   if (score >= 60) return 'Apply Eventually: Backup Lane'
   return 'Apply Eventually: Or Skip It'
 }
+// Force the exact "Health - Mental Health" spelling — no extra qualifier words — whenever an agent
+// scores a job into that subcategory (e.g. "Health - Consumer Mental Health"), so the Lane column
+// stays a clean, filterable taxonomy AND so the spreadsheet's lane_color() can key off it exactly.
+function normalizeLane(lane) {
+  const s = (lane || '').trim()
+  if (/^health\s*-\s*.*mental health/i.test(s)) return 'Health - Mental Health'
+  return s
+}
+// HARD STOP (Jessica, 7/16/26): a job whose content the scoring agent could NOT verify as a
+// real posting must never show a normal-looking score — that's exactly how a 488KB capture of
+// Microsoft careers-site JS theme boilerplate got a final score of 44 and looked legitimate
+// until she caught it by hand. Blank the score entirely and force a loud, unmissable status
+// instead of a number that invites trust. This must survive downstream: make_rankings_xlsx.py
+// gives this status its own unmissable fill, separate from the normal score-band colors.
+const NEEDS_REFETCH_STATUS = '⚠️ NEEDS RE-FETCH — content not verified'
 for (const r of rows) {
-  r.final_score = Math.round(
-    r.desire_score * W.desire +
-    r.market_perception_score * W.market +
-    r.company_style_score * W.style +
-    r.practicality_score * W.practicality
-  )
-  r.status = statusFor(r.final_score)
+  r.lane = normalizeLane(r.lane)
+  if (r.content_verified === false) {
+    r.final_score = null
+    r.desire_score = null
+    r.market_perception_score = null
+    r.company_style_score = null
+    r.practicality_score = null
+    r.status = NEEDS_REFETCH_STATUS
+    r.top_concerns = `⚠️ FETCH VERIFICATION FAILED: ${r.content_issue || 'agent could not confirm this file contains real job-posting content'}. This row was NOT scored — re-fetch (try a different method) or paste the real posting text, then re-run vetting.` +
+      (r.top_concerns ? ` | (original notes: ${r.top_concerns})` : '')
+  } else {
+    r.final_score = Math.round(
+      r.desire_score * W.desire +
+      r.market_perception_score * W.market +
+      r.company_style_score * W.style +
+      r.practicality_score * W.practicality
+    )
+    r.status = statusFor(r.final_score)
+  }
   r._comp_fit = compFitLabel(r.comp_range, CFG)
   r._loc_fit = locationFitLabel(r.location, CFG)
 }
-rows.sort((a, b) => b.final_score - a.final_score)
+// Unverified rows float to the very top — impossible to miss, not buried at the bottom where a
+// null score would otherwise sort.
+rows.sort((a, b) => (b.final_score ?? Infinity) - (a.final_score ?? Infinity))
+const unverifiedCount = rows.filter((r) => r.content_verified === false).length
+if (unverifiedCount > 0) {
+  log(`⚠️ ${unverifiedCount} job(s) FAILED content verification and were NOT scored — see "${NEEDS_REFETCH_STATUS}" rows at the top of the rankings.`)
+}
 
 // ---- Build CSV (deterministic quoting) ----
 function csvCell(v) {
@@ -346,6 +413,11 @@ const HEADERS = [
   LABELS.final, LABELS.market, LABELS.desire, LABELS.style, LABELS.practicality,
   'Mission Fit Notes', 'Scope Fit Notes', 'Top Reasons Notes', 'Top Concerns',
   'Job File', 'Base Resume Used', 'Lane Fit', 'Location Fit', 'Comp Fit',
+  // Both blank at vet time and filled in later by the downstream steps, via
+  // 03-VETTING/update_rankings_row.py: 'Base Resume Used' by tailor-jobs, 'Cover Letter?' by the
+  // cover-letter workflow. (Before 7/16/26 'Base Resume Used' was written blank here and NOTHING
+  // ever filled it — the tailor agent's recommended_base was returned and silently discarded.)
+  'Cover Letter?',
 ]
 // The CSV is CLEAN DATA ONLY — header + one row per job, in final-score order. No section-divider
 // rows and no pre-grouping: that keeps the data sortable (no merged cells) and lets a user paste
@@ -358,7 +430,7 @@ function dataCells(r) {
     '', '', '',
     r.final_score, r.market_perception_score, r.desire_score, r.company_style_score, r.practicality_score,
     r.mission_fit_notes, r.scope_fit_notes, r.top_reasons, r.top_concerns,
-    r.job_file, '', laneFitStr(r.lane_fit), r._loc_fit, r._comp_fit,
+    r.job_file, '', laneFitStr(r.lane_fit), r._loc_fit, r._comp_fit, '',
   ]
 }
 const csvLines = [HEADERS.map(csvCell).join(',')]
@@ -369,16 +441,17 @@ const csvContent = csvLines.join('\n') + '\n'
 const quarantinedN = (discovery && discovery.quarantined) || 0
 const qNote = quarantinedN > 0 ? `> Note: ${quarantinedN} thin/failed post(s) were quarantined by prep and were NOT ranked (see "0 - Prep Report/"). Only usable posts are ranked below.\n` : ''
 const mdParts = [`# Job Rankings\n\n${rows.length} jobs scored, highest priority first.\n${qNote}`]
+const fmtScore = (v) => v === null || v === undefined ? '—' : v
 for (const r of rows) {
   mdParts.push(
-`## ${r.final_score} — ${r.company}: ${r.title_and_link.split(' | ')[0]}
+`## ${fmtScore(r.final_score)} — ${r.company}: ${r.title_and_link.split(' | ')[0]}${r.content_verified === false ? '  ⚠️ NOT SCORED — SEE BELOW' : ''}
 
 - **Status:** ${r.status}
 - **Lane:** ${r.lane}  |  **Lane fit:** ${laneFitStr(r.lane_fit)}
 - **Location:** ${r.location}  |  **Comp:** ${r.comp_range}
-- **Scores:** ${LABELS.desire} ${r.desire_score} / ${LABELS.market} ${r.market_perception_score} / ${LABELS.style} ${r.company_style_score} / ${LABELS.practicality} ${r.practicality_score} → **${LABELS.final} ${r.final_score}**
-- **Mission fit:** ${r.mission_fit_notes}
-- **Scope fit:** ${r.scope_fit_notes}
+- **Scores:** ${LABELS.desire} ${fmtScore(r.desire_score)} / ${LABELS.market} ${fmtScore(r.market_perception_score)} / ${LABELS.style} ${fmtScore(r.company_style_score)} / ${LABELS.practicality} ${fmtScore(r.practicality_score)} → **${LABELS.final} ${fmtScore(r.final_score)}**
+- **Mission fit:** ${r.mission_fit_notes}${r.mission_fit_detail ? `\n  - *Detail:* ${r.mission_fit_detail}` : ''}
+- **Scope fit:** ${r.scope_fit_notes}${r.scope_fit_detail ? `\n  - *Detail:* ${r.scope_fit_detail}` : ''}
 - **Top reasons:** ${r.top_reasons}
 - **Top concerns:** ${r.top_concerns}
 - **File:** ${r.job_file}

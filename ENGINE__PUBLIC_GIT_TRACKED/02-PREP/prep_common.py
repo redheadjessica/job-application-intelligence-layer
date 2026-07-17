@@ -181,7 +181,15 @@ def normalize_url(url: str) -> str:
 # --------------------------------------------------------------------------- #
 def classify(body: str, *, is_ats: bool = False) -> tuple[str, str]:
     """Return (status, reason). USABLE / THIN / FAILED based on the extracted
-    job-text body. ATS API results are trusted unless empty."""
+    job-text body. ATS API results are trusted unless empty.
+
+    BUG FIX (2026-07-16): the content-marker check used to only apply when the body was
+    short (< THIN_CHAR_THRESHOLD * 2). A long body with ZERO job-posting content markers —
+    e.g. a JS-rendered SPA whose raw HTML is mostly theme/config JSON, not the rendered job
+    text — sailed through as USABLE purely because it was long. This is exactly how a
+    488KB Microsoft careers-site boilerplate capture got scored as a real job (it wasn't).
+    The has_content check now applies unconditionally: length alone never substitutes for
+    actual job-posting content."""
     b = (body or "").strip()
     n = len(b)
     if n == 0:
@@ -195,8 +203,10 @@ def classify(body: str, *, is_ats: bool = False) -> tuple[str, str]:
         return THIN, "looks like a login/apply shell (no job content)"
     if n < THIN_CHAR_THRESHOLD:
         return THIN, f"short body ({n} chars, under {THIN_CHAR_THRESHOLD})"
-    if not has_content and n < THIN_CHAR_THRESHOLD * 2:
-        return THIN, "no clear responsibilities/requirements content"
+    if not has_content:
+        return THIN, (f"no job-posting content markers found (responsibilities/qualifications/"
+                       f"about the role/etc.) despite {n} chars — likely boilerplate, theme "
+                       f"config, or nav chrome rather than the actual posting text")
     return USABLE, ""
 
 
@@ -347,10 +357,19 @@ def _remove_if_exists(rel_path: str, batch: Path) -> None:
 # --------------------------------------------------------------------------- #
 # Orchestrator — both scripts call this with their own fetch_one()
 # --------------------------------------------------------------------------- #
-def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False) -> dict:
+def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
+                  fetch_fallback=None, fallback_label: str | None = None) -> dict:
     """fetch_one(url) -> dict: {ok: bool, title, company, body, method, error}.
     Manifest-aware: a plain re-run skips already-usable URLs and retries
-    thin/failed ones (set force=True to refetch everything)."""
+    thin/failed ones (set force=True to refetch everything).
+
+    HARD RULE (Jessica, 7/16/26): a job must never be scored against content nobody has
+    confirmed is the real posting. Before quarantining a THIN/FAILED result, always try a
+    SECOND fetch method if one is available (fetch_fallback — same signature as fetch_one).
+    Only after both methods fail does a URL get quarantined, and the quarantine notes then
+    say plainly that multiple methods were attempted and both failed. If no fallback is
+    available at all (e.g. Playwright isn't installed), that limitation is recorded in the
+    manifest/report too, rather than silently only trying once."""
     dirs = batch_dirs(source_dir)
     ensure_dirs(dirs)
     batch_root = dirs["batch"]
@@ -405,12 +424,35 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False)
                     taken.pop(fn, None)
 
         res = fetch_one(url) or {}
-        if not res.get("ok"):
+        methods_tried = [res.get("method") or "unknown"]
+        status, reason = (FAILED, res.get("error") or "fetch failed") if not res.get("ok") \
+            else classify(res.get("body") or "", is_ats=(res.get("method") == "ats"))
+
+        # HARD RULE: never quarantine on one method alone if a second one is available.
+        # A THIN/FAILED first attempt automatically triggers the fallback fetch before we
+        # give up — this is what should have caught the Microsoft SPA-boilerplate capture.
+        if status != USABLE:
+            if fetch_fallback is not None:
+                res2 = fetch_fallback(url) or {}
+                methods_tried.append(res2.get("method") or fallback_label or "fallback")
+                status2, reason2 = (FAILED, res2.get("error") or "fetch failed") if not res2.get("ok") \
+                    else classify(res2.get("body") or "", is_ats=(res2.get("method") == "ats"))
+                if status2 == USABLE or (status == FAILED and status2 == THIN):
+                    # Second method did better (or at least got further than an outright failure).
+                    res, status, reason = res2, status2, reason2
+                # else: keep the first result; both attempts failed/thin either way.
+                reason = f"{reason} (tried {', '.join(methods_tried)}, all failed to produce usable content)" \
+                    if status != USABLE else reason
+            else:
+                reason = f"{reason} — only one fetch method attempted ({methods_tried[0]}); " \
+                         f"no fallback method available (e.g. Playwright not installed) to auto-retry"
+
+        if status == FAILED:
             fn = failed_filename(url, norm)
             out = dirs["failed"] / fn
-            out.write_text(failed_text(url, res.get("error") or "fetch failed", ts), encoding="utf-8")
+            out.write_text(failed_text(url, reason, ts), encoding="utf-8")
             entries.append(base_entry(url, norm, status=FAILED, method=res.get("method"),
-                                      error=res.get("error") or "fetch failed",
+                                      error=reason, notes=f"methods tried: {', '.join(methods_tried)}",
                                       quarantine_path=_rel(out, batch_root)))
             continue
 
@@ -418,15 +460,16 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False)
         company = (res.get("company") or "Unknown").strip()
         body = res.get("body") or ""
         method = res.get("method")
-        status, reason = classify(body, is_ats=(method == "ats"))
 
         fn = unique_filename(company, title, norm, taken, url)
         taken[fn] = norm
         if status == USABLE:
             out = dirs["source"] / fn
             out.write_text(build_output_text(url, title, company, body), encoding="utf-8")
+            note = "" if len(methods_tried) == 1 else f"usable after fallback (tried: {', '.join(methods_tried)})"
             entries.append(base_entry(url, norm, status=USABLE, method=method, company=company,
-                                      title=title, char_count=len(body), output_path=_rel(out, batch_root)))
+                                      title=title, char_count=len(body), notes=note,
+                                      output_path=_rel(out, batch_root)))
         else:  # THIN
             out = dirs["needs_review"] / fn
             out.write_text(thin_text(url, title, company, body, reason, ts), encoding="utf-8")

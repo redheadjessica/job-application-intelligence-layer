@@ -158,8 +158,32 @@ def main() -> None:
     if not urls:
         raise SystemExit("No URLs found in input file.")
 
-    print(f"Found {len(urls)} URL(s). Fetching (ATS API first, then requests)...")
-    prep_common.process_urls(urls, batch_dir, fetch_one, force=args.force)
+    # HARD RULE (Jessica, 7/16/26): never quarantine a URL after trying only one fetch
+    # method. If Playwright is available, wire it in as the automatic second attempt for
+    # any URL the requests fetcher can't get real content from (JS-rendered SPAs especially).
+    try:
+        from playwright.sync_api import sync_playwright
+        HAVE_PLAYWRIGHT = True
+    except ImportError:
+        HAVE_PLAYWRIGHT = False
+
+    if HAVE_PLAYWRIGHT:
+        import prep_job_urls_playwright as pjp
+        print(f"Found {len(urls)} URL(s). Fetching (ATS API first, then requests; "
+              f"Playwright auto-retry enabled for thin/failed results)...")
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            try:
+                prep_common.process_urls(urls, batch_dir, fetch_one, force=args.force,
+                                          fetch_fallback=pjp.make_fetch_one(browser),
+                                          fallback_label="playwright")
+            finally:
+                browser.close()
+    else:
+        print(f"Found {len(urls)} URL(s). Fetching (ATS API first, then requests)... "
+              f"[Playwright not installed — no automatic second-method retry available; "
+              f"thin/failed results will note this limitation]")
+        prep_common.process_urls(urls, batch_dir, fetch_one, force=args.force)
 
 
 if __name__ == "__main__":

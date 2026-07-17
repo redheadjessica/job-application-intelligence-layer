@@ -6,6 +6,7 @@ export const meta = {
     { title: 'Draft', detail: 'writer agent, lint-gated' },
     { title: 'Evaluate', detail: 'fit + voice scores, adversarial, self-pushback' },
     { title: 'Finalize', detail: 'surgical fixes + anti-smoothing lint + .docx + link QA + packet' },
+    { title: 'Record', detail: 'mark Cover Letter? = Y in the batch rankings' },
   ],
 }
 
@@ -166,8 +167,39 @@ Return (structured): final_md_path, docx_path, review_path, changes_applied, dec
 )
 
 const ok = results.filter(Boolean)
+
+// ---- Mark each finished letter in the batch rankings (added 7/16/26) ----
+// So the tracker answers "which of these already have a cover letter?" at a glance instead of
+// requiring a dig through the job folders. Matches by URL first, then job filename.
+if (ok.length) {
+  phase('Record')
+  const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`
+  const cmds = ok.map((L) => {
+    const batchDir = `__READY_TO_REVIEW__PRIVATE_GITIGNORED/${batchOf(L.job)}`
+    return [
+      `PY=".venv/bin/python3"; [ -x "$PY" ] || PY="python3"; "$PY"`,
+      `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/update_rankings_row.py`,
+      `--batch ${shq(batchDir)}`,
+      `--job-file ${shq(String(L.job).split('/').pop())}`,
+      `--cover-letter`,
+    ].join(' ')
+  })
+  await agent(
+    `Mark each completed cover letter in its batch rankings.
+
+Run these EXACT shell commands from the project root, in order, and report each one's output verbatim:
+
+${cmds.join('\n')}
+
+Each prints either "Updated ..." (success) or a line starting with "WARNING: no rankings row matched".
+Do NOT treat a WARNING as fatal and do NOT retry or "fix" it — just report it. Return a short summary:
+how many updated, and the full text of any WARNING lines.`,
+    { phase: 'Record', model: 'haiku', label: 'record cover letters in rankings' }
+  )
+}
+
 return {
   letters: ok,
   failed: jobList.length - ok.length,
-  note: `Prepared ${ok.length}/${jobList.length} cover letter(s). Open each "application_coverletter_output - …" packet first (Questions at top), then copy from the .docx into your letter template with a formatting-preserving paste (in Pages: never "Paste and Match Style"). The .docx is the agent's verbatim output — edit only in your own editor; submit as PDF.`,
+  note: `Prepared ${ok.length}/${jobList.length} cover letter(s). Open each "application_coverletter_output - …" packet first (Questions at top), then copy from the .docx into your letter template with a formatting-preserving paste (in Pages: never "Paste and Match Style"). The .docx is the agent's verbatim output — edit only in your own editor; submit as PDF. Each job's "Cover Letter?" column was also marked Y in its batch rankings.`,
 }

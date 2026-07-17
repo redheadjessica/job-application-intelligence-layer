@@ -5,54 +5,94 @@
   the finished copy to:  PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md  (which is what the engine reads,
   alongside 01-scoring-card.md).
 
-  This file tells the scorer WHO you are, so it can judge Market Perception and Company Style
-  and sort jobs into your lanes. Keep it tight — it's read in full on every job.
+  This file tells the scorer WHO you are, so it can judge Profile Fit and Company Style and sort
+  jobs into your lanes. It is a REASONING DOCUMENT, not a biography: the first half teaches the
+  scorer how to think about this career (identity, throughlines, adjacencies, misclassifications);
+  the factual record follows. Keep it tight — it's read in full on every job.
   {{PLACEHOLDERS}} and <!-- intake: ... --> comments mark what to fill.
 -->
 
 **How this file is used — two kinds of content, kept apart:**
-- **EVIDENCE** (Background, Skill Strengths, Skill Gaps, Seniority) = what you can *demonstrate*. Used by **Profile Fit ("How They May See Your Profile")** and the Generalist-Fit part of **Company Style**.
+- **EVIDENCE** (Career Identity, Throughlines, Strengths, Adjacent Experience, Gaps, Misclassifications, Seniority, Career History) = what you can *demonstrate*. Used by **Profile Fit ("How They May See Your Profile")** and the Generalist-Fit part of **Company Style**.
 - **PREFERENCES** (Priority Lanes, Practical Constraints, and any company/role/manager preferences) = what you *want*. Used by **Want-it (Desire)**, **Company Style**, **Practicality**, and lane assignment.
 - **The wall:** a preference is never evidence that an employer will see you as qualified. Wanting a lane/mission/company must never move Profile Fit.
 
-**This is a canonical summary derived from richer materials** (your experience bank + master profile). **Omission is not absence:** if something isn't listed, that is not proof you lack it — a requirement with no signal is *unknown*, not *failed*. Only items in Skill Gaps are gaps; do not infer a weakness from silence.
+**This is a canonical summary derived from richer materials** (your experience bank + master profile). **Two kinds of silence, treated differently:** if the *posting* is vague or the requirement is an undocumented baseline ("strong communication"), score neutrally — silence there is not failure. But if a posting *clearly asks* for a specialization and this profile has no named evidence of it, that is **not** license for optimism — the scorer grades what a hiring team could actually see. Items in Confirmed Recurring Gaps and Boundaries are established, recurring gaps — but that list is not exhaustive; a per-job `candidate-silent` finding on an unlisted specialization is a separate, job-scoped judgment, not proof the list is complete. Material open questions get logged for you to answer.
 
 ---
 
-## Background
-<!-- intake: 2–4 sentences. Who they are professionally, the anchor credential(s) a recruiter would notice,
-     the domains they've worked in, and the kind of operator they are. Pull from the resume; confirm the framing. -->
+## Career Identity
+<!-- intake: 2–4 sentences that state what KIND of product person this career says you are — the identity
+     a hiring team would read off the whole resume, not a summary of jobs held. Name the anchor
+     credential(s), the recurring strengths, and (honestly) what you are NOT — e.g. "a proven consumer
+     generalist known for X and Y, not a deep specialist in Z." Then 1–2 sentences on how a hiring team
+     reads you: which role-theses your career matches as "the thing itself," and where you read as a
+     strong generalist applying sideways. -->
 
-{{2–4 sentence professional summary — seniority, anchor experience, domains, operating style}}
+{{career identity statement}}
+
+**How a hiring team reads this career:** {{which hiring theses this career tells repeatedly and coherently; for which theses it reads as adjacent}}
 
 ---
 
-## Skill Strengths (score higher when a role emphasizes these)
-<!-- intake: bullet the skill clusters that are a clear YES. Derive from the resume, then confirm/trim.
-     EACH strength should carry a brief PROOF ANCHOR (a company, scale, outcome, or artifact) so it's
-     credible to an employer — "Activation & onboarding (led the new-user-experience team at <Co>)",
-     not a bare label like "onboarding". A strengths list of bare labels is too thin to score fit well. -->
+## Career Throughlines (recurring themes — the story the whole career tells)
+<!-- intake: 3–6 SYNTHESIZED themes that recur across multiple roles — not a list of skills, the
+     narrative threads. Each throughline names the theme and cites 2+ roles/artifacts that demonstrate
+     it. The scorer gives narrative credit when a role's hiring thesis matches a THROUGHLINE; a single
+     isolated bullet does not earn that credit. Mark any weaker/supporting theme as "(supporting
+     throughline — reinforces the story; never the headline)". -->
+
+1. **{{throughline}}** — {{the 2+ places it shows up}}
+2. **{{throughline}}** — {{...}}
+3. {{... 3–6 total}}
+
+---
+
+## Clearly Established Strengths (demonstrated repeatedly, across multiple roles)
+<!-- intake: bullet the capabilities that are a clear YES — signals a hiring team can verify, not resume
+     bullets. EACH strength carries a brief PROOF ANCHOR (a company, scale, outcome, or artifact) —
+     "Activation & onboarding (led the new-user-experience team at <Co>)", not a bare label. -->
 <!-- If the candidate builds with AI, say so HERE as a strength (hands-on AI building / AI-tool fluency);
      do not let AI show up only as a gap. Reserve the gap list for genuine, narrow, day-one gaps. -->
 
-- {{strength 1}}
-- {{strength 2}}
-- {{strength 3}}
+- {{strength + proof anchor}}
+- {{strength + proof anchor}}
 - {{... 6–11 bullets total}}
 
 ---
 
-## Skill Gaps (score lower when a role centers these)
+## Adjacent Experience (real, meaningful — but NOT defining specializations)
+<!-- intake: the most important calibration section. These are areas where the candidate has genuine
+     experience that a recruiter will see — and that experience does NOT make them the specialist a req
+     written around that theme is looking for. Table format: area | what the record supports | what it
+     does NOT support. Typical candidates: mobile, growth, a domain vertical (health, fintech, ...),
+     AI-at-production-scale, enterprise, marketplaces. Think carefully about where each area belongs:
+     here, in Strengths, or in Gaps. -->
+
+| Area | What the record supports | What it does NOT support |
+|---|---|---|
+| {{area}} | {{documented experience}} | {{the specialist identity it doesn't add up to}} |
+| {{area}} | {{...}} | {{...}} |
+
+---
+
+## Confirmed Recurring Gaps and Boundaries
 <!-- intake: the things that, when CENTRAL to a role, make the user a weaker or mis-cast fit.
      Not weaknesses to hide — signals for triage. Ask: "what kind of role is NOT for you?"
-     Keep each gap NARROW and precise (the specific thing they lack), not a broad category that
-     contradicts a demonstrated strength — e.g. "in-house ML/model ownership + mature eval-system
-     operation", NOT a blanket "AI/ML" that would wrongly cancel out hands-on AI building. Do NOT put
-     private self-development / coaching reflections here (managing up, perfectionism, etc.) — those
-     are not employer-visible and must not become scoring penalties. -->
-<!-- absence rule: only items listed here are gaps; the scorer must not infer a gap from something
-     simply being missing from the Strengths list. -->
-<!-- Distinguish evidence types when a gap is really "adjacent": direct vs transferable vs absent. -->
+     These must be genuine profile limitations, not temporary resume omissions. Keep each gap NARROW
+     and precise (the specific thing they lack), not a broad category that contradicts a demonstrated
+     strength — e.g. "in-house ML/model ownership + mature eval-system operation", NOT a blanket
+     "AI/ML" that would wrongly cancel out hands-on AI building. Do NOT put private self-development /
+     coaching reflections here (managing up, perfectionism, etc.) — those are not employer-visible and
+     must not become scoring penalties. -->
+<!-- IMPORTANT — this list is NOT exhaustive and must not be framed as such (a real contradiction was
+     found and fixed 7/15/26): this section covers gaps confirmed during intake and likely to recur
+     across many roles, not every capability the candidate has never performed. For a clearly stated,
+     thesis-central requirement not established anywhere in this profile, the scorer uses the scoring
+     card's candidate-silent / name-the-evidence rules and may grade that ONE role's requirement
+     `absent` — that is a per-job evidence judgment, not a new permanent claim, and must not be added
+     here or reused on a different job. Absence from the Strengths list is not, by itself, evidence of
+     a weakness — but it is also not proof an unlisted specialization is present. -->
 
 - {{gap / anti-fit 1}}
 - {{gap / anti-fit 2}}
@@ -60,10 +100,31 @@
 
 ---
 
+## Common Misclassifications (analogies that flatter — the scorer treats each with suspicion)
+<!-- intake: teach the scorer which specific analogies about THIS candidate look plausible but are
+     wrong, in "X ≠ Y" form with a clause of why. Generic examples to adapt:
+       "invitation-system ownership ≠ referral-program building",
+       "consumer PM ≠ full-stack growth PM", "hands-on AI builder ≠ production AI shipper",
+       "domain-adjacent ≠ domain specialist". Derive them from the Adjacent Experience table:
+     each adjacency usually implies one misclassification. -->
+
+- **{{plausible analogy}} ≠ {{what the req actually wants}}.** {{one clause: why the analogy breaks}}
+- {{... 4–8 bullets}}
+
+---
+
 ## Seniority Context
 <!-- intake: 2–4 sentences on level. Where they'd look over-leveled, where under-leveled, and the sweet spot. -->
 
 {{level framing — e.g. "Senior-to-staff IC product leader. Over-leveled for mid-level PM roles; under-leveled for roles managing 4+ PMs. Player-coach / IC-heavy senior roles are the sweet spot."}}
+
+---
+
+## Career History (sequence only — dates and full detail live in the resume canon)
+<!-- intake: one compact arrow-chain of roles in order, oldest → current, bolding the 1–2 anchor roles.
+     No dates, no bullets — the resume bases own the detail; this just lets the scorer see the arc. -->
+
+{{Role @ Co → Role @ Co → **Anchor Role @ Co** → ... → **Current Role @ Co**}}
 
 ---
 

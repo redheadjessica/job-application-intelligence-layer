@@ -370,6 +370,7 @@ Rules:
 - Do not generate a significantly longer summary unless the candidate explicitly asks for it.
 - Prefer a compact summary that can fit in the existing resume layout with only minor manual adjustment.
 - When in doubt, err slightly shorter rather than longer.
+- **Don't spend summary space duplicating what's already visible in the first experience bullet.** The recruiter reads the summary and the top of the experience section within the same few seconds; a summary clause restating the candidate's current role/project ("most recently on X, a …") that is literally the first bullet below it buys nothing. Summary space sells *fit for this role* — angle, throughline, why-them — not a recap of adjacent content. A brief name-drop is fine when it carries new positioning; a full descriptive clause of bullet #1 is not.
 
 Tone and style:
 - The summary should read more casually and conversationally than the rest of the resume.
@@ -446,7 +447,7 @@ This file should contain the full actionable output for the run, in this order (
 4. Summary Options
 5. Skills Recommendation
 6. Selected Writing / Projects recommendation (if the candidate has a Voice/portfolio family)
-7. Content Opportunity (high-priority roles only; omit otherwise — unless the candidate's profile says to always include one)
+7. Content Opportunity (ONLY if the candidate opted in at intake — see Step 9.5; omit the section entirely for candidates who didn't)
 
 **Bottom — context and diagnostics:**
 8. Job Analysis
@@ -455,6 +456,15 @@ This file should contain the full actionable output for the run, in this order (
 11. Final Risks / Notes
 12. Suggested System Updates
 13. Read Log (last)
+
+### "Questions for the candidate" — content discipline
+
+That section exists for **genuine gaps**: missing or ambiguous work history, experience the JD asks about that the source files can't confirm, and factual questions whose answers would change the recommendation. Nothing else belongs there.
+
+- **No comp/logistics FYIs.** "The posted range is below/at your floor" is a one-line note under *Final Risks / Notes*, not a question — the candidate already decided to pursue the job when they put it in the batch.
+- **Never remind the candidate that an optional section is optional.** No standing disclaimers of the form "the Content Opportunity below assumes you're willing to write something new — if not, just skip it." Optional sections are optional by definition; saying so wastes the highest-value real estate in the file. This applies to every optional section, not just Content Opportunity.
+- **Flagging a genuinely NEW bullet or claim for confirmation stays** — that is a real question about the candidate's history, exactly what the section is for.
+- The test for every entry: *does the candidate's answer change what goes on the resume?* If not, it is not a question — move it to the diagnostics half or delete it.
 
 ## Terminal Output
 
@@ -468,7 +478,12 @@ All proposed bullets, summaries, and skills should be formatted so they can be c
 
 **⭐ NO hard line-wrapping.** Write each sentence/paragraph/bullet as ONE continuous line and let the editor soft-wrap. Never insert manual line breaks mid-sentence with continuation indentation — it makes the files hard to read and wastes space. One bullet = one line, however long.
 
-**⭐ Work Experience format — notes first, then paste-ready bullets.** For EACH role section: (1) your reasoning/notes/what-changed at the top, then (2) a single clean block of the complete final bullets in submission order, each starting with `- `, containing ONLY the exact resume text — **no quotation marks around bullets, no inline commentary, no source tags, nothing interleaved between bullets.** The test: the candidate selects the whole bullet block, pastes it straight into their editor, and edits nothing. (Candidates skip suggestions when cleaning quotes/notes out takes too long.)
+**⭐ Delta-only against the chosen base — never restate what isn't changing.** The candidate is reading this file next to the base resume you recommended; re-listing bullets that are identical to the base only adds reading time and hides the real changes. Per role section:
+- **If the role's section is unchanged from the base:** ONE line — `No changes — use [base]'s [Role] section as-is.` Nothing else. Do not reproduce the bullets, and do not present the base's own bullets back as if they were suggestions (recommending "replace X with Y" where Y is word-for-word identical to X is the specific failure this rule exists to stop).
+- **If the role's section has changes:** notes explaining ONLY what changed and why (never per-bullet commentary on unchanged bullets), then the paste-ready block below.
+- The output should read as a short change list, not a full resume transcript. A reader should be able to find every actual edit in under a minute.
+
+**⭐ Work Experience format for CHANGED roles — notes first, then paste-ready bullets.** For each role section that has changes: (1) your reasoning/notes/what-changed at the top, then (2) a single clean block of the complete final bullets in submission order (complete so it can be pasted wholesale — this is the one place restating unchanged neighbors is allowed, because the block must paste as a unit), each starting with `- `, containing ONLY the exact resume text — **no quotation marks around bullets, no inline commentary, no source tags, nothing interleaved between bullets.** The test: the candidate selects the whole bullet block, pastes it straight into their editor, and edits nothing. (Candidates skip suggestions when cleaning quotes/notes out takes too long.)
 
 Avoid:
 - tables
@@ -1105,14 +1120,17 @@ When two roles at the same company are tailored (e.g. a Staff and a Principal op
 
 ---
 
-## Step 9.5 — Targeted Content Opportunity (high-priority roles only)
+## Step 9.5 — Targeted Content Opportunity (opt-in feature; high-priority roles only)
 
-For a **high-priority role only** (the batch ranked it Apply ASAP / Apply If Time, or it's clearly a top target), consider whether **one** new or repurposed piece of writing would *materially* strengthen this specific application. If the candidate has writing samples or a portfolio (the Voice family from intake), draw on them.
+**This feature is opt-in at intake.** It only runs for candidates whose `01-profile.md` records that they want pre-application content suggestions (intake asks; see the intake skill). If the profile carries no content-opportunity preference, **skip this step entirely and omit the section from the output — not even a placeholder.**
+
+For an opted-in candidate, on a **high-priority role only** (the batch ranked it Apply ASAP / Apply If Time, or it's clearly a top target), consider whether **one** new or repurposed piece of writing would *materially* strengthen this specific application. Draw on their content library / writing samples (the Voice family from intake) so suggestions build on what they've already written — and never propose a topic they've already covered as if it were new.
 
 Rules:
 - **Recommend at most ONE piece.** Never a list.
 - **Omit the section entirely** if there isn't a strong, specific reason to write or repurpose something. Most applications should not get a recommendation. Silence is the default.
 - **Profile override:** if the candidate's `01-profile.md` says to always propose content ideas, this section becomes required in every output (1–2 ideas, still honest about effort/risk) — their standing preference beats the omit-by-default rule.
+- **Never preface the section with a reminder that it's optional** ("this assumes you're willing to write something new — if not, skip it"). The section is inherently optional; the candidate opted into it; nothing else in the resume ever depends on it. Just present the idea.
 - It can be a brand-new piece or a repurpose/extension of existing writing.
 - Be honest about effort and risk — don't recommend a heavy lift for a marginal gain.
 
