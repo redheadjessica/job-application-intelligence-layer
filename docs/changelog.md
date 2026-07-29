@@ -11,6 +11,14 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — REVERT: voluntary diversity-statement prompts are KEPT, not excluded
+
+Reverses the same-day decision to exclude voluntary diversity-statement prompts ("we recruit from underrepresented communities — if you bring a diverse perspective based on your background, share more here"). The candidate reviewed it and reversed the call, and her reasoning is the better rule: **the distinction that matters is FORM, not topic.** A gender/race *dropdown* is a routine self-ID field with nothing to compose — correctly excluded. A *free-text* prompt inviting you to write about your background requires genuinely sitting down and composing something, which is exactly what the "think and compose a response" keep-test is for. Excluding it silently discarded a question she'd actually have to write.
+
+Removed the four narrow patterns from `_EXCLUDE_LABEL_RE` and replaced them with a comment recording the decision and warning against re-adding them (this is the second time the rule has moved; the comment is there so a future pass doesn't "helpfully" re-exclude). Flipped the three parametrized tests from *dropped* to *KEPT*, and added a companion test asserting the revert did NOT weaken the routine exclusions — dropdown-style gender/race/veteran/disability selects must still be dropped. Suite: **129 passed**.
+
+Generic lesson for the filter: when deciding whether a question is "routine," check whether answering it requires composition, not whether its subject matter resembles an EEO topic.
+
 ## 2026-07-29 — Multi-ATS application-question capture: three new fetchers + one generalized apply-page renderer
 
 Before this, only two of the supported sources could produce application questions at all: Greenhouse (questions come back on the boards API) and Ashby (questions only exist on the rendered apply page). Every other source hardcoded `"questions": []`, so a whole class of postings looked like they had no questions when they simply had no capture path. Fixed by adding three fetchers and generalizing the render, all in `02-PREP/`.

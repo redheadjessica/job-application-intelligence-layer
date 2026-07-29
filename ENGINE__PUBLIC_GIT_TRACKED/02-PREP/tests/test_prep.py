@@ -715,19 +715,21 @@ def test_ashby_apply_url_never_puts_path_after_query():
 
 
 # --------------------------------------------------------------------------- #
-# Voluntary diversity-statement prompts must be EXCLUDED (2026-07-29)
+# Voluntary diversity-statement prompts must be KEPT (decided 2026-07-29)
 #
-# These are free-text, so the compose-a-response keep-rule would otherwise retain
-# them, but they are candidate SELF-IDENTIFICATION: they reveal nothing about the
-# job and aren't a job-specific response. Real example that slipped through before
-# this fix (a Greenhouse post's optional third question).
+# History: these were briefly EXCLUDED as self-identification. That was wrong for
+# this system's purpose and the candidate reversed it. The distinction that matters
+# is FORM, not topic: a gender/race DROPDOWN is a routine self-ID field (excluded),
+# but a free-text prompt inviting you to write about your background requires
+# genuinely sitting down and composing something — so it passes the
+# "think and compose a response" keep-test. Do not re-add an exclusion for these.
 # --------------------------------------------------------------------------- #
 _DIVERSITY_PROMPTS = [
-    ("Blue-Rose-style optional diversity statement",
-     "Blue Rose Research is invested in advancing the diversity of our teams by "
-     "recruiting from underrepresented communities. If you believe you bring a "
-     "diverse perspective based on your background, communities or experience, we "
-     "invite you to share more here. This is completely optional."),
+    ("optional free-text diversity statement",
+     "We are invested in advancing the diversity of our teams by recruiting from "
+     "underrepresented communities. If you believe you bring a diverse perspective "
+     "based on your background, communities or experience, we invite you to share "
+     "more here. This is completely optional."),
     ("underrepresented groups phrasing",
      "We recruit from underrepresented groups — tell us about your background."),
     ("diverse perspective phrasing",
@@ -736,14 +738,30 @@ _DIVERSITY_PROMPTS = [
 
 
 @pytest.mark.parametrize("name,label", _DIVERSITY_PROMPTS)
-def test_voluntary_diversity_statements_are_excluded(name, label):
+def test_voluntary_diversity_statements_are_kept(name, label):
+    # Free-text => compose-a-response => KEEP (see the note above).
     fields = [{"label": label, "type": "textarea", "required": False, "options": []}]
-    assert af.filter_questions(fields) == [], f"{name} must be dropped"
+    kept = af.filter_questions(fields)
+    assert len(kept) == 1, f"{name} must be KEPT (free-text, requires composition)"
+
+
+def test_dropdown_style_self_id_fields_are_still_excluded():
+    # The revert above must NOT weaken the routine self-ID exclusions: a gender/race
+    # style SELECT is administrative, not a composed response.
+    fields = [
+        {"label": "Gender", "type": "select", "required": False,
+         "options": [{"label": "Male"}, {"label": "Female"}, {"label": "Decline"}]},
+        {"label": "Race / Ethnicity", "type": "select", "required": False,
+         "options": [{"label": "Decline to self-identify"}]},
+        {"label": "Veteran Status", "type": "select", "required": False, "options": []},
+        {"label": "Disability Status", "type": "select", "required": False, "options": []},
+    ]
+    assert af.filter_questions(fields) == []
 
 
 def test_question_about_building_for_diverse_users_is_kept():
-    # Guard against over-exclusion: a genuine job-material question that happens to
-    # mention diverse USERS is a compose-a-response question and must SURVIVE.
+    # A genuine job-material question that happens to mention diverse USERS is a
+    # compose-a-response question and must SURVIVE.
     fields = [{
         "label": "How would you approach designing an onboarding flow that works for "
                  "a diverse set of users with very different needs?",

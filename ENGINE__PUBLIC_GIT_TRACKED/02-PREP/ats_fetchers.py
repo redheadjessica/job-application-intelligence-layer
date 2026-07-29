@@ -147,13 +147,14 @@ _EXCLUDE_LABEL_RE = re.compile(
     r"salary expectation|compensation expectation|"
     r"\bgender\b|\brace\b|ethnic|hispanic|latino|veteran|disabilit|"
     r"sexual orientation|self[- ]identif|demographic|"
-    # Voluntary DIVERSITY-STATEMENT prompts. These are free-text (so the
-    # compose-a-response keep-rule would otherwise retain them) but they are
-    # candidate self-identification, not job-material: they tell you nothing about
-    # the role and aren't a job-specific response. Patterns kept narrow so a
-    # genuine question about building for diverse USERS still survives.
-    r"underrepresented (communit|group|background)|"
-    r"diverse perspective|diversity of our team|advancing the diversity|"
+    # NOTE (reverted 2026-07-29, by the candidate's explicit call): a previous change
+    # excluded voluntary DIVERSITY-STATEMENT prompts ("we recruit from underrepresented
+    # communities — if you bring a diverse perspective based on your background, share
+    # more here") as self-identification. That was WRONG for this system's purpose. Such
+    # a prompt is FREE TEXT that requires genuinely sitting down and composing something
+    # about yourself — categorically different from a gender/race dropdown — so it passes
+    # the "think and compose a response" keep-test and MUST be kept. Do not re-add an
+    # exclusion for it. (The dropdown-style self-ID fields above are still excluded.)
     r"country of residence|current (city|residence|address)|home address|"
     r"where (do|are) you (currently )?(live|located|residing|reside)|"
     r"where are you (currently )?based|"
