@@ -18,6 +18,8 @@
 - **Scores low when:** {{the spaces and kinds of work that leave you flat}}
 - **Your extra must-haves / pulls:** {{1–2 personal factors a generic list would miss — e.g. "climate impact", "remote-first culture", "no ad-tech or gambling"}}
 
+**Strategic Career Leverage (optional — a bounded part of this "Want it" score).** A job can be only *moderately* attractive on its own yet worth prioritizing because succeeding in it would build the specific, missing experience that makes you much more competitive for the work you *ultimately* want next. This helps you decide where to spend limited application time and effort — a role can be desirable both for the work itself *and* because it's a strong bridge toward where you're headed. It is turned on ONLY if you fill in `Target Career Direction`, `Primary Strategic Gaps`, and `High-Leverage Bridge Work` in your candidate profile; if you leave those blank, no leverage adjustment is applied (the scorer never guesses a strategy for you). When on, a role earns a **bounded** uplift (None / Some / Strong / Exceptional) ONLY when all three hold: (1) it would close one of your *named* strategic gaps, (2) that work is part of *your actual mandate* in the posting (not just "the company uses AI / is in healthcare / another team owns it"), and (3) the resulting evidence would be *legible* to a future employer in your target lane. It never rewards prestige/logo/comp alone, never overrides Culture/Practicality/Fit, and never rescues a role you'd genuinely dislike into a dream role.
+
 ---
 
 ## 2. Fit — how convincingly your career tells the story they're hiring for   (weight: 30%)

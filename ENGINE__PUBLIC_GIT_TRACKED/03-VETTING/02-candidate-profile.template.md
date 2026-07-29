@@ -154,6 +154,20 @@
 
 ---
 
+## Target Career Direction & Strategic Leverage  (OPTIONAL — leave blank to skip)
+<!-- intake: OPTIONAL and lightweight — do NOT interrogate the user. Fill this ONLY if the user
+     wants the scorer to recognize "stepping-stone" value: roles that aren't a top mission match on
+     their own but would build the specific missing experience that makes the user much more
+     competitive for where they ultimately want to go. If these three fields are blank, the scorer
+     applies NO Strategic Career Leverage adjustment and never guesses a strategy. These feed the
+     "Want it (Desire)" score only — never Fit/Profile. Keep each to a few concrete lines. -->
+
+- **Target Career Direction:** {{the kind of work you ultimately want next — the lane(s)/problem space you're building toward. Be specific but not a single narrow keyword.}}
+- **Primary Strategic Gaps (1–3):** {{the 1–3 missing experiences that most limit your competitiveness for that direction today — e.g. "shipped production AI to real users / owned agentic workflows + evals", "recent domain evidence in <health/coaching/learning/…>". Name them concretely.}}
+- **High-Leverage Bridge Work:** {{the kinds of OWNED work that would credibly close those gaps and be legible to a future target-lane employer. Also note what does NOT count (e.g. "generic AI-adjacency without owning production AI", "a health company whose mandate isn't care/outcome-related").}}
+
+---
+
 ## Practical Constraints
 <!-- intake: the hard, scalar facts the scorer needs for Practicality. Ask directly; these are easy questions. -->
 

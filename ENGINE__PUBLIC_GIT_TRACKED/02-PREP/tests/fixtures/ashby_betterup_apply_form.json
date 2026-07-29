@@ -1,0 +1,96 @@
+{
+  "_comment": "Hand-authored fixture representing the RENDERED Ashby apply-page form fields for the BetterUp Principal Product Manager posting. Ashby's posting-api does NOT expose application questions, so these are what a best-effort Playwright render of the /application page would scrape. System (routine/identity) fields are prefixed with _systemfield_ exactly as Ashby names them. Two custom fields exercise the narrow keep-filter: a compose mission essay (keep) and an office-proximity ValueSelect that reveals working-location + cadence (keep). A visa Boolean must be dropped.",
+  "organization": "betterup",
+  "jobId": "fa0a5d05-39f9-47d5-9fc9-0a0540ff9018",
+  "fields": [
+    {
+      "id": "sf-name",
+      "path": "_systemfield_name",
+      "title": "Name",
+      "type": "Name",
+      "isRequired": true,
+      "options": []
+    },
+    {
+      "id": "sf-email",
+      "path": "_systemfield_email",
+      "title": "Email",
+      "type": "Email",
+      "isRequired": true,
+      "options": []
+    },
+    {
+      "id": "sf-phone",
+      "path": "_systemfield_phone",
+      "title": "Phone",
+      "type": "Phone",
+      "isRequired": false,
+      "options": []
+    },
+    {
+      "id": "sf-resume",
+      "path": "_systemfield_resume",
+      "title": "Resume",
+      "type": "File",
+      "isRequired": true,
+      "options": []
+    },
+    {
+      "id": "sf-linkedin",
+      "path": "_systemfield_linkedin",
+      "title": "LinkedIn Profile",
+      "type": "String",
+      "isRequired": false,
+      "options": []
+    },
+    {
+      "id": "sf-location",
+      "path": "_systemfield_location",
+      "title": "Current Location",
+      "type": "Location",
+      "isRequired": false,
+      "options": []
+    },
+    {
+      "id": "q-mission",
+      "path": "0e2f7a10-mission-essay",
+      "title": "BetterUp's mission is to help people everywhere pursue their lives with greater clarity, purpose, and passion. How does this mission resonate with you, and what specifically draws you to this role?",
+      "type": "LongText",
+      "isRequired": true,
+      "options": []
+    },
+    {
+      "id": "q-visa",
+      "path": "9c1b4d22-visa-sponsorship",
+      "title": "Will you now or in the future require visa sponsorship to work in the United States?",
+      "type": "Boolean",
+      "isRequired": true,
+      "options": []
+    },
+    {
+      "id": "q-office",
+      "path": "3a7e9f01-office-proximity",
+      "title": "I understand that this role requires me to live within 45 miles of one of the following offices and attend in person at least 2 days per week. Which office are you closest to?",
+      "type": "ValueSelect",
+      "isRequired": true,
+      "options": [
+        { "value": "sf", "label": "San Francisco Bay Area" },
+        { "value": "nyc", "label": "New York City" },
+        { "value": "austin", "label": "Austin, TX" },
+        { "value": "dc", "label": "Washington, D.C." }
+      ]
+    },
+    {
+      "id": "sf-eeo-gender",
+      "path": "_systemfield_eeo_gender",
+      "title": "Gender",
+      "type": "ValueSelect",
+      "isRequired": false,
+      "options": [
+        { "value": "m", "label": "Male" },
+        { "value": "f", "label": "Female" },
+        { "value": "d", "label": "Decline to self-identify" }
+      ]
+    }
+  ]
+}

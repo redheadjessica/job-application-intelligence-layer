@@ -65,8 +65,18 @@ def terse_base(s: str) -> str:
     s = re.sub(r'\*\*', '', (s or "").strip())
     s = re.sub(r'^\s*[-*•]\s+', '', s)   # leading markdown bullet
     s = _LABEL.sub('', s).strip()
+    # Collapse a date-paren that carries extra words INSIDE it: "(7/1/26 finalized submission)"
+    # -> "(7/1/26)". Do this BEFORE _DATE_END so the paren is a clean date to anchor on.
+    s = re.sub(r'\((\d{1,2}/\d{1,2}/\d{2}|\d{1,2}/\d{2})[^)]*\)', r'(\1)', s)
     m = _DATE_END.match(s)
-    s = m.group(1) if m else _PROSE_CUT.split(s, maxsplit=1)[0]
+    if m:
+        s = m.group(1)
+    else:
+        # No parenthesized date to anchor on. If there's a BARE date ("..., 6/11/26 (canonical...)"),
+        # truncate right after it — everything past the date is trailing prose. Otherwise fall back
+        # to cutting at the first prose connector.
+        bare = re.search(r'\d{1,2}/\d{1,2}/\d{2}|\d{1,2}/\d{2}', s)
+        s = s[:bare.end()] if bare else _PROSE_CUT.split(s, maxsplit=1)[0]
     s = s.strip().rstrip('.,').strip()
 
     def _d(mm):

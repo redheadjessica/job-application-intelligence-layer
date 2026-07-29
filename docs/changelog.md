@@ -11,6 +11,186 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Completeness audit of 51 still-open jobs surfaced a real working-location prose bug
+
+Ran a private completeness audit: re-fetched 51 still-open jobs with the current engine and compared each result with the text originally scored. Three were materially incomplete or employer-changed, three were now closed, and the other 45 retained complete job text. Re-scoring the affected usable posts confirmed that truncated responsibilities can materially change rankings even when comp/location were present. One SPA career-site family also re-fetched worse than the originals because related-jobs chrome contaminated the captured body; preserve the originals until a dedicated cleaner ships. Candidate-specific companies, scores, and artifacts remain in the gitignored audit folder rather than this public changelog.
+
+**Bug found — working-location prose fallback declared `found` on garbage.** Among audit jobs whose working location came from prose, four captured the literal single letter `"s"` and three more returned noisy navigation or marketing text while still reporting `Completeness ✓`. The comp prose scanner was clean on the same audit. The false-complete condition was isolated to the location prose regex; structured-ATS captures were unaffected.
+
+**Fix shipped (`prep_common.py`).** Two root causes, both in the location prose path (comp path untouched; structured-ATS path untouched):
+1. `_LOC_LABEL_RE` matched the keyword "location" *inside* the plural nav label "Locations"/"Office locations" and captured the trailing `"s"` — fixed by `\b`-terminating the keyword group.
+2. `_CITY_STATE_RE` used `\s` as its inter-word separator, and `\s` matches newlines, so a city glued onto the previous line's trailing token across a break ("Google Cloud\nAustin, TX" captured as one city) — fixed by restricting the separator to `[ \t]`.
+New `_sanitize_location()` validates every prose candidate before the gate may call working-location `found`: prefer a real `City, ST`, drop division prefixes / trailing marketing-sentence+URL tails, reject sub-3-char/nav-blocklist tokens, and require a genuine workplace signal (Remote/hybrid/onsite/cadence) or a compact "City, Region" phrase — else `None` → `capture_failed`. Verified against the audit's malformed values, including rejection of `"s"` and cleanup of navigation text joined across a newline. Added 15 regression tests (section 19 in `02-PREP/tests/test_prep.py`); suite now 54 passing. **Still open (secondary, not done):** one SPA career-site family pulls related-jobs chrome into the body and needs a dedicated extraction fix.
+
+**Also caught (process note):** the first-pass audit diff compared only the job *body* and stripped the `== NORMALIZED ==` block, which made correctly captured compensation look missing. Any completeness comparison must read the normalized block, not just the body.
+
+## 2026-07-29 — Desire: add bounded "Strategic Career Leverage" factor (stepping-stone value)
+
+Fixes a real Desire blind spot: a role can be only moderately attractive *in isolation* yet highly worth limited application time because succeeding in it would build the specific, missing evidence that makes the candidate much more competitive for the work they ultimately want next. That is NOT Profile Fit (how a hiring team sees the documented profile now) — it's a distinct question the sub-factor sum missed.
+
+Smallest clean change (no redesign, no new column/score, Desire weight/format unchanged): replaced the vague "career-ladder value" cross-cutting multiplier with a rigorous, bounded **Strategic Career Leverage** rule that mirrors the existing mission-floor override pattern — `desire = max(sum, min(sum + uplift, 85))`.
+- **Gated by a 3-part test** (all must hold for Strong/Exceptional): named-gap (closes a *stated* strategic gap), ownership (the work is the candidate's *actual mandate*, not "the company uses AI / is in healthcare / another team owns it"), future-legibility (a target-lane employer would readily understand the evidence).
+- **Bounded uplift:** None +0 / Some +2–6 / Strong +7–11 / Exceptional +11–16, capped at 85 (leverage alone never makes a role a drop-everything 86–100 dream), never lowers the raw sum, disliked-work guard (Role Excitement ≤ 10 → capped at Some), and it never touches Profile/Style/Practicality. Explicitly must not reward prestige/logo/comp alone, vague AI/health adjacency, or paths needing unsupported leaps. Output stays concise — one clause in `mission_fit_notes` + level/evidence in the optional `mission_fit_detail`; no new column.
+- **User-defined, generic:** driven by three new candidate-profile fields (`Target Career Direction`, `Primary Strategic Gaps`, `High-Leverage Bridge Work`); if blank, NO adjustment is applied (never invent a strategy). Added to the public `02-candidate-profile.template.md` (optional/lightweight) + `01-scoring-card.template.md` (generic explanation with the "helps decide where to spend application effort" framing), with a scorer pointer in `vet-jobs.js`. Candidate-specific values and calibration results remain in gitignored private files.
+
+## 2026-07-29 — Rankings: visible per-job "Data Completeness" column + loud top-of-sheet flag
+
+Prep now records per-field capture quality (comp + working-location), but nothing surfaced it in the ranking — so the candidate couldn't tell at a glance which scores were computed against complete data without spot-checking each job. Added a generic (all-users) Data Completeness indicator threaded through both halves of the rankings output:
+
+- **`vet-jobs.js`:** new `Data Completeness` column in `HEADERS`/`dataCells` (after Comp Fit, before Cover Letter?). Value derived deterministically at assembly time (no LLM, no `SCORE_SCHEMA` change): read the prep manifest once (`0 - Prep Report/prep-manifest.json`), map `basename(output_path)` → `field_status`, and label from it — `✓ complete` when both comp + working-location are `found`; else a terse flag distinguishing benign employer omission (`comp not posted`) from could-not-verify (`⚠ comp not verified` / `⚠ location unknown` / `⚠ comp+location not verified`). FALLBACK for older batches with no `field_status`: derive from the row's own comp/location text (comp `??`/empty or location `Unknown`/empty → could-not-verify). A loud summary line was also added to the top of the Markdown rankings: `⚠️ Incomplete captures (N): …` (attention rows only; skips pure `not posted`), or an all-clear line.
+- **`make_rankings_xlsx.py`:** maps the label text → a cell color (green `complete` / amber `not posted` / red could-not-verify), and — for CSVs written before this column existed — reproduces the JS row-fallback so any batch regenerates with the column populated + colored. Added a merged banner just below the jobs (above the section legend) carrying the same `⚠️ Incomplete captures (N)` list, and mirrored the flag at the top of the Instructions tab. Column-index/letter mapping stays dynamic off the CSV header, so the inserted column needed no manual re-indexing of widths / dropdown / autofilter ranges.
+
+Verified by regenerating a pre-`field_status` batch from its current CSV, exercising the fallback: three `Unknown`-location rows became `⚠ location unknown` (red), the remaining rows became `✓ complete` (green), and the banner listed the three affected rows. The XLSX reloads clean via openpyxl; the prep pytest suite remained green.
+
+---
+
+## 2026-07-29 — Prep completeness: prose-aware verdict + custom-domain ATS dispatch (stop crying wolf)
+
+Re-verifying the whole 07-28-26 batch (11 jobs) with the new engine exposed two false-alarm classes: 6 jobs came back `capture_failed` for comp+location even though several plainly published them — Rippling, Blue Rose (techjobsforgood), and the Google roles write the pay range and location into the JD PROSE, and the vetting scorer reads that body and used them correctly. The completeness verdict was only checking structured fields, so it contradicted what the scorer could actually determine. Two fixes, both in `02-PREP/`:
+
+- **FIX 1 — prose-aware `assess_completeness` (prep_common.py).** Before marking compensation or working-location `capture_failed`, scan the captured JD body (the same text the scorer reads): a currency/keyword-gated pay range (`$174,000 - $290,000`, `USD 232,000–282,000`, `$110K–$180K`, and comma-less currency amounts like Google's `$240000 - $334000`) → comp `found` (source: description), best-effort range surfaced on the Compensation line marked "(from description)"; a named `City, ST` / Remote / hybrid-cadence / `Location:` line → working-location `found` (source: description). Only falls through to `capture_failed` when the field is absent from BOTH structured sources AND the prose. Non-salary numeric ranges ("20-50 employees", "2019 - 2023") are rejected by requiring a currency marker or salary keyword.
+- **FIX 2 — custom-domain ATS dispatch (ats_fetchers.py).** A non-ATS host carrying an ATS id in its query is now routed to that ATS: `?ashby_jid=<uuid>` → Ashby (org guessed from the domain via brand-suffix stripping; matched by the globally-unique UUID against the org's board feed — this rescued `lark.com/careers?ashby_jid=...`, which otherwise captured only a cookie banner); `?gh_jid=<digits>` → the existing embedded-Greenhouse recovery, now with improved board-token derivation (`pinterestcareers.com` → `pinterest`) and a URL-path role-slug added to the title-match safety guard, so a correct board hit passes even when the fetched page is a thin shell with no usable title/body (this recovered Pinterest).
+
+Re-verification result (11 URLs; the batch file has 11, not 12): **10/11 now fully recover comp+location** across structured ATS, custom-domain ATS-id recovery, and prose fallbacks. The one holdout rendered only a generic SPA navigation shell, so `capture_failed` is the truthful result. Tests: 39 passed (added prose-comp variants including comma-less currency, prose-location city/remote + no-false-positive, custom-domain ATS dispatch + no-match, and slug-matched embedded-board recovery).
+
+## 2026-07-29 — Prep completeness: fix `not_posted` vs `capture_failed`, add embedded-Greenhouse recovery, trim doubled question quote
+
+Live smoke test on `careers.airbnb.com/positions/8044715/` surfaced a correctness bug in the completeness gate shipped earlier today: a generic (non-ATS) HTML scrape that found no comp and no location marked BOTH as `not_posted` — the exact failure the feature exists to prevent (Airbnb's $232K–$282K pay and SF/NY location ARE published; that job is actually served by Greenhouse board `airbnb`). Fixes, all in `02-PREP/`:
+
+- **Status logic (`assess_completeness`, `prep_common.py`):** a field is `not_posted` ONLY when a *structured* source was consulted and the field is genuinely absent (ATS API with empty `pay_input_ranges`, Ashby `shouldDisplayCompensationOnJobPostings=false`, or JSON-LD with no such field). A field missing from a bare generic/non-structured HTML scrape is now `capture_failed` (could-not-verify), which is what arms the field-driven retry cascade. New `_source_is_structured(meta)` helper + explicit `structured_source` flag threaded through the fetchers (ATS/JSON-LD → structured; plain `requests/html`/`playwright/html` with no JSON-LD → not).
+- **Embedded-Greenhouse recovery** added to the retry cascade: when a non-ATS career URL carries a Greenhouse-style numeric job id in its path (or the HTML references `boards.greenhouse.io`/`gh_jid`), prep now tries `boards-api.greenhouse.io/v1/boards/<token>/jobs/<id>` with board tokens derived from the domain (`careers.airbnb.com`→`airbnb`). SAFETY guard: a domain-guessed token's result is accepted only when its job title reasonably matches the page title we already have, or its title words appear in the fetched body — so a wrong board that merely has a job with the same numeric id is discarded. This recovered Airbnb comp+location live (status `not_posted`/`not_posted` → `found`/`found`, method chain `requests → playwright → greenhouse-embedded`).
+- **Polish:** verbatim application-question labels that already end in a stray double-quote no longer render a doubled trailing quote (the Bloomerang question-2 `…delivery?""` bug) — `_strip_wrapping_quotes` trims wrapping double-quotes before we wrap the label in our own.
+- **Coverage:** added pytest cases — generic scrape with no comp/location → `capture_failed` (not `not_posted`) and fires the fallback; structured scrape absent field → `not_posted`; embedded-GH recovery recovers comp/location, guards a wrong board, and no-ops (no network) when there's no GH id; and the doubled-quote polish. Suite: 27 passed.
+- **Ashby questions always rendered on the primary pass:** Ashby's posting-api ALWAYS returns comp/location but NEVER returns questions — so a normal requests-first Ashby run was "complete" (comp/location found), no fallback fired, and the thoughtful questions (e.g. BetterUp's mission essay + office-cadence) were never captured. Fix: for Ashby jobs only, the primary `fetch_one` now always attempts the best-effort Playwright apply-page render (`_render_ashby_questions`) and merges the filtered questions into the posting-api meta WITHOUT re-fetching comp/location. Graceful (try/except → `[]`; never fails the fetch, e.g. Playwright absent). Non-Ashby jobs never invoke it, so the requests-first fast path is unchanged for them. Live-verified on the BetterUp URL: on a clean run (`methods_tried: ['ats']`, no fallback) the 2 kept questions now appear where the block was previously "(none kept)". Added 3 tests (always-render-even-when-API-complete merge; graceful degradation on render failure; Ashby-only gating). Suite: 30 passed.
+
+## 2026-07-29 — Prep completeness gate: comp/location verified & recovered BEFORE ranking; provenance; thoughtful-question capture
+
+Root problem the user hit repeatedly: comp or working-location was missing from saved job captures ~25% of the time even when the posting plainly published it (Lark's salary lived only in Ashby's structured comp field and was dropped; Airbnb's pay range was never captured), which corrupts rankings (comp/practicality scored against `??`) and forces a manual re-fetch + re-rank. Root causes: prep only guarded against *thin* bodies (never verified specific fields), ATS results bypassed validation entirely, and the rich structured fields the fetchers already pulled were flattened away before write.
+
+Built a completeness-and-recovery gate that runs in prep, BEFORE ranking (all in `ENGINE__PUBLIC_GIT_TRACKED/02-PREP/`, kept PII-free — no jail.config reads):
+- **Enriched extraction** so comp/location are actually captured: Ashby now reads per-zone `compensationTiers`, `secondaryLocations`, `address`, `workplaceType`; Greenhouse uses `?questions=true&pay_transparency=true` + `pay_input_ranges`/`offices` (was hardcoding comp=None); Lever gains workplace/location; benefits/equity use best-effort description-prose extraction. The full structured meta is now threaded through `fetch_one` instead of flattened to title/company/body. **Known soft-field limitation:** brief prose mentions such as “eligible for equity and benefits” may still fail to populate the normalized soft fields even though the full body preserves the statement.
+- **`assess_completeness`** → per-field status `found` / `not_posted` / `capture_failed` / `conflicting` for compensation + working-location (+ title/description). Key discipline: a comp/location *question* is not the job *fact* — "compensation expectations?" ≠ employer comp, "where do you live?" ≠ working location, but an office-attendance requirement DOES supply working-location + cadence. A generic/non-structured scrape that finds nothing is `capture_failed` (retryable), NOT `not_posted`.
+- **Field-driven retry cascade** (extends the old thin-body fallback): missing/uncertain comp or location triggers structured-ATS → rendered page → apply page → an embedded-Greenhouse recovery (custom career domains like `careers.airbnb.com` that are Greenhouse-backed) before giving up. Still missing after the cascade → flag loudly (prep report "⚠️ Incomplete captures" + manifest `field_status`/`missing_fields`/`methods_tried`) and **rank anyway** — never quarantine for a missing field.
+- **Dual-preservation `.txt` layout** (normalized never replaces source): provenance line (capture date, source, posting id, urls, methods tried) + a NORMALIZED block (Working Location / Compensation / Benefits / Equity each status-tagged, a Completeness line, `[CONFLICT]` when sources disagree) + employer-provided structured wording when available + the full description between the existing markers. **Known generic-fallback limitation:** prose-derived values can appear in the normalized block while the separate structured-source lines remain empty; the full body is still the durable source.
+- **Thoughtful-question capture (narrow):** Greenhouse via `?questions=true`; Ashby/others via best-effort Playwright apply-page render. Keep a question ONLY if it's a compose-a-response essay OR reveals job location/cadence/employer-comp; exclude all routine/identity/EEO + work-auth/visa/comp-expectations. Verified: Bloomerang→3 essays, BetterUp→mission essay + office-cadence question (the latter also feeds Working Location, preserving the full employer metro list; candidate-relative mapping happens at vetting, not prep). Kept verbatim (text, help text, choices, required flag).
+- **Durable fixtures + pytest** under `02-PREP/tests/` (Bloomerang GH + BetterUp Ashby responses + a hand-authored rendered-apply-form fixture) so this is regression-tested offline, not only against live pages that will disappear.
+
+Downstream wiring: `vet-jobs.js` scoring prompt now treats the NORMALIZED `Compensation:` / `Working Location:` lines as authoritative (parse comp from `[found]`; `[not posted]`→`??`; `[capture_failed]`/`[conflicting]`→`??` + note), and computes the candidate-relative location by matching the candidate's home-metro/`city_priority` against the employer metro list + applying the office cadence (e.g. a NYC user gets `IRL NYC - 2 days` from the BetterUp office question) — generic, not hardcoded. Tailor spec (`04-TAILOR/00-job_application_agent.md`) flips application-answer drafting from out-of-scope to narrowly in-scope: a new "Proposed Answers to Application Questions" section drafts lightweight best-effort answers for the compose-a-response questions only, in the candidate's voice from existing canon, deferring uncertainties to "Questions for the candidate" (never blocking; no routine/work-auth/comp-expectation answers).
+
+Follow-ons still open: best-effort Lever/Workday/LinkedIn question capture (LinkedIn's guest API exposes no form). Ashby question capture remains best-effort, but the later primary-pass fix above means it is attempted even when the posting API already supplied complete comp/location.
+
+
+## 2026-07-29 — Working-location day-count coloring ported; structured comp gaps fixed; lane calibration reviewed
+
+Three issues surfaced during review of a private batch:
+
+**1. Working Location column was all one green.** The user's documented location-color rule (Remote→green; home-metro 1–2 days→yellow; home-metro 3+/unclear/multi-hub→orange; non-home-metro→red) was only ever applied in a 7/14 one-off rescore workbook — it was **never wired into the shared engine**, and the 7/14 changelog wrongly claimed "the real engine already does this correctly." It did not: `make_rankings_xlsx.py`'s `loc_color` colored purely by arrangement TYPE via the config rating (`home_hybrid: "preferred"` = green), with **no day-count sensitivity**, so every NYC-hybrid role (1 day or 5) painted green. Fix: rewrote `loc_color(workloc, label, cfg)` to derive the day count from the Working Location text and apply the documented rule; updated the one call site. Verified on the batch: NYC 3-day/unclear now orange, remote green, unknown grey. This supersedes the pure arrangement-rating lookup (the config's per-arrangement ratings no longer drive the color; day count + home/other classification do). Subjective color choice — user can adjust the mapping.
+
+**2. Two roles returned `??` even though both postings listed compensation.** This was a fetch-completeness gap, not a scoring-agent error: one range lived only in a structured ATS compensation field, while another was present in Greenhouse JSON but absent from the captured body. Both were recovered and persisted. **Lesson for prep:** explicitly capture structured compensation; a description-only fetch can miss pay that renders on the live posting.
+
+**3. A civic/social-impact role was mis-laned as generic political technology.** Private candidate-specific lane and score corrections stayed in the gitignored output. The generic lesson is that explicit democracy/civic/social-impact language should not be flattened into an `Other` bucket, and a technical qualification expressly framed as learnable should not automatically become a hard day-one gate.
+
+
+## 2026-07-28 — Vetting regression fix: SCORE_SCHEMA too large for the platform safety classifier
+
+The 07-28-26 vet batch failed with all 11 scoring agents erroring identically: "blocked by safety
+classifier: output schema too large to classify safely." The two setup agents (discover, refs)
+succeeded; only the `Score` agents — the ones passing `SCORE_SCHEMA` — failed. Cause: the platform now
+runs a safety classifier over structured-output schemas and rejects ones past a size threshold, and
+`SCORE_SCHEMA` in `.claude/workflows/vet-jobs.js` had grown very large — the `location` and `lane`
+field descriptions were ~1.4KB and ~1.3KB respectively, plus long example-laden `mission_fit_notes` /
+`scope_fit_notes` descriptions. This is an environment change surfacing as a regression; the workflow
+itself was unchanged.
+
+Fix: stripped `SCORE_SCHEMA` field descriptions down to bare types (kept only the `confidence` enum and
+the integer min/max bounds). No guidance was lost — every one of those rules is already stated in full
+in the scoring *prompt* ("Scoring rules" bullets), which is the real instruction source; the schema
+descriptions were redundant copies. Added a header comment warning future editors to keep the schema
+terse and put new detailed guidance in the prompt, not the schema.
+
+Two-part gotcha worth remembering for next time this recurs:
+1. An intermediate trim (short one-liner descriptions) still failed identically — the classifier
+   threshold is low enough that only a near-empty schema clears it. Go straight to bare types.
+2. Re-running via the `run-batch` front door kept failing even after the file was fixed on disk,
+   because `run-batch` reaches `vet-jobs` through `workflow('vet-jobs')` and the workflow registry
+   had cached `vet-jobs` at session start — it never re-read the edited file. Running `vet-jobs.js`
+   directly via `Workflow({scriptPath: '.../vet-jobs.js'})` bypassed the cache and picked up the fix.
+   (Caveat learned: pass that direct invocation's `args` as real JSON — unquoted keys like
+   `{folder: ...}` fail `JSON.parse`, so `outDir`/`batchName` silently drop and the outputs land in
+   the source folder with the wrong name; had to move/rename them into `1 - Rankings/` by hand.)
+
+## 2026-07-28 — Prep recovery: Cloudflare + cookie-banner pages need ATS-API fallback beyond Playwright
+
+Ran a fresh 11-URL batch (07-28-26). Two posts came back unusable and neither requests nor the
+Playwright renderer could recover them, but both had ATS IDs in the URL that let me fetch clean JSON
+directly:
+- Pinterest (Sr PM, Core Saving Experience) — Cloudflare "Just a moment" challenge blocked both
+  requests and Playwright; recovered via the Greenhouse boards API using the `gh_jid` (board token
+  `pinterest`): `https://boards-api.greenhouse.io/v1/boards/pinterest/jobs/<gh_jid>`.
+- Lark Health (Senior PM, AI Coaching) — the `lark.com/careers/open-positions?ashby_jid=…` page
+  fetched *above* the thin threshold (~1.9KB) but was pure cookie-consent boilerplate, so it passed
+  as "usable" while containing no job text. Recovered via the Ashby posting API
+  (`https://api.ashbyhq.com/posting-api/job-board/lark?includeCompensation=true`, needs a browser
+  UA header or it 403s) and matched on the `ashby_jid`.
+
+Takeaway worth noting for the prep engine: (1) a size-only thin check misses cookie-banner/consent
+pages that clear the byte threshold with zero real content — a content check (or detecting known
+banner boilerplate) would catch these; (2) when a URL carries a `gh_jid`/`ashby_jid`/etc., the ATS
+JSON API is a more reliable recovery path than re-rendering the anti-bot HTML page. `ats_fetchers.py`
+already does ATS-first for some hosts, but these two slipped through to the HTML path. No engine code
+changed yet — captured here as the pattern to fold in.
+
+## 2026-07-17 — Cover letters: never overwrite an original; every revision is a new version
+
+A requested cover-letter v2 overwrote the original run's `final.md`, `.docx`, and review packet,
+destroying the church-and-state learning baseline (reconcile diffs the agent's ORIGINAL against the
+submitted PDF; overwriting the original erases that signal). Hard rule now, for every user. The
+original private artifacts were restored and later drafts separated into versions.
+
+Enforcement added in three tracked places so the workflow can't do this again:
+- `cover-letter.js` finalize stage: a versioning guard — if `_cl_work/final.md` already exists, write
+  this run's outputs to `final-v2.md` / `… - v2.docx` / `… - v2.md` and leave the originals
+  byte-for-byte untouched; only create un-versioned originals when none exist.
+- `.claude/agents/cover-letter-writer.md`: added a "Church-and-state: never overwrite an original"
+  section with the same versioning rule, applied before any DRAFT/REVISE work.
+- `formatting-spec.template.md` (+ the private live instance): church-and-state section now carries the
+  "new letters are new versions, never a clobber" corollary.
+
+---
+
+## 2026-07-17 — tailor-jobs / cover-letter always return a paste-ready table now
+
+Root cause from a backlog run: the rankings writeback (added 7/16) only lands when the job's batch has
+a rankings file. A job tailored outside a current batch had nowhere for its base to go, so the result
+existed only inside its per-job output instead of a paste-ready tracker table.
+
+Considered and rejected a bigger fix (teach the writeback to scan every historical batch by URL and
+backfill archived rankings). The smaller, more honest fix was to make the paste-ready result
+unconditional:
+
+- `tailor-jobs.js` / `cover-letter.js` now UNCONDITIONALLY return a markdown `table` field (Company
+  · Role · Base Resume Used, or Company · Role · Cover Letter?) — independent of whether the
+  Record-phase writeback found a rankings row to update. This is what actually gets pasted into a
+  user's tracker; it must not depend on a rankings file existing.
+- Added `terseBase()` in JS mirroring `update_rankings_row.py`'s `terse_base()` (Python), verified
+  byte-identical output across every real example from this session. Two implementations, same
+  behavior — worth revisiting if they drift; noted here for whoever touches the Python one next.
+- Per-batch writeback behavior UNCHANGED — still fires when a rankings file exists for the job's
+  batch (the normal same-day vet+tailor flow), so nothing regresses there.
+
+---
+
+## 2026-07-17 — `terse_base()` normalizer: handle bare dates and dates with extra words in the paren
+
+Found while tailoring a backlog: `update_rankings_row.py`'s `terse_base()` wrote two bases
+through un-normalized because its date anchor only matched a date fully inside parens with nothing
+else. Fixes: (1) collapse `(7/1/26 finalized submission)` → `(7/1/26)` before anchoring; (2) when a
+base has a BARE date and no clean parenthesized one, truncate right after the bare date instead of
+latching onto a later non-date paren. The affected private rows were corrected by re-running the
+writeback.
+
+---
+
 ## 2026-07-16 — Reconcile gap found: a failed agent's findings can be silently lost (worked around by hand; not yet fixed)
 
 During the 07-16 reconcile batch, the Paperless Post agent wrote its reconcile report to the folder but

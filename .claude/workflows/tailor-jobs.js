@@ -8,6 +8,33 @@ export const meta = {
   ],
 }
 
+// ---- Base-name terseness (mirrors update_rankings_row.py's terse_base — keep in sync) ----
+// Used for the copy/paste table below, independent of whether the Record-phase writeback found a
+// matching rankings row. Jessica's house style: "Company — Role (M/D/YY)", no trailing prose.
+const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 }
+function terseBase(raw) {
+  let s = String(raw || '').trim().replace(/\*\*/g, '')
+  s = s.replace(/^\s*[-*•]\s+/, '')
+  s = s.replace(/^\s*(?:primary|chosen|recommended|selected)\s+base\s*(?:\(merge\))?\s*:\s*/i, '')
+  s = s.replace(/^\s*base\s+(?:chosen|used|actually used)\s*:\s*/i, '')
+  // Collapse a date-paren carrying extra words: "(7/1/26 finalized submission)" -> "(7/1/26)"
+  s = s.replace(/\((\d{1,2}\/\d{1,2}\/\d{2}|\d{1,2}\/\d{2})[^)]*\)/, '($1)')
+  const dateEnd = /^(.*?\((?:\d{1,2}\/\d{1,2}\/\d{2}|\d{1,2}\/\d{2}|[A-Z][a-z]{2,8}\s+\d{4})\))/.exec(s)
+  if (dateEnd) {
+    s = dateEnd[1]
+  } else {
+    const bare = /\d{1,2}\/\d{1,2}\/\d{2}|\d{1,2}\/\d{2}/.exec(s)
+    s = bare ? s.slice(0, bare.index + bare[0].length)
+      : s.split(/(?:,\s*(?:adapted|merged|chassis|retitled|copied|from the)|\.\s|\s+chassis\b|\s+—\s*see\b)/i)[0]
+  }
+  s = s.trim().replace(/[.,]+$/, '').trim()
+  s = s.replace(/\(([A-Z][a-z]{2,8})\s+(\d{4})\)/, (m, mon, yr) => {
+    const n = MONTHS[mon.toLowerCase().slice(0, 3)]
+    return n ? `(${n}/${yr.slice(-2)})` : m
+  })
+  return s.replace('Professional Services', 'Prof. Services')
+}
+
 // Named-workflow invocation can deliver `args` as a JSON string; parse it back to a value first.
 let A = args
 if (typeof A === 'string') { try { A = JSON.parse(A) } catch (_) { /* leave as raw string */ } }
@@ -118,7 +145,26 @@ how many updated, and the full text of any WARNING lines.`,
   }
 }
 
+// ---- Always end with a paste-ready table (added 7/17/26) ----
+// The Record-phase writeback only lands when the job's batch has a rankings file to update — a
+// backlog job tailored outside any current batch (e.g. into "manual/") has nowhere for that to
+// land, and the base/cover-letter data would otherwise only exist buried in each job's .md file.
+// This table is unconditional: it's the thing Jessica actually copies into her Google Sheet, and
+// it must show up every run regardless of whether the rankings writeback found a home.
+const roleOf = (t) => (t.title_and_link || '').split(' | ')[0] || (t.job_folder || '').split('/').pop().split(' - ').slice(1).join(' - ') || ''
+const tableRows = tailored.map((t) => ({
+  company: t.company || (t.job_folder || '').split('/').pop().split(' - ')[0] || '',
+  role: roleOf(t),
+  base: t.recommended_base ? terseBase(t.recommended_base) : '',
+}))
+const table = [
+  '| Company | Role | Base Resume Used |',
+  '|---|---|---|',
+  ...tableRows.map((r) => `| ${r.company} | ${r.role} | ${r.base} |`),
+].join('\n')
+
 return {
   tailored,
-  note: `Prepared ${tailored.length} resume draft(s) in __READY_TO_REVIEW__PRIVATE_GITIGNORED/. Open each job folder's "application_resume_output - [Company] - [Role].md", starting with the "Questions for the candidate" section. Each job's chosen base was also written back into its batch's "Base Resume Used" column.`,
+  table,
+  note: `Prepared ${tailored.length} resume draft(s) in __READY_TO_REVIEW__PRIVATE_GITIGNORED/. Open each job folder's "application_resume_output - [Company] - [Role].md", starting with the "Questions for the candidate" section. Each job's chosen base was also written back into its batch's "Base Resume Used" column where a rankings file exists for it. Copy/paste table for your tracker is in the "table" field (no Cover Letter column — tailor-jobs never generates letters; run the cover-letter workflow separately if you want one, which adds its own paste table for that column).`,
 }

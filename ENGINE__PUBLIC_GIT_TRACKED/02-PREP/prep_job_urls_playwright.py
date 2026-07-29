@@ -21,7 +21,13 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import sync_playwright
 
 import prep_common
-from ats_fetchers import ats_company_from_url, extract_jsonld_jobposting, fetch_via_ats
+from ats_fetchers import (
+    ats_company_from_url,
+    extract_jsonld_jobposting,
+    fetch_via_ats,
+    filter_questions,
+    normalize_ashby_apply_fields,
+)
 
 LIKELY_SELECTORS = [
     "main", "article", "[data-testid*='job']", "[class*='job-description']",
@@ -83,13 +89,82 @@ def extract_best_text(page) -> str:
     return candidates[0][2]
 
 
+def _render_ashby_questions(browser, url: str) -> list:
+    """Best-effort scrape of an Ashby apply-page's form fields (the posting-api
+    does NOT expose them). Wrapped defensively — any failure degrades to []. The
+    fields are normalized + run through the shared narrow filter so only the
+    thoughtful / job-material questions (compose essays, office-cadence) survive."""
+    apply_url = url if url.rstrip("/").endswith("application") else url.rstrip("/") + "/application"
+    page = None
+    try:
+        page = browser.new_page()
+        page.set_default_timeout(15000)
+        page.goto(apply_url, wait_until="domcontentloaded")
+        try:
+            page.wait_for_load_state("networkidle", timeout=8000)
+        except PlaywrightTimeoutError:
+            pass
+        # Ashby renders each application field in a labeled container. Collect the
+        # question text, control type, and any options, plus the underlying field
+        # name/path when exposed on the input (so system fields are recognized).
+        raw = page.evaluate(
+            """() => {
+                const out = [];
+                const seen = new Set();
+                const conts = document.querySelectorAll('.ashby-application-form-field-entry, [class*="_fieldEntry"], form label');
+                conts.forEach(c => {
+                    const labelEl = c.querySelector('label, legend, .ashby-application-form-question-title') || c;
+                    const title = (labelEl.innerText || labelEl.textContent || '').trim();
+                    if (!title || seen.has(title)) return;
+                    const ta = c.querySelector('textarea');
+                    const sel = c.querySelector('select');
+                    const inp = c.querySelector('input');
+                    let type = 'String', options = [];
+                    if (ta) type = 'LongText';
+                    else if (sel) { type = 'ValueSelect';
+                        sel.querySelectorAll('option').forEach(o => { const t=(o.textContent||'').trim(); if(t) options.push({label:t}); }); }
+                    else if (inp) {
+                        const it = (inp.getAttribute('type')||'').toLowerCase();
+                        if (it==='checkbox'||it==='radio') type='Boolean'; else if(it==='file') type='File'; else type='String';
+                    }
+                    const el = ta || sel || inp;
+                    const path = el ? (el.getAttribute('name') || el.getAttribute('id') || '') : '';
+                    seen.add(title);
+                    out.push({title, type, path, isRequired: !!(el && el.required), options});
+                });
+                return out;
+            }"""
+        )
+        fields = normalize_ashby_apply_fields({"fields": raw or []})
+        return filter_questions(fields)
+    except Exception:
+        return []
+    finally:
+        if page is not None:
+            try:
+                page.close()
+            except Exception:
+                pass
+
+
 def make_fetch_one(browser):
     def fetch_one(url: str) -> dict:
         try:
             ats = fetch_via_ats(url)
             if ats:
+                meta = dict(ats)
+                meta["method"] = "ats"
+                meta["structured_source"] = True
+                questions = ats.get("questions") or []
+                # Ashby questions aren't on the posting-api — render the apply page.
+                if not questions and "ashbyhq.com" in urlparse(url).netloc.lower():
+                    rendered = _render_ashby_questions(browser, url)
+                    if rendered:
+                        questions = rendered
+                        meta["questions"] = rendered
                 return {"ok": True, "title": ats["title"], "company": ats["company"],
-                        "body": ats["text"], "method": "ats", "error": None}
+                        "body": ats["text"], "method": "ats", "error": None,
+                        "meta": meta, "questions": questions}
             page = browser.new_page()
             page.set_default_timeout(15000)
             try:
@@ -109,25 +184,40 @@ def make_fetch_one(browser):
                 # JS-rendered sites sometimes inject their own schema.org JobPosting JSON-LD
                 # client-side (not present in the raw HTML the plain fetcher sees). Safe to use —
                 # it's the page's own structured data for this job, not sidebar/related-jobs noise.
+                rendered_html = None
                 try:
                     rendered_html = page.content()
                     jobposting = extract_jsonld_jobposting(rendered_html)
                 except Exception:
                     jobposting = None
-                if jobposting and jobposting.get("location") and "location:" not in text[:200].lower():
-                    header_lines = [f"Location: {jobposting['location']}"]
-                    if jobposting.get("employment_type"):
-                        header_lines.append(f"Employment Type: {jobposting['employment_type']}")
-                    if jobposting.get("compensation"):
-                        header_lines.append(f"Compensation: {jobposting['compensation']}")
-                    text = "\n".join(header_lines) + "\n\n" + text
+                jobposting = jobposting or {}
+                meta = {
+                    "title": title, "company": company, "source": "playwright/html",
+                    "method": "playwright",
+                    "location": jobposting.get("location"),
+                    "working_location": jobposting.get("location"),
+                    "employment_type": jobposting.get("employment_type"),
+                    "compensation": jobposting.get("compensation"),
+                    "compensation_raw": jobposting.get("compensation"),
+                    "location_raw": jobposting.get("location"),
+                    "apply_url": url,
+                    # Structured only when the rendered page carried a JSON-LD JobPosting;
+                    # otherwise a missing field is capture_failed, not not_posted.
+                    "structured_source": bool(jobposting),
+                    "comp_expected": False,
+                    "location_expected": bool(jobposting.get("location")),
+                    # Rendered HTML kept transiently for embedded-Greenhouse recovery.
+                    "raw_html": rendered_html,
+                    "questions": [],
+                }
                 return {"ok": True, "title": title, "company": company, "body": text,
-                        "method": "playwright", "error": None}
+                        "method": "playwright", "error": None, "meta": meta, "questions": []}
             finally:
                 page.close()
         except Exception as e:
             return {"ok": False, "title": None, "company": None, "body": "",
-                    "method": "playwright", "error": f"{type(e).__name__}: {e}"}
+                    "method": "playwright", "error": f"{type(e).__name__}: {e}",
+                    "meta": {}, "questions": []}
     return fetch_one
 
 

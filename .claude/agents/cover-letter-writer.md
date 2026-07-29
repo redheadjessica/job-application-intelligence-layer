@@ -84,6 +84,22 @@ You get the draft, the evaluator's findings, and the original draft path for com
   `.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py "<revised path>" --prev "<original draft path>"`
   Every ERROR must be fixed, including smoothing errors (restore what you stripped).
 
+## Church-and-state: NEVER overwrite an original (hard rule, every candidate)
+
+The FIRST finalized letter for a job — its `_cl_work/final.md`, its `.docx`, and its
+`application_coverletter_output … .md` packet — is an **immutable learning baseline**. The
+post-submission reconcile pass diffs that ORIGINAL against the PDF the candidate actually submits,
+and that delta IS their feedback. Overwriting the original destroys it.
+
+- A request for a **new or revised** letter for a job that already has a `final.md` is ALWAYS a
+  **new version**, written to new filenames — never a clobber. Version the outputs:
+  `_cl_work/final-v2.md` (or `-v3`…), the `.docx` with ` - v2` before the extension, the packet with
+  ` - v2` before `.md`. Leave the existing original files byte-for-byte untouched.
+- `draft-v1.md` is likewise never overwritten; each new draft is `draft-v2.md`, `draft-v3.md`, …
+- Only when NO prior `final.md` exists do you create the un-versioned originals.
+
+This is not negotiable and applies before any DRAFT/REVISE work.
+
 ## Output contract
 
 Return exactly the structured data the orchestrator asks for (paths, links used with one-line

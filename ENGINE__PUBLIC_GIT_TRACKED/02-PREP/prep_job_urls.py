@@ -95,34 +95,73 @@ def detect_company(url: str, title: str) -> str:
     return host_guess.title()
 
 
-def fetch_one(url: str) -> dict:
-    """Return prep_common's fetch contract for one URL."""
+def fetch_one(url: str, ashby_question_renderer=None) -> dict:
+    """Return prep_common's fetch contract for one URL, including the full
+    structured `meta` dict + kept `questions` so the completeness gate, provenance
+    header, and normalized block downstream have everything to work with.
+
+    `ashby_question_renderer(url) -> list` is an optional best-effort callback that
+    renders an Ashby apply page for its (filtered) questions. Ashby's posting-api
+    ALWAYS returns comp/location but NEVER returns questions, so a normal
+    requests-first Ashby run is "complete" and no fallback pass ever fires to
+    capture the thoughtful questions. We therefore always attempt this render for
+    Ashby (only) when a renderer is available, merging the questions into the
+    posting-api meta WITHOUT re-fetching comp/location. Non-Ashby jobs never touch
+    it, so the requests-first fast path is unchanged for them."""
     try:
         ats = fetch_via_ats(url)
         if ats:
+            meta = dict(ats)
+            meta["method"] = "ats"
+            meta["structured_source"] = True
+            questions = ats.get("questions") or []
+            if (not questions and ashby_question_renderer is not None
+                    and "ashbyhq.com" in urlparse(url).netloc.lower()):
+                try:
+                    rendered = ashby_question_renderer(url) or []
+                except Exception:
+                    rendered = []
+                if rendered:
+                    questions = rendered
+                    meta["questions"] = rendered
             return {"ok": True, "title": ats["title"], "company": ats["company"],
-                    "body": ats["text"], "method": "ats", "error": None}
+                    "body": ats["text"], "method": "ats", "error": None,
+                    "meta": meta, "questions": questions}
         html = fetch_html(url)
         title = extract_title(html)
         company = detect_company(url, title)
         body = extract_clean_text(html, url)
         # Non-ATS sites often carry their own structured JobPosting data (schema.org, for SEO)
         # that trafilatura's main-content extraction can drop (it favors the article body over
-        # header/metadata regions). Prepend it as a "Location:" line, same shape the ATS
-        # fetchers already use, so the scorer treats it as ground truth either way.
-        jobposting = extract_jsonld_jobposting(html)
-        if jobposting and jobposting.get("location") and "location:" not in body[:200].lower():
-            header_lines = [f"Location: {jobposting['location']}"]
-            if jobposting.get("employment_type"):
-                header_lines.append(f"Employment Type: {jobposting['employment_type']}")
-            if jobposting.get("compensation"):
-                header_lines.append(f"Compensation: {jobposting['compensation']}")
-            body = "\n".join(header_lines) + "\n\n" + body
+        # header/metadata regions). Capture it into meta so comp/location land in the
+        # normalized block, same as the ATS fetchers.
+        jobposting = extract_jsonld_jobposting(html) or {}
+        meta = {
+            "title": title, "company": company, "source": "requests/html", "method": "requests",
+            "location": jobposting.get("location"),
+            "working_location": jobposting.get("location"),
+            "employment_type": jobposting.get("employment_type"),
+            "compensation": jobposting.get("compensation"),
+            "compensation_raw": jobposting.get("compensation"),
+            "location_raw": jobposting.get("location"),
+            "apply_url": url,
+            # A plain HTML scrape is only a STRUCTURED source when the page carried
+            # its own JSON-LD JobPosting. Without that, a missing comp/location is
+            # "could not verify" (capture_failed), NOT "not posted" — a render or the
+            # real ATS API routinely surfaces fields a plain scrape drops.
+            "structured_source": bool(jobposting),
+            "comp_expected": False, "location_expected": bool(jobposting.get("location")),
+            # Raw HTML kept transiently so the embedded-Greenhouse recovery can spot a
+            # gh_jid / boards.greenhouse.io reference (not emitted or persisted).
+            "raw_html": html,
+            "questions": [],
+        }
         return {"ok": True, "title": title, "company": company, "body": body,
-                "method": "requests", "error": None}
+                "method": "requests", "error": None, "meta": meta, "questions": []}
     except Exception as e:
         return {"ok": False, "title": None, "company": None, "body": "",
-                "method": "requests", "error": f"{type(e).__name__}: {e}"}
+                "method": "requests", "error": f"{type(e).__name__}: {e}",
+                "meta": {}, "questions": []}
 
 
 def read_urls(input_file: Path) -> list[str]:
@@ -170,11 +209,21 @@ def main() -> None:
     if HAVE_PLAYWRIGHT:
         import prep_job_urls_playwright as pjp
         print(f"Found {len(urls)} URL(s). Fetching (ATS API first, then requests; "
+              f"Ashby apply-page questions always rendered; "
               f"Playwright auto-retry enabled for thin/failed results)...")
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             try:
-                prep_common.process_urls(urls, batch_dir, fetch_one, force=args.force,
+                # Ashby posting-api never carries questions, so always render the
+                # apply page for them on the primary pass (best-effort; the render
+                # degrades to [] on any failure and never fails the fetch).
+                def ashby_renderer(u):
+                    return pjp._render_ashby_questions(browser, u)
+
+                def primary(u):
+                    return fetch_one(u, ashby_question_renderer=ashby_renderer)
+
+                prep_common.process_urls(urls, batch_dir, primary, force=args.force,
                                           fetch_fallback=pjp.make_fetch_one(browser),
                                           fallback_label="playwright")
             finally:

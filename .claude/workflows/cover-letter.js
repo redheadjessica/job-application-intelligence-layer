@@ -133,13 +133,24 @@ Evaluation: ${evaluation.eval_path} (fit ${evaluation.fit_score}/5, voice ${eval
 Job description: ${jobPath}
 Job folder: ${draft.job_folder}
 
+⚠️ NEVER OVERWRITE AN ORIGINAL (church-and-state, HARD RULE for every user — see formatting-spec.md).
+FIRST, check whether "_cl_work/final.md" already exists in this job folder (ls it).
+- If it does NOT exist: this is the first letter for this job. Use the un-versioned target names below
+  (final.md / the standard .docx name / the standard packet name).
+- If it DOES exist: an immutable learning baseline is already here (reconcile diffs that ORIGINAL
+  final.md/.docx against the PDF the candidate actually submits — overwriting it destroys that signal).
+  You MUST NOT touch the existing final.md, its .docx, or its packet. Write THIS run's outputs to the
+  next unused versioned names instead: "_cl_work/final-v2.md" (or -v3…), the .docx with " - v2" before
+  the extension, and the packet with " - v2" before ".md". Leave every original byte-for-byte intact.
+Call the resolved names <final-md>, <docx>, and <packet> below. (draft-v1.md is always left untouched.)
+
 Steps, in order:
 1. ${needsRevision
-        ? `REVISE mode per your spec (surgeon, not editor): address every must-fix, apply considers only where you agree, touch ONLY cited lines. Write the result to "_cl_work/final.md" (leave draft-v1.md untouched). Then run the preservation lint and fix until 0 errors: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py "<final.md>" --prev "${draft.draft_path}"`
-        : `No revision needed (strong first draft). Copy the draft to "_cl_work/final.md" and run: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py "<final.md>" (must be 0 errors).`}
-2. Generate the deliverable: read signature_name from PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/config.json, hyphenate it (e.g. "Jordan Lee" -> "Jordan-Lee"), then run: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/make_cover_letter_docx.py "<final.md>" -o "${draft.job_folder}/<Hyphenated-Name>-CoverLetter - ${draft.company} - ${draft.role}.docx"
+        ? `REVISE mode per your spec (surgeon, not editor): address every must-fix, apply considers only where you agree, touch ONLY cited lines. Write the result to <final-md>. Then run the preservation lint and fix until 0 errors: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py "<final-md>" --prev "${draft.draft_path}"`
+        : `No revision needed (strong first draft). Copy the draft to <final-md> and run: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py "<final-md>" (must be 0 errors).`}
+2. Generate the deliverable: read signature_name from PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/config.json, hyphenate it (e.g. "Jordan Lee" -> "Jordan-Lee"), then run: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/make_cover_letter_docx.py "<final-md>" -o "<docx>"  (where <docx> is "${draft.job_folder}/<Hyphenated-Name>-CoverLetter - ${draft.company} - ${draft.role}.docx", plus the " - v2" suffix if versioning per the rule above).
 3. Link QA: for each link, curl -sIL -o /dev/null -w "%{http_code}" --max-time 10 "<url>". 200/30x = pass; Medium/LinkedIn 403/999 bot-blocks = verify the URL character-for-character against PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/writing-links.md and mark "matches writing-links". Anything else = flag.
-4. Write the COMPACT review packet to "${draft.job_folder}/application_coverletter_output - ${draft.company} - ${draft.role}.md" — target ~35 lines, do NOT include the letter text (reconcile reads _cl_work/final.md directly). Exactly these sections:
+4. Write the COMPACT review packet to <packet> ("${draft.job_folder}/application_coverletter_output - ${draft.company} - ${draft.role}.md", plus the " - v2" suffix if versioning) — target ~35 lines, do NOT include the letter text (reconcile reads _cl_work/final.md directly). Exactly these sections:
    # Cover Letter — ${draft.company} — ${draft.role}
    ## Questions for you (resolve before sending)   <- open questions + the writer's declined-fix disagreements + link-QA flags; "None" if empty
    ## Scorecard   <- 3-4 lines: "Fit ${evaluation.fit_score}/5 · Voice ${evaluation.voice_score}/5 (adversarial eval) — N must-fix, all resolved, preservation lint clean"; the one-line GOLD-exemplar comparison; any lint warnings left standing
@@ -198,8 +209,19 @@ how many updated, and the full text of any WARNING lines.`,
   )
 }
 
+// ---- Always end with a paste-ready table (added 7/17/26, mirrors tailor-jobs.js) ----
+// Unconditional: the Record-phase writeback only lands where a rankings file exists for the job's
+// batch (a backlog letter written outside any current batch has nowhere for that to go), so this
+// table is what Jessica actually copies into her Google Sheet regardless.
+const table = [
+  '| Company | Role | Cover Letter? |',
+  '|---|---|---|',
+  ...ok.map((L) => `| ${L.company || ''} | ${L.role || ''} | Y |`),
+].join('\n')
+
 return {
   letters: ok,
   failed: jobList.length - ok.length,
-  note: `Prepared ${ok.length}/${jobList.length} cover letter(s). Open each "application_coverletter_output - …" packet first (Questions at top), then copy from the .docx into your letter template with a formatting-preserving paste (in Pages: never "Paste and Match Style"). The .docx is the agent's verbatim output — edit only in your own editor; submit as PDF. Each job's "Cover Letter?" column was also marked Y in its batch rankings.`,
+  table,
+  note: `Prepared ${ok.length}/${jobList.length} cover letter(s). Open each "application_coverletter_output - …" packet first (Questions at top), then copy from the .docx into your letter template with a formatting-preserving paste (in Pages: never "Paste and Match Style"). The .docx is the agent's verbatim output — edit only in your own editor; submit as PDF. Each job's "Cover Letter?" column was also marked Y in its batch rankings where one exists. Copy/paste table for your tracker is in the "table" field.`,
 }

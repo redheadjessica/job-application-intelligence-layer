@@ -3,7 +3,7 @@
 Build a polished job-search TRACKER .xlsx from a job-vetting rankings CSV.
 
 The CSV (written by vet-jobs) is CLEAN DATA: a header + one row per job, in final-score order, in
-the 23-column tracker layout (human-editable columns first — headers ending "? [You ...]" — then AI
+the tracker layout (human-editable columns first — headers ending "? [You ...]" — then AI
 scoring/detail). No divider rows: the data stays sortable (no merged cells) and a user can paste
 rows into their own tracker without dragging duplicate dividers.
 
@@ -46,7 +46,7 @@ except ImportError:  # the pure label->color/config logic below stays importable
 
 FONT = "Arial"
 
-# ---- The 23-column tracker layout (must match vet-jobs.js HEADERS). The CSV header row drives the
+# ---- The tracker column layout (must match vet-jobs.js HEADERS). The CSV header row drives the
 # actual order; these names locate the columns that need special styling. ----
 H_STATUS = "Status? [You Change]"
 H_LANE = "Lane"
@@ -57,6 +57,7 @@ H_COMPRANGE = "Comp Range"
 H_LANEFIT = "Lane Fit"
 H_LOCFIT = "Location Fit"
 H_COMPFIT = "Comp Fit"
+H_DATACOMPLETE = "Data Completeness"  # per-job comp/location capture quality (green/amber/red)
 LEGEND_MERGE_TO = 10  # section bars merge A:J (columns 1..10 — the human-facing block)
 
 # ---- Score-column labels/weights/definitions are DYNAMIC (see load_meta / DEFAULT_METADATA below).
@@ -172,7 +173,7 @@ WIDTHS = {
     H_WORKLOC: 22, H_COMPRANGE: 12, "Have Intro? [You Add]": 14, "Your Notes? [You Add]": 26,
     "Decline/Down Date? [You Add]": 16, "Mission Fit Notes": 40, "Scope Fit Notes": 40,
     "Top Reasons Notes": 46, "Top Concerns": 46, "Job File": 28, "Base Resume Used": 26,
-    H_LANEFIT: 22, H_LOCFIT: 18, H_COMPFIT: 16, "Cover Letter?": 12,
+    H_LANEFIT: 22, H_LOCFIT: 18, H_COMPFIT: 16, H_DATACOMPLETE: 24, "Cover Letter?": 12,
 }
 # Score-column widths, keyed by dimension (not by the dynamic label string) — applied at runtime
 # once the effective labels are resolved, since the label text itself may change per-run.
@@ -216,12 +217,96 @@ def comp_color(label) -> str:
     return COMP_LABEL_COLORS.get((label or "").strip(), GREY)
 
 
-def loc_color(label, cfg) -> str:
-    key = LOC_LABEL_ARR.get((label or "").strip())
-    if not key:
+# ---- Data Completeness: per-job comp/location capture quality ----------------- #
+# vet-jobs.js is the single source of the LABEL text (preferring prep's field_status, else its own
+# row fallback) and writes it into the CSV column. This script maps that label TEXT -> a color, and
+# — for older CSVs written before the column existed — reproduces vet-jobs.js's ROW FALLBACK here so
+# regenerating an old batch still gets a populated, colored column + top flag. Keep the vocabulary
+# ("complete" / "not verified" / "unknown" / "not posted") in sync with vet-jobs.js.
+COMPLETE_GREEN, COMPLETE_AMBER, COMPLETE_RED = GREEN, YELLOW, RED
+
+
+def fallback_completeness(comp_range, working_location) -> str:
+    """Derive the completeness label from a row's own comp/location text (no manifest field_status).
+    Mirrors vet-jobs.js fallbackCompleteness: a missing field can't be told apart from 'not posted'
+    here, so it is treated as could-not-verify."""
+    comp = (comp_range or "").strip()
+    loc = (working_location or "").strip()
+    comp_missing = (not comp) or ("?" in comp)
+    loc_missing = (not loc) or (loc.lower() == "unknown")
+    if not comp_missing and not loc_missing:
+        return "✓ complete"
+    if comp_missing and loc_missing:
+        return "⚠ comp+location not verified"
+    if comp_missing:
+        return "⚠ comp not verified"
+    return "⚠ location unknown"
+
+
+def completeness_category(value):
+    """complete / benign (only 'not posted') / attention (any 'not verified' / 'unknown'). Mirrors
+    vet-jobs.js completenessCategory; drives both the cell color and the top-flag membership."""
+    v = (value or "").strip().lower()
+    if not v:
+        return None
+    if "complete" in v:
+        return "complete"
+    if "not verified" in v or "unknown" in v:
+        return "attention"
+    if "not posted" in v:
+        return "benign"
+    return "attention"
+
+
+def completeness_color(value):
+    cat = completeness_category(value)
+    return {"complete": COMPLETE_GREEN, "benign": COMPLETE_AMBER, "attention": COMPLETE_RED}.get(cat)
+
+
+def completeness_summary(records):
+    """Build the loud top-flag line from the ranked records: '⚠️ Incomplete captures (N): Company —
+    Role (flag); ...' listing only rows we could not verify (skips pure 'not posted'), or an
+    all-clear line when none. Returns (text, has_attention). Shared by the XLSX banner + Instructions
+    tab; the Markdown rankings carry an equivalent line built in vet-jobs.js."""
+    attention = [rec for rec in (records or [])
+                 if completeness_category(rec.get(H_DATACOMPLETE)) == "attention"
+                 and (rec.get(H_STATUS) or "").strip() != NEEDS_REFETCH_STATUS]
+    if not attention:
+        return "✓ Data completeness: all captures complete.", False
+    parts = []
+    for rec in attention:
+        role = parse_title_link(rec.get(H_TITLE) or "")[0]
+        flag = (rec.get(H_DATACOMPLETE) or "").lstrip("⚠ ").strip()
+        parts.append(f"{(rec.get(H_COMPANY) or '').strip()} — {role} ({flag})")
+    return f"⚠️ Incomplete captures ({len(attention)}): " + "; ".join(parts), True
+
+
+def loc_color(workloc, label, cfg) -> str:
+    """Color Working Location / Location Fit, DAY-COUNT aware (implements the candidate's documented
+    rule, ported from the 7/14 one-off rescore workbook into the shared engine 7/29):
+      Remote -> green; home-metro hybrid 1-2 days -> yellow; home-metro hybrid 3+/unclear days or
+      home-metro onsite -> orange; non-home-metro required -> red; no signal -> grey.
+    The day count comes from the Working Location TEXT (which carries it, e.g. "IRL NYC/SF - 3 days");
+    the arrangement TYPE (Home/Other/Remote) comes from the deterministic Location Fit label. This
+    SUPERSEDES the older pure arrangement-rating lookup, which ignored day count and painted every
+    home-hybrid role green regardless of whether it was 1 day or 5."""
+    s = (workloc or "").strip().lower()
+    lab = (label or "").strip()
+    if not s and not lab:
         return GREY
-    arr = (cfg.get("location") or {}).get("arrangements") or {}
-    return RATING_COLORS.get(arr.get(key), GREY)
+    if lab.startswith("Remote") or ("remote" in s and "irl" not in s):
+        return RATING_COLORS["preferred"]          # green — fully remote is always top
+    m = re.search(r"(\d+)\s*day", s)
+    days = int(m.group(1)) if m else None
+    if lab.startswith("Home"):
+        if lab.startswith("Home onsite") or (days is not None and days >= 5):
+            return RATING_COLORS["stretch"]        # orange — full onsite in the home metro
+        if days is not None and days <= 2:
+            return RATING_COLORS["ok"]             # yellow — light home-metro hybrid (1-2 days)
+        return RATING_COLORS["stretch"]            # orange — 3+ days OR unclear day count
+    if lab.startswith("Other"):
+        return RATING_COLORS["no"]                 # red — relocation / non-home city required
+    return GREY                                    # unknown / no location signal
 
 
 # Lane color is keyed to the HEALTH DOMAIN itself (Jessica's rule, 7/16/26), not lane-priority
@@ -370,12 +455,20 @@ def build_score_section(meta):
     return rows
 
 
-def build_instructions(ws, meta=None, archive_link=None, archive_warning=None):
+def build_instructions(ws, meta=None, archive_link=None, archive_warning=None,
+                       completeness_line=None, completeness_attention=False):
     meta = meta or DEFAULT_METADATA
     ws.column_dimensions["A"].width = 110
     t = ws.cell(1, 1, "How to use this tracker")
     t.font = Font(name=FONT, bold=True, size=14, color="305496")
     r = 3
+    # Loud data-completeness flag at the very top — mirrors the banner on the Job Rankings sheet.
+    if completeness_line:
+        c = ws.cell(r, 1, completeness_line)
+        c.font = Font(name=FONT, bold=True, size=11, color=("C00000" if completeness_attention else "375623"))
+        c.fill = solid("FCE4D6" if completeness_attention else "E2EFDA")
+        c.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+        r += 2
     for text, is_header in INSTRUCTIONS + build_score_section(meta):
         c = ws.cell(r, 1, text)
         c.font = Font(name=FONT, bold=is_header, size=11, color=("305496" if is_header else "000000"))
@@ -412,6 +505,18 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         WIDTHS[label_of[key]] = SCORE_WIDTHS_BY_KEY.get(key, 14)
 
     headers, records = read_records(input_csv, SCORE_COLS)
+    # Data Completeness column: present in CSVs written by current vet-jobs.js. For OLDER CSVs (pre-
+    # column), synthesize it here — insert the header after Comp Fit and derive each value from the
+    # row's own comp/location text — so regenerating any batch still gets the column + coloring + flag.
+    if H_DATACOMPLETE not in headers:
+        insert_at = (headers.index(H_COMPFIT) + 1) if H_COMPFIT in headers else len(headers)
+        headers.insert(insert_at, H_DATACOMPLETE)
+        for rec in records:
+            rec[H_DATACOMPLETE] = fallback_completeness(rec.get(H_COMPRANGE), rec.get(H_WORKLOC))
+    else:
+        for rec in records:  # backfill any blank cell so every row is colored
+            if not (rec.get(H_DATACOMPLETE) or "").strip():
+                rec[H_DATACOMPLETE] = fallback_completeness(rec.get(H_COMPRANGE), rec.get(H_WORKLOC))
     ncols = len(headers)
     letter = {h: get_column_letter(i + 1) for i, h in enumerate(headers)}
     legend_letter = get_column_letter(LEGEND_MERGE_TO)
@@ -420,7 +525,10 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
     ws = wb.active
     ws.title = "Job Rankings"
     archive_link, archive_warning = resolve_submitted_applications_link(cfg)
-    build_instructions(wb.create_sheet("Instructions"), meta=meta, archive_link=archive_link, archive_warning=archive_warning)   # second tab
+    compl_line, compl_attention = completeness_summary(records)
+    build_instructions(wb.create_sheet("Instructions"), meta=meta, archive_link=archive_link,
+                       archive_warning=archive_warning, completeness_line=compl_line,
+                       completeness_attention=compl_attention)   # second tab
 
     THIN = Side(style="thin", color="D9D9D9")
     BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -492,9 +600,12 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         cc = comp_color(rec.get(H_COMPFIT, ""))
         ws[f"{letter[H_COMPRANGE]}{r}"].fill = solid(cc)
         ws[f"{letter[H_COMPFIT]}{r}"].fill = solid(cc)
-        loc = loc_color(rec.get(H_LOCFIT, ""), cfg)
+        loc = loc_color(rec.get(H_WORKLOC, ""), rec.get(H_LOCFIT, ""), cfg)
         ws[f"{letter[H_WORKLOC]}{r}"].fill = solid(loc)
         ws[f"{letter[H_LOCFIT]}{r}"].fill = solid(loc)
+        dcc = completeness_color(rec.get(H_DATACOMPLETE, ""))
+        if dcc:
+            ws[f"{letter[H_DATACOMPLETE]}{r}"].fill = solid(dcc)
 
         # HARD-STOP override: wins over every other fill above — none of a NEEDS-RE-FETCH row's
         # data (lane, comp, location, scores) is trustworthy, so the whole row gets flagged, not
@@ -545,9 +656,23 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         ]:
             ws.conditional_formatting.add(frng, rule)
 
+    # Loud DATA-COMPLETENESS flag — a merged banner just below the jobs, above the section legend,
+    # so the reader sees at a glance which rows' scores were computed against comp/location that could
+    # NOT be verified (skips pure "not posted" — a benign employer omission). Same summary the Markdown
+    # rankings carry at the top; also mirrored on the Instructions tab.
+    summ, has_attention = completeness_summary(records)
+    cr = last_data_row + 2
+    fill_hex, font_hex = ("FCE4D6", "C00000") if has_attention else ("E2EFDA", "375623")
+    banner = ws.cell(cr, 1, summ)
+    banner.fill = solid(fill_hex)
+    banner.font = Font(name=FONT, bold=True, size=11, color=font_hex)
+    banner.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    ws.merge_cells(f"A{cr}:{legend_letter}{cr}")
+    ws.row_dimensions[cr].height = 30
+
     # Section-color legend — a SEPARATE block below the jobs (blank-row gap), merged A:J. Not mixed
     # into the sortable data; a palette to copy a bar from after sorting if you want visual breaks.
-    lr = last_data_row + 2
+    lr = cr + 2
     lbl = ws.cell(lr, 1, "Section colors  (optional — after sorting by Status, copy a bar in above a group; do NOT paste these into your own tracker's data)")
     lbl.font = Font(name=FONT, size=9, italic=True, color="808080")
     lbl.alignment = Alignment(horizontal="left", vertical="center")

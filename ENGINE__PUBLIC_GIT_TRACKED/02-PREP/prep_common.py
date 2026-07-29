@@ -22,7 +22,21 @@ from ats_fetchers import (
     UUID_RE,
     _greenhouse_ids,
     _linkedin_job_id,
+    parse_office_cadence,
+    question_provides_employer_comp,
+    question_provides_working_location,
+    recover_embedded_greenhouse,
 )
+
+# --------------------------------------------------------------------------- #
+# Per-field completeness vocabulary (comp + working-location gate before ranking)
+# --------------------------------------------------------------------------- #
+FOUND = "found"
+NOT_POSTED = "not_posted"
+CAPTURE_FAILED = "capture_failed"
+CONFLICTING = "conflicting"
+# Hard fields that gate ranking quality (never a reason to quarantine, though).
+HARD_FIELDS = ("compensation", "working_location")
 
 # --------------------------------------------------------------------------- #
 # Status vocabulary (kept stable so the manifest is a contract ranking can read)
@@ -60,6 +74,19 @@ _CONTENT_MARKERS = (
 # --------------------------------------------------------------------------- #
 # Slug + filenames
 # --------------------------------------------------------------------------- #
+# Double-quote-like characters that a verbatim question label sometimes carries
+# on one or both ends. We wrap the label in our own quotes when emitting it, so a
+# stray one doubles up (e.g. `…delivery?""`). Strip only these wrapping quotes;
+# apostrophes and quotes *inside* the label are left untouched.
+_WRAP_QUOTES = "\"“”„‟"
+
+
+def _strip_wrapping_quotes(text: str) -> str:
+    """Trim stray leading/trailing double-quote characters so a verbatim label
+    doesn't render a doubled quote when we wrap it in our own."""
+    return (text or "").strip().strip(_WRAP_QUOTES).strip()
+
+
 def slugify(text: str, max_len: int = 80) -> str:
     text = (text or "").strip().lower()
     text = re.sub(r"[^a-z0-9]+", "-", text)
@@ -211,20 +238,407 @@ def classify(body: str, *, is_ats: bool = False) -> tuple[str, str]:
 
 
 # --------------------------------------------------------------------------- #
+# Completeness gate (compensation + working location) — runs BEFORE ranking
+# --------------------------------------------------------------------------- #
+def _norm_val(v) -> str:
+    return re.sub(r"\s+", " ", str(v or "").strip().lower())
+
+
+def _distinct(values) -> list:
+    seen, out = set(), []
+    for v in values:
+        if not v:
+            continue
+        k = _norm_val(v)
+        if k and k not in seen:
+            seen.add(k)
+            out.append(str(v).strip())
+    return out
+
+
+# A plain HTML scrape (requests or a rendered page with no JSON-LD JobPosting) is
+# NOT a structured source: a field missing from it is "could not verify"
+# (capture_failed), never "not posted", because the real ATS API or a render
+# routinely surfaces fields a plain scrape misses. Only a structured source (an
+# ATS API, or a JSON-LD JobPosting) can testify that a field is genuinely absent.
+_GENERIC_SOURCES = {"requests/html", "playwright/html"}
+
+
+def _source_is_structured(meta: dict) -> bool:
+    """True when a STRUCTURED source (ATS API or JSON-LD JobPosting) was
+    successfully consulted for this posting. A genuinely-absent field is only
+    trustworthy as `not_posted` from such a source; a bare generic HTML scrape
+    yields `capture_failed` instead. An explicit meta['structured_source'] flag
+    wins; otherwise anything not tagged as a generic HTML source is treated as
+    structured (covers the ATS result dicts, which name themselves e.g.
+    'greenhouse-boards-api')."""
+    flag = meta.get("structured_source")
+    if flag is not None:
+        return bool(flag)
+    return (meta.get("source") or "").strip().lower() not in _GENERIC_SOURCES
+
+
+# --------------------------------------------------------------------------- #
+# Prose fallback — the completeness verdict must match what the vetting scorer can
+# actually read. The scorer reads the job-description BODY, so before we call a
+# field capture_failed we scan that same prose: employers routinely write the pay
+# range and the location into the JD text even when no structured field carries it.
+# --------------------------------------------------------------------------- #
+
+# A monetary amount: a comma-thousands number (240,000), a K-scaled number (180K),
+# or a plain 4-7 digit number (240000). Plain small integers like "20" never match,
+# so "10-20 people" can't be read as pay; the plain-digit form additionally requires
+# a currency marker at match time (below) so ids/years don't false-positive.
+_CUR = r"USD|US\$|CAD|C\$|A\$|AUD|EUR|GBP|\$|£|€"
+_AMT = r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d{2,3}(?:\.\d+)?\s?[kK]|\d{4,7}(?:\.\d{2})?"
+_PAY_RANGE_RE = re.compile(
+    rf"(?P<cur1>{_CUR})?\s?"
+    rf"(?P<lo>{_AMT})"
+    rf"\s?(?:-|–|—|to|through)\s?"
+    rf"(?P<cur2>{_CUR})?\s?"
+    rf"(?P<hi>{_AMT})",
+    re.I,
+)
+_SALARY_KEYWORDS = (
+    "salary", "compensation", "pay range", "pay for", "base pay", "base salary",
+    "annual", "annually", "per year", "/year", "/yr", "a year", "ote",
+    "total comp", "target cash", "range for this", "hiring range", "wage",
+)
+
+
+def _prose_compensation(body: str) -> str | None:
+    """Best-effort employer pay figure written into the JD prose. Returns a cleaned
+    range string, or None. Requires a currency marker OR a nearby salary keyword so
+    non-salary numeric ranges don't false-positive."""
+    if not body:
+        return None
+    text = re.sub(r"\s+", " ", body)
+    low = text.lower()
+    for m in _PAY_RANGE_RE.finditer(text):
+        lo, hi = m.group("lo"), m.group("hi")
+        has_cur = bool(m.group("cur1") or m.group("cur2"))
+        has_comma_or_k = any(("," in x or "k" in x.lower()) for x in (lo, hi))
+        window = low[max(0, m.start() - 90): m.start()]
+        after = low[m.end(): m.end() + 25]
+        has_kw = (any(k in window for k in _SALARY_KEYWORDS)
+                  or any(k in after for k in ("per year", "annually", "/yr", "/year",
+                                              "a year", "base", "salary")))
+        # A currency marker is enough; a comma/K-scaled figure needs a salary keyword;
+        # a bare plain-digit range (240000-334000) needs an explicit currency so ids
+        # and year ranges can't masquerade as pay.
+        if has_cur or (has_comma_or_k and has_kw):
+            return re.sub(r"\s+", " ", m.group(0)).strip()
+    return None
+
+
+# US state abbreviations, to keep the "City, ST" prose pattern from matching noise.
+_US_STATES = {
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL",
+    "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT",
+    "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI",
+    "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
+}
+# Inter-word separator is [ \t], NOT \s: \s matches newlines, which let a city glue
+# onto the trailing token of the PREVIOUS line across a break ("Google Cloud\nAustin,
+# TX" -> captured as one city). Keeping it on a single line fixes that (2026-07-29 audit).
+_CITY_STATE_RE = re.compile(r"\b([A-Z][A-Za-z.\-]+(?:[ \t][A-Z][A-Za-z.\-]+){0,2}),[ \t]*([A-Z]{2})\b")
+_REMOTE_RE = re.compile(
+    r"(?i)\b(fully[- ]remote|remote[- ]first|remote[- ]friendly|100%\s*remote|"
+    r"work from (home|anywhere)|this (role|position) is remote|remote position|"
+    r"remote role|remote,|remote \(|open to remote)\b")
+_CADENCE_RE = re.compile(
+    r"(?i)\b(hybrid|on-?site|in-?office|in the office|in[- ]person|"
+    r"\d\s*days?\s*(?:per|a)\s*week|days?\s*(?:per|a)\s*week in|relocate to)\b")
+# The keyword group is \b-terminated so a plural nav label ("Locations" / "Office
+# locations") does NOT match "location" and leak its trailing "s" as the value — the
+# 2026-07-29 completeness audit caught exactly this (4 jobs green-lit with
+# working-location = "s"). A separator stays optional so "Location New York" still works.
+_LOC_LABEL_RE = re.compile(
+    r"(?im)^\s*(?:office location|work location|location|based in)\b\s*[:\-–]?\s*(.+)$")
+
+# A trailing marketing sentence or markdown-link/URL after the real place, captured by
+# a naive prose grab (e.g. Rippling: "San Francisco, CA, [Rippling has raised ...](url) …").
+_LOC_TRAILING_JUNK_RE = re.compile(r"\s*(?:\[|\(|https?://|www\.).*$", re.S)
+# Bare nav/label tokens that must never count as a location on their own.
+_LOC_NAV_BLOCKLIST = {"locations", "location", "careers", "apply", "menu", "jobs", "home", "s"}
+
+
+def _sanitize_location(val: str | None) -> str | None:
+    """Clean a raw prose location candidate and confirm it actually looks like a
+    location before the completeness gate is allowed to call working-location `found`.
+    Returns a short trustworthy snippet, or None (-> capture_failed downstream).
+
+    Handles the failure modes the 2026-07-29 audit surfaced:
+      "Google Cloud\\nAustin, TX" -> "Austin, TX"      (division prefix / multiline)
+      "Product\\nMenlo Park, CA"  -> "Menlo Park, CA"
+      "San Francisco, CA, [Rippling has raised ...](url) …" -> "San Francisco, CA"
+      "s" / "Locations"          -> None              (nav-label leak)
+    """
+    if not val:
+        return None
+    # Multiline: keep the single most location-like line (City,ST > remote/cadence).
+    lines = [ln.strip() for ln in re.split(r"[\r\n]+", val) if ln.strip()]
+    if lines:
+        lines.sort(key=lambda ln: (
+            2 if _CITY_STATE_RE.search(ln) else 1 if (_REMOTE_RE.search(ln) or _CADENCE_RE.search(ln)) else 0),
+            reverse=True)
+        val = lines[0]
+    # A real "City, ST" anywhere wins — drops any division prefix or trailing marketing.
+    cm = _CITY_STATE_RE.search(val)
+    if cm and cm.group(2) in _US_STATES:
+        return f"{cm.group(1)}, {cm.group(2)}"
+    # Otherwise cut a trailing URL / markdown link / parenthetical marketing tail.
+    val = _LOC_TRAILING_JUNK_RE.sub("", val).strip(" ,;:·—–-\t").strip()
+    if len(val) < 3 or val.lower() in _LOC_NAV_BLOCKLIST:
+        return None
+    # Trust it if it carries a real workplace signal (Remote/hybrid/onsite/cadence),
+    # or reads as a compact "City, Region" phrase (US or international). A longer
+    # free-text clause with no such signal is prose, not a location.
+    if _REMOTE_RE.search(val) or _CADENCE_RE.search(val):
+        return val[:120]
+    if "," in val and len(val.split()) <= 6 and re.match(r"^[A-Z][\w.\-]+", val):
+        return val[:120]
+    return None
+
+
+def _prose_working_location(body: str) -> str | None:
+    """Best-effort job location/cadence written into the JD prose: a "City, ST",
+    a Remote/hybrid/onsite signal, or an explicit Location: line. Returns a short,
+    validated snippet, or None. Every candidate is run through _sanitize_location so a
+    nav-label leak ("Locations" -> "s") or a marketing tail never counts as found."""
+    if not body:
+        return None
+    m = _LOC_LABEL_RE.search(body)
+    if m and m.group(1).strip():
+        cleaned = _sanitize_location(m.group(1))
+        if cleaned:
+            return cleaned
+    m = _REMOTE_RE.search(body)
+    if m:
+        return m.group(0).strip().rstrip(",(").strip().title()
+    for cm in _CITY_STATE_RE.finditer(body):
+        if cm.group(2) in _US_STATES:
+            return f"{cm.group(1)}, {cm.group(2)}"
+    m = _CADENCE_RE.search(body)
+    if m:
+        return m.group(0).strip()
+    return None
+
+
+def assess_completeness(meta: dict | None, body: str, questions: list | None) -> dict:
+    """Per-field capture status for the ranking gate. Each of compensation and
+    working-location (plus title/description presence) is exactly one of:
+    `found` / `not_posted` / `capture_failed` / `conflicting`.
+
+    Rules (PII-free; candidate-relative interpretation happens later at vetting):
+      - Employer compensation must be a real employer figure. A candidate
+        "compensation expectations?" question does NOT satisfy it (such questions
+        are already dropped by the filter and never reach here).
+      - Working location must be the JOB's location/cadence. "Where do you live?"
+        does NOT satisfy it; an office-attendance question DOES (and supplies the
+        cadence). Two disagreeing sources -> `conflicting` (keep both, flagged).
+    """
+    meta = meta or {}
+    questions = questions or []
+    fs: dict = {"conflicts": []}
+
+    title = (meta.get("title") or "").strip()
+    fs["title"] = FOUND if title and title != "Unknown Title" else CAPTURE_FAILED
+    fs["description"] = FOUND if (body or "").strip() else CAPTURE_FAILED
+
+    # ---- compensation ----
+    comp_sources = _distinct([s for _, s in (meta.get("compensation_sources") or [])] or [meta.get("compensation")])
+    comp_from_q = any(question_provides_employer_comp(q) for q in questions)
+    comp_prose = _prose_compensation(body)
+    if len(comp_sources) >= 2:
+        fs["compensation"] = CONFLICTING
+        fs["conflicts"].append(f"compensation: {' vs '.join(comp_sources[:2])}")
+    elif meta.get("compensation") or comp_from_q:
+        fs["compensation"] = FOUND
+    elif comp_prose:
+        # The scorer reads the JD body; comp is written into the prose even though no
+        # structured field carried it. This IS found — not a capture failure.
+        fs["compensation"] = FOUND
+        fs["compensation_source"] = "description"
+        fs["compensation_prose"] = comp_prose
+    elif meta.get("comp_expected"):
+        # A structured source expected comp but it came back empty -> capture failure.
+        fs["compensation"] = CAPTURE_FAILED
+    elif _source_is_structured(meta):
+        # A structured source was consulted and comp is genuinely absent (e.g.
+        # Greenhouse pay_transparency with empty pay_input_ranges, Ashby
+        # shouldDisplayCompensationOnJobPostings=false, JSON-LD with no salary).
+        fs["compensation"] = NOT_POSTED
+    else:
+        # A bare generic HTML scrape: a missing figure is could-not-verify, not
+        # proof the employer didn't publish (this is the field-driven retry trigger).
+        fs["compensation"] = CAPTURE_FAILED
+
+    # ---- working location ----
+    loc_sources = _distinct([s for _, s in (meta.get("location_sources") or [])]
+                            or [meta.get("working_location") or meta.get("location")])
+    office_q = any(question_provides_working_location(q) for q in questions)
+    loc_prose = _prose_working_location(body)
+    if len(loc_sources) >= 2:
+        fs["working_location"] = CONFLICTING
+        fs["conflicts"].append(f"working-location: {' vs '.join(loc_sources[:2])}")
+    elif meta.get("working_location") or meta.get("location") or office_q:
+        fs["working_location"] = FOUND
+    elif loc_prose:
+        # Location written into the JD prose (a named city / Remote / cadence) — the
+        # scorer can read it, so it is found, not a capture failure.
+        fs["working_location"] = FOUND
+        fs["working_location_source"] = "description"
+        fs["working_location_prose"] = loc_prose
+    elif meta.get("location_expected"):
+        # A structured source expected a location but it came back empty.
+        fs["working_location"] = CAPTURE_FAILED
+    elif _source_is_structured(meta):
+        # Structured source consulted; location genuinely absent.
+        fs["working_location"] = NOT_POSTED
+    else:
+        # Generic scrape: missing location is could-not-verify (retry trigger).
+        fs["working_location"] = CAPTURE_FAILED
+
+    return fs
+
+
+def missing_hard_fields(field_status: dict | None) -> list[str]:
+    """Hard fields whose capture actually failed (a retry might help). `not_posted`
+    and `conflicting` are NOT retryable-missing — the employer just didn't publish,
+    or we already have two readings."""
+    fs = field_status or {}
+    return [f for f in HARD_FIELDS if fs.get(f) == CAPTURE_FAILED]
+
+
+# --------------------------------------------------------------------------- #
 # Output text + quarantine stubs
 # --------------------------------------------------------------------------- #
-def build_output_text(url: str, title: str, company: str, body_text: str) -> str:
-    return (
-        f"URL: {url}\n"
-        f"Page Title: {title}\n"
-        f"Company: {company}\n\n"
-        f"--- JOB TEXT START ---\n\n"
-        f"{body_text}\n\n"
-        f"--- JOB TEXT END ---\n"
+_STATUS_LABEL = {
+    FOUND: "found", NOT_POSTED: "not posted", CAPTURE_FAILED: "capture failed",
+    CONFLICTING: "conflicting",
+}
+
+
+def _apply_office_cadence(meta: dict, questions: list) -> tuple[str | None, str | None]:
+    """If a kept question carries an office-attendance requirement, fold its full
+    eligible-metro list + cadence into the working-location string (verbatim; no
+    candidate-city mapping — vetting does that from jail.config.json)."""
+    working = meta.get("working_location") or meta.get("location")
+    cadence_raw = meta.get("cadence_raw")
+    for q in questions or []:
+        parsed = parse_office_cadence(q)
+        if not parsed:
+            continue
+        metros = parsed.get("metros") or []
+        cadence = parsed.get("cadence")
+        if metros:
+            metro_str = "; ".join(metros)
+            working = f"{working}; {metro_str}" if working else metro_str
+            # Dedupe while preserving order.
+            working = "; ".join(dict.fromkeys(p.strip() for p in working.split(";") if p.strip()))
+        if cadence:
+            working = f"{working} — {cadence}" if working else cadence
+        cadence_raw = cadence_raw or parsed.get("verbatim")
+    return working, cadence_raw
+
+
+def build_output_text(url: str, title: str, company: str, body_text: str, *,
+                      meta: dict | None = None, questions: list | None = None,
+                      field_status: dict | None = None, methods_tried: list | None = None,
+                      captured: str | None = None) -> str:
+    """Dual-preservation layout: a provenance line, a NORMALIZED block (for
+    vetting) with per-field statuses + a completeness line + optional conflicts,
+    an APPLICATION QUESTIONS block (kept questions only, verbatim), a verbatim
+    EMPLOYER-PROVIDED SOURCE block, then the full job text between the stable
+    START/END markers. Parseable and stable (golden-file tested)."""
+    meta = meta or {}
+    questions = questions if questions is not None else (meta.get("questions") or [])
+    fs = field_status or assess_completeness(meta, body_text, questions)
+
+    apply_url = meta.get("apply_url") or "n/a"
+    source = meta.get("source") or "requests/html"
+    posting_id = meta.get("posting_id") or "n/a"
+    methods = ", ".join(dict.fromkeys(methods_tried or [])) or (meta.get("method") or source)
+    captured = captured or datetime.now(timezone.utc).date().isoformat()
+
+    workplace = meta.get("workplace") or ("Remote" if meta.get("remote") else None)
+    working_location, cadence_raw = _apply_office_cadence(meta, questions)
+    compensation = meta.get("compensation")
+    benefits = meta.get("benefits")
+    equity = meta.get("equity")
+
+    # When a field was found only in the JD prose (no structured value), surface that
+    # prose figure on the line and mark it "(from description)" so the value shown
+    # matches the found status and what the scorer reads.
+    comp_from_prose = not compensation and fs.get("compensation_source") == "description"
+    if comp_from_prose:
+        compensation = fs.get("compensation_prose")
+    loc_from_prose = not working_location and fs.get("working_location_source") == "description"
+    if loc_from_prose:
+        working_location = fs.get("working_location_prose")
+
+    def _stat(field: str) -> str:
+        return f"[{_STATUS_LABEL.get(fs.get(field), 'unknown')}]"
+
+    def _val(v, status_field, from_prose=False):
+        if v:
+            return f"{v} (from description)" if from_prose else str(v)
+        st = fs.get(status_field)
+        return "Not posted" if st == NOT_POSTED else ("Could not verify" if st == CAPTURE_FAILED else "n/a")
+
+    lines: list[str] = []
+    lines.append(f"URL: {url}")
+    lines.append(f"Application URL: {apply_url}")
+    lines.append(f"Company: {company}")
+    lines.append(f"Role: {title}")
+    lines.append(f"Source: {source} · Posting ID: {posting_id} · Captured: {captured} · Methods tried: {methods}")
+    lines.append("")
+    lines.append("== NORMALIZED (for vetting) ==")
+    lines.append(f"Employment Type: {meta.get('employment_type') or 'n/a'}")
+    lines.append(f"Workplace: {workplace or 'n/a'}")
+    lines.append(f"Working Location: {_val(working_location, 'working_location', loc_from_prose)}   {_stat('working_location')}")
+    lines.append(f"Compensation: {_val(compensation, 'compensation', comp_from_prose)}   {_stat('compensation')}")
+    lines.append(f"Benefits: {benefits or 'Not posted'}")
+    lines.append(f"Equity: {equity or 'Not posted'}")
+    lines.append(
+        f"Completeness: title {'✓' if fs.get('title') == FOUND else '✗'} · "
+        f"description {'✓' if fs.get('description') == FOUND else '✗'} · "
+        f"compensation {_STATUS_LABEL.get(fs.get('compensation'), 'unknown')} · "
+        f"working-location {_STATUS_LABEL.get(fs.get('working_location'), 'unknown')}"
     )
+    for c in (fs.get("conflicts") or []):
+        lines.append(f"[CONFLICT]: {c}")
+    lines.append("")
+    lines.append("== APPLICATION QUESTIONS (thoughtful / job-material only) ==")
+    if questions:
+        for i, q in enumerate(questions, 1):
+            req = "required" if q.get("required") else "optional"
+            qtype = q.get("source_type") or q.get("type") or "text"
+            help_txt = f" — {q['help']}" if q.get("help") else ""
+            opts = q.get("options") or []
+            opt_str = "  (options: " + " / ".join(f'"{o}"' for o in opts) + ")" if opts else ""
+            label = _strip_wrapping_quotes(q.get("label", "").strip())
+            lines.append(f'{i}. [{qtype}, {req}] "{label}"{help_txt}{opt_str}')
+    else:
+        lines.append("(none kept)")
+    lines.append("")
+    lines.append("== EMPLOYER-PROVIDED SOURCE (verbatim; the durable archive) ==")
+    lines.append(f'Compensation (verbatim): "{meta.get("compensation_raw") or ""}"')
+    lines.append(f'Locations/Addresses (verbatim): "{meta.get("location_raw") or ""}"')
+    lines.append(f'Office cadence (verbatim): "{cadence_raw or ""}"')
+    lines.append("")
+    lines.append("--- JOB TEXT START ---")
+    lines.append("")
+    lines.append(body_text)
+    lines.append("")
+    lines.append("--- JOB TEXT END ---")
+    return "\n".join(lines) + "\n"
 
 
-def thin_text(url: str, title: str, company: str, body_text: str, reason: str, ts: str) -> str:
+def thin_text(url: str, title: str, company: str, body_text: str, reason: str, ts: str,
+              *, meta: dict | None = None, questions: list | None = None,
+              field_status: dict | None = None, methods_tried: list | None = None) -> str:
     return (
         f"# QUARANTINED — THIN FETCH (needs your review)\n"
         f"# Reason: {reason}\n"
@@ -232,7 +646,8 @@ def thin_text(url: str, title: str, company: str, body_text: str, reason: str, t
         f"# What to do: open this, confirm it's the real job post. If it's incomplete,\n"
         f"#   paste the full job text below the marker, then re-run prep (it will pick it up),\n"
         f"#   OR move this file into 'All Job Posts (full text)/' if it's actually fine.\n\n"
-        + build_output_text(url, title, company, body_text)
+        + build_output_text(url, title, company, body_text, meta=meta, questions=questions,
+                            field_status=field_status, methods_tried=methods_tried)
     )
 
 
@@ -309,6 +724,12 @@ def write_report(path: Path, manifest: dict) -> None:
     failed = [x for x in e if x["status"] == FAILED]
     dups = [x for x in e if x["status"] == DUPLICATE]
     possible = [x for x in usable if x.get("possible_duplicate_group")]
+    # Usable posts still missing a hard field (comp / working-location). These rank
+    # anyway — but loudly flagged, distinguishing "employer didn't publish" from
+    # "expected from the ATS but came back empty".
+    incomplete = [x for x in usable
+                  if any((x.get("field_status") or {}).get(f) in (CAPTURE_FAILED, NOT_POSTED, CONFLICTING)
+                         for f in HARD_FIELDS)]
     safe = "Yes — usable posts are ready to rank." if usable else "No usable posts yet."
 
     lines = [f"# Prep Report — {manifest['batch']}", ""]
@@ -321,7 +742,24 @@ def write_report(path: Path, manifest: dict) -> None:
     lines += ["", f"**Safe to rank now?** {safe}", ""]
     lines.append("Usable posts are ready for ranking. Please review the thin/failed items before "
                  "relying on them (open them, paste the real job text if needed, then re-run prep).")
+    if incomplete:
+        lines.append(f"- ⚠️ {len(incomplete)} usable post(s) with an incomplete comp/location capture — see below")
     lines += ["", "## Details"]
+    if incomplete:
+        lines.append("**⚠️ Incomplete captures (still ranked — review the flagged field):**")
+        for x in incomplete:
+            fsx = x.get("field_status") or {}
+            bits = []
+            for f in HARD_FIELDS:
+                st = fsx.get(f)
+                if st == CAPTURE_FAILED:
+                    bits.append(f"{f.replace('_', '-')}: capture failed (expected from "
+                                f"{x.get('method') or 'source'} but came back empty)")
+                elif st == NOT_POSTED:
+                    bits.append(f"{f.replace('_', '-')}: not posted (employer didn't publish)")
+                elif st == CONFLICTING:
+                    bits.append(f"{f.replace('_', '-')}: conflicting (two sources disagree — both kept)")
+            lines.append(f"- {x.get('company','?')} — {x.get('title','?')}: {'; '.join(bits)}  ({x['original_url']})")
     if possible:
         lines.append("**Possible duplicates (kept both — review):**")
         for x in possible:
@@ -392,7 +830,11 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
         d = {"original_url": url, "normalized_url": norm, "status": None, "method": None,
              "company": None, "title": None, "char_count": None, "output_path": None,
              "quarantine_path": None, "duplicate_of": None, "duplicate_group": None,
-             "possible_duplicate_group": None, "notes": "", "error": None, "fetched_at": ts}
+             "possible_duplicate_group": None, "notes": "", "error": None, "fetched_at": ts,
+             # Completeness gate (comp + working-location before ranking). A missing
+             # hard field never quarantines — the job stays usable and ranks, flagged.
+             "field_status": None, "missing_fields": [], "methods_tried": [],
+             "has_compensation": None, "has_working_location": None}
         d.update(kw)
         return d
 
@@ -423,29 +865,66 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                 if owner == norm:
                     taken.pop(fn, None)
 
+        def _evaluate(r):
+            """(status, reason, field_status) for one fetch result."""
+            if not r.get("ok"):
+                return FAILED, (r.get("error") or "fetch failed"), {}
+            st, rs = classify(r.get("body") or "", is_ats=(r.get("method") == "ats"))
+            f_status = assess_completeness(r.get("meta") or {}, r.get("body") or "",
+                                           r.get("questions") if r.get("questions") is not None
+                                           else (r.get("meta") or {}).get("questions"))
+            return st, rs, f_status
+
         res = fetch_one(url) or {}
         methods_tried = [res.get("method") or "unknown"]
-        status, reason = (FAILED, res.get("error") or "fetch failed") if not res.get("ok") \
-            else classify(res.get("body") or "", is_ats=(res.get("method") == "ats"))
+        status, reason, field_status = _evaluate(res)
 
         # HARD RULE: never quarantine on one method alone if a second one is available.
-        # A THIN/FAILED first attempt automatically triggers the fallback fetch before we
-        # give up — this is what should have caught the Microsoft SPA-boilerplate capture.
-        if status != USABLE:
-            if fetch_fallback is not None:
-                res2 = fetch_fallback(url) or {}
-                methods_tried.append(res2.get("method") or fallback_label or "fallback")
-                status2, reason2 = (FAILED, res2.get("error") or "fetch failed") if not res2.get("ok") \
-                    else classify(res2.get("body") or "", is_ats=(res2.get("method") == "ats"))
-                if status2 == USABLE or (status == FAILED and status2 == THIN):
-                    # Second method did better (or at least got further than an outright failure).
-                    res, status, reason = res2, status2, reason2
-                # else: keep the first result; both attempts failed/thin either way.
-                reason = f"{reason} (tried {', '.join(methods_tried)}, all failed to produce usable content)" \
-                    if status != USABLE else reason
-            else:
-                reason = f"{reason} — only one fetch method attempted ({methods_tried[0]}); " \
-                         f"no fallback method available (e.g. Playwright not installed) to auto-retry"
+        # The fallback fetch fires when the first attempt is THIN/FAILED *or* when a hard
+        # field (compensation / working-location) came back as a genuine capture failure
+        # (field-driven, not just body-thinness) — this is the completeness gate that
+        # runs BEFORE ranking, so we don't rank an incomplete capture then re-fetch later.
+        field_gap = missing_hard_fields(field_status)
+        if (status != USABLE or field_gap) and fetch_fallback is not None:
+            res2 = fetch_fallback(url) or {}
+            methods_tried.append(res2.get("method") or fallback_label or "fallback")
+            status2, reason2, field_status2 = _evaluate(res2)
+            gap2 = missing_hard_fields(field_status2)
+            improved_body = status2 == USABLE or (status == FAILED and status2 == THIN)
+            improved_fields = status2 == USABLE and len(gap2) < len(field_gap)
+            if improved_body or improved_fields:
+                res, status, reason, field_status, field_gap = res2, status2, reason2, field_status2, gap2
+            if status != USABLE:
+                reason = f"{reason} (tried {', '.join(methods_tried)}, all failed to produce usable content)"
+        elif status != USABLE and fetch_fallback is None:
+            reason = (f"{reason} — only one fetch method attempted ({methods_tried[0]}); "
+                      f"no fallback method available (e.g. Playwright not installed) to auto-retry")
+
+        # Embedded-Greenhouse recovery: many custom career domains (careers.<co>.com)
+        # are Greenhouse-backed. If we still lack a hard field (or never got usable
+        # content), and this non-ATS URL carries a Greenhouse-style job id, hit the
+        # real GH boards API with board tokens derived from the domain / page HTML.
+        # Accepted only when the returned title matches what we already have (guards
+        # a wrong-board-token collision) — this is what lets e.g. Airbnb recover
+        # comp + location a plain scrape of careers.airbnb.com misses.
+        if status != USABLE or field_gap:
+            rec = recover_embedded_greenhouse(
+                url, page_title=res.get("title"), body=res.get("body"),
+                html_text=(res.get("meta") or {}).get("raw_html"))
+            if rec:
+                methods_tried.append("greenhouse-embedded")
+                rec_meta = dict(rec)
+                rec_meta["method"] = "ats"
+                rec_meta["structured_source"] = True
+                res_rec = {"ok": True, "title": rec.get("title"),
+                           "company": rec.get("company"), "body": rec.get("text") or "",
+                           "method": "ats", "error": None, "meta": rec_meta,
+                           "questions": rec.get("questions") or []}
+                status_r, reason_r, field_status_r = _evaluate(res_rec)
+                gap_r = missing_hard_fields(field_status_r)
+                if status_r == USABLE and (status != USABLE or len(gap_r) < len(field_gap)):
+                    res, status, reason, field_status, field_gap = (
+                        res_rec, status_r, reason_r, field_status_r, gap_r)
 
         if status == FAILED:
             fn = failed_filename(url, norm)
@@ -453,6 +932,7 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
             out.write_text(failed_text(url, reason, ts), encoding="utf-8")
             entries.append(base_entry(url, norm, status=FAILED, method=res.get("method"),
                                       error=reason, notes=f"methods tried: {', '.join(methods_tried)}",
+                                      methods_tried=methods_tried,
                                       quarantine_path=_rel(out, batch_root)))
             continue
 
@@ -460,21 +940,40 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
         company = (res.get("company") or "Unknown").strip()
         body = res.get("body") or ""
         method = res.get("method")
+        meta = res.get("meta") or {}
+        questions = res.get("questions") if res.get("questions") is not None else meta.get("questions")
+        missing = missing_hard_fields(field_status)
+        has_comp = field_status.get("compensation") == FOUND
+        has_loc = field_status.get("working_location") == FOUND
 
         fn = unique_filename(company, title, norm, taken, url)
         taken[fn] = norm
+        out_text = build_output_text(url, title, company, body, meta=meta, questions=questions,
+                                     field_status=field_status, methods_tried=methods_tried)
         if status == USABLE:
             out = dirs["source"] / fn
-            out.write_text(build_output_text(url, title, company, body), encoding="utf-8")
-            note = "" if len(methods_tried) == 1 else f"usable after fallback (tried: {', '.join(methods_tried)})"
+            out.write_text(out_text, encoding="utf-8")
+            note_bits = []
+            if len(methods_tried) > 1:
+                note_bits.append(f"usable after fallback (tried: {', '.join(methods_tried)})")
+            if missing:
+                note_bits.append("incomplete capture: " + ", ".join(
+                    f"{f.replace('_', '-')} {field_status.get(f)}" for f in missing))
             entries.append(base_entry(url, norm, status=USABLE, method=method, company=company,
-                                      title=title, char_count=len(body), notes=note,
-                                      output_path=_rel(out, batch_root)))
+                                      title=title, char_count=len(body), notes="; ".join(note_bits),
+                                      field_status=field_status, missing_fields=missing,
+                                      methods_tried=methods_tried, has_compensation=has_comp,
+                                      has_working_location=has_loc, output_path=_rel(out, batch_root)))
         else:  # THIN
             out = dirs["needs_review"] / fn
-            out.write_text(thin_text(url, title, company, body, reason, ts), encoding="utf-8")
+            out.write_text(thin_text(url, title, company, body, reason, ts, meta=meta,
+                                     questions=questions, field_status=field_status,
+                                     methods_tried=methods_tried), encoding="utf-8")
             entries.append(base_entry(url, norm, status=THIN, method=method, company=company,
                                       title=title, char_count=len(body), notes=reason,
+                                      field_status=field_status, missing_fields=missing,
+                                      methods_tried=methods_tried, has_compensation=has_comp,
+                                      has_working_location=has_loc,
                                       quarantine_path=_rel(out, batch_root)))
 
     # Soft-flag possible same company/title duplicates among usable posts (keep both).
