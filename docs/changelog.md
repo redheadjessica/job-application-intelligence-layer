@@ -11,6 +11,45 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Working Location output contract: canonical grammar + exact 4-hex colors, enforced mechanically (SUPERSEDES the 7/14 location-color rule and its 7/29 engine port)
+
+The user issued an authoritative spec for the Working Location column after a real batch proved that
+prompt instructions alone can't enforce an output format (a scored row came back as `NYC/SF - 3 days`
+with the mandatory `IRL ` prefix missing). Root cause across several recent regressions: formats were
+enforced by LLM prompt text instead of deterministic post-processing.
+
+New module `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py` — the single home for output-
+contract normalizers (importable + CLI):
+
+- `normalize_working_location(text, cfg)` enforces the canonical grammar — `Remote` ·
+  `Remote (<detail>)` · `Remote or IRL <cities> - <cadence>` · `IRL <cities> - <cadence>` ·
+  `Unknown`. It inserts the missing `IRL ` prefix, converts `Hybrid X`/`Onsite X` phrasing (onsite =
+  5 days ONLY when full-time attendance is established, else `unknown days`), preserves multi-city
+  lists (`/`-joined, ordered by configured `city_priority`), preserves exact-vs-open cadence
+  (`3 days` ≠ `3+ days`; "at least N" stays `N+ days`), keeps known-city/unknown-cadence as
+  `IRL <city> - unknown days`, and assigns `Unknown` only on no signal. Repair-or-fail-loudly: an
+  unparseable value becomes `Unknown` WITH a printed warning, never silently. A location requirement
+  parsed from an application question normalizes identically to one from the JD.
+- `working_location_color(canonical, cfg)` is the ONE deterministic color mapper, returning exactly
+  one of four hexes (black text, **no grey**): green `42FF35` = remote genuinely available (never
+  inferred from "remote-friendly"/"flexible"); yellow `FDFF43` = acceptable home-metro office at
+  EXACTLY 1–3 days; orange `FA9C31` = Unknown, unknown cadence, >3 days, or open-ended minimums;
+  red `F82C1F` = required in-person outside the home geography. Home-metro detection uses
+  `home_metro_aliases` only — `city_priority` membership does NOT make a city a home metro.
+  **Key deltas from the superseded 7/14 rule: exactly-3-days is now YELLOW (was orange), and
+  Unknown is ORANGE (was grey); grey is no longer a legal Working Location color.**
+- CLI mode `--normalize-rankings-csv <csv> --config jail.config.json` rewrites the column in place,
+  printing every repair. `vet-jobs.js` now shells out to it right after writing the rankings CSV,
+  before the XLSX build, and its `location:` prompt rule was rewritten around the canonical grammar
+  (the prompt is guidance; the normalizer is the contract).
+- `make_rankings_xlsx.py` re-normalizes the Working Location cell on read (so regenerating an old
+  CSV repairs its text too) and colors BOTH the Working Location and Location Fit cells via the new
+  mapper. Deleted the dead `LOC_LABEL_ARR` map; `jail.config.json`'s `location.arrangements` no
+  longer influences this color (it remains a practicality-scoring signal).
+- New test dir `03-VETTING/tests/`: the spec's full case matrix asserted at the normalizer level AND
+  by building a real XLSX and reading the actual written cell fill hex back with openpyxl, including
+  the `NYC/SF - 3 days` → `IRL NYC/SF - 3 days` repair and question-derived ≡ JD-derived equivalence.
+
 ## 2026-07-29 — REVERT: voluntary diversity-statement prompts are KEPT, not excluded
 
 Reverses the same-day decision to exclude voluntary diversity-statement prompts ("we recruit from underrepresented communities — if you bring a diverse perspective based on your background, share more here"). The candidate reviewed it and reversed the call, and her reasoning is the better rule: **the distinction that matters is FORM, not topic.** A gender/race *dropdown* is a routine self-ID field with nothing to compose — correctly excluded. A *free-text* prompt inviting you to write about your background requires genuinely sitting down and composing something, which is exactly what the "think and compose a response" keep-test is for. Excluding it silently discarded a question she'd actually have to write.

@@ -12,7 +12,8 @@ This script STYLES that data and adds tracker affordances:
 - a Status dropdown (inline list, like the reference workbook — shows the arrow; applied to the job
   rows only),
 - auto-filter on the job rows so "Sort A->Z" is one click (the legend below is outside its range),
-- candidate-relative stoplight fills for Status / Lane / Location Fit / Comp Fit,
+- lifecycle/stoplight fills for Status / Lane / Comp Fit, plus the fixed 4-hex Working Location
+  palette applied to BOTH the Working Location and Location Fit cells,
 - Final Score / sub-score color ramps,
 - a SEPARATE section-color legend block below the jobs (merged A:J bars) — a palette you can copy a
   bar from if you sort and want visual breaks; it is NOT mixed into the sortable data,
@@ -21,7 +22,10 @@ This script STYLES that data and adds tracker affordances:
 Note on "chips": the rounded colored dropdown pills are a Google Sheets-native feature configured in
 Sheets; they cannot be embedded in an .xlsx. This file gives flat cell fills + a working dropdown.
 
-Candidate-relative fit MATH lives in vet-jobs.js (single source); here we only map labels -> colors.
+Output-contract normalization + the Working Location color mapper live in norm_contracts.py (single
+source, same directory); this script re-normalizes contract-governed cells on read so regenerating an
+OLD CSV also repairs its text and colors. Candidate-relative fit LABEL text still originates in
+vet-jobs.js.
 Usage:
     python make_rankings_xlsx.py <input-rankings.csv> [output.xlsx] \
         [--config jail.config.json] [--quarantined N]
@@ -32,6 +36,9 @@ import json
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import norm_contracts  # noqa: E402 — shared output-contract normalizers + color mappers
 
 try:
     from openpyxl import Workbook
@@ -161,11 +168,6 @@ COMP_LABEL_COLORS = {
     "Below floor": RED, "Meets/above target": GREEN, "Above floor": GREEN,
     "Near target": YELLOW, "Unknown": GREY, "No comp prefs": GREY,
 }
-LOC_LABEL_ARR = {
-    "Remote": "remote", "Remote (state-restricted)": "remote",
-    "Home hybrid": "home_hybrid", "Home onsite": "home_onsite",
-    "Other hybrid": "other_hybrid", "Other onsite": "other_onsite",
-}
 
 # Structural (non-score) column widths — these header strings don't change with score relabeling.
 WIDTHS = {
@@ -281,32 +283,16 @@ def completeness_summary(records):
     return f"⚠️ Incomplete captures ({len(attention)}): " + "; ".join(parts), True
 
 
-def loc_color(workloc, label, cfg) -> str:
-    """Color Working Location / Location Fit, DAY-COUNT aware (implements the candidate's documented
-    rule, ported from the 7/14 one-off rescore workbook into the shared engine 7/29):
-      Remote -> green; home-metro hybrid 1-2 days -> yellow; home-metro hybrid 3+/unclear days or
-      home-metro onsite -> orange; non-home-metro required -> red; no signal -> grey.
-    The day count comes from the Working Location TEXT (which carries it, e.g. "IRL NYC/SF - 3 days");
-    the arrangement TYPE (Home/Other/Remote) comes from the deterministic Location Fit label. This
-    SUPERSEDES the older pure arrangement-rating lookup, which ignored day count and painted every
-    home-hybrid role green regardless of whether it was 1 day or 5."""
-    s = (workloc or "").strip().lower()
-    lab = (label or "").strip()
-    if not s and not lab:
-        return GREY
-    if lab.startswith("Remote") or ("remote" in s and "irl" not in s):
-        return RATING_COLORS["preferred"]          # green — fully remote is always top
-    m = re.search(r"(\d+)\s*day", s)
-    days = int(m.group(1)) if m else None
-    if lab.startswith("Home"):
-        if lab.startswith("Home onsite") or (days is not None and days >= 5):
-            return RATING_COLORS["stretch"]        # orange — full onsite in the home metro
-        if days is not None and days <= 2:
-            return RATING_COLORS["ok"]             # yellow — light home-metro hybrid (1-2 days)
-        return RATING_COLORS["stretch"]            # orange — 3+ days OR unclear day count
-    if lab.startswith("Other"):
-        return RATING_COLORS["no"]                 # red — relocation / non-home city required
-    return GREY                                    # unknown / no location signal
+def loc_color(workloc, cfg) -> str:
+    """Color Working Location AND Location Fit from the canonical Working Location text — a thin
+    call into norm_contracts.working_location_color(), the ONE deterministic mapper (authoritative
+    spec, 2026-07-29). Returns exactly one of the 4 spec hexes (42FF35 / FDFF43 / FA9C31 / F82C1F,
+    black text): remote -> green; acceptable home-metro office at exactly 1-3 days -> yellow;
+    >3 days / open-ended minimums ("3+", "at least 3") / unknown cadence / Unknown -> orange;
+    required in-person outside the home geography -> red. NO grey. This SUPERSEDES the July-14 rule
+    (which put exactly-3-days at orange and Unknown at grey) and the older per-arrangement-rating
+    lookup; jail.config.json's location.arrangements no longer drives this color."""
+    return norm_contracts.working_location_color(workloc, cfg)
 
 
 # Lane color is keyed to the HEALTH DOMAIN itself (Jessica's rule, 7/16/26), not lane-priority
@@ -425,7 +411,7 @@ INSTRUCTIONS = [
     ("Pasting jobs into your own tracker? Copy only the job rows, NOT the legend bars, so you don't end up with duplicate dividers.", False),
     ("", False),
     ("Colors & the dropdown", True),
-    ("Status / Lane / Location Fit / Comp Fit cells are color-coded. In Google Sheets you can layer the native rounded \"chip\" dropdown on top if you prefer that look (that is a Sheets feature, not part of the file).", False),
+    ("Status / Lane / Comp Fit cells are color-coded. Working Location + Location Fit share one fixed 4-color palette: green = remote genuinely available; yellow = acceptable home-metro office at exactly 1-3 days; orange = unknown location/cadence, >3 days, or open-ended minimums (\"3+ days\"); red = required in-person outside your home geography. In Google Sheets you can layer the native rounded \"chip\" dropdown on top if you prefer that look (that is a Sheets feature, not part of the file).", False),
     ("", False),
     ("AI detail columns", True),
     ("The score block (below) and the notes/detail columns to the right of it are AI-generated.  \"Lane\" = what the job actually is;  \"Lane Fit\" = how that maps to your target lanes.", False),
@@ -505,6 +491,13 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         WIDTHS[label_of[key]] = SCORE_WIDTHS_BY_KEY.get(key, 14)
 
     headers, records = read_records(input_csv, SCORE_COLS)
+    # Output-contract normalization on read (norm_contracts is the single source): repair the
+    # Working Location text so regenerating an OLD CSV (or one an LLM wrote slightly off-grammar)
+    # still yields canonical cells + correct colors. vet-jobs.js runs the same normalizer over the
+    # CSV itself right after scoring; this is the belt-and-suspenders for standalone regeneration.
+    for rec in records:
+        if H_WORKLOC in rec:
+            rec[H_WORKLOC] = norm_contracts.normalize_working_location(rec.get(H_WORKLOC), cfg)
     # Data Completeness column: present in CSVs written by current vet-jobs.js. For OLDER CSVs (pre-
     # column), synthesize it here — insert the header after Comp Fit and derive each value from the
     # row's own comp/location text — so regenerating any batch still gets the column + coloring + flag.
@@ -560,8 +553,9 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
     if quarantined and int(quarantined) > 0:
         notes.append(f"Prep quarantined {quarantined} thin/failed post(s); they were NOT ranked. See '0 - Prep Report/'.")
     if not config_complete_enough(cfg):
-        notes.append("Candidate preferences (jail.config.json comp/location) are missing or empty, so Comp Fit / "
-                     "Location Fit are neutral. Run /intake or fill jail.config.json for candidate-relative coloring.")
+        notes.append("Candidate preferences (jail.config.json comp/location) are missing or empty, so Comp Fit is "
+                     "neutral and Working Location / Location Fit cannot recognize your home metro (out-of-metro "
+                     "offices show orange instead of red). Run /intake or fill jail.config.json.")
     if notes:
         ws[f"{letter[H_STATUS]}1"].comment = Comment("\n".join(notes), "JAIL")
 
@@ -600,7 +594,7 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         cc = comp_color(rec.get(H_COMPFIT, ""))
         ws[f"{letter[H_COMPRANGE]}{r}"].fill = solid(cc)
         ws[f"{letter[H_COMPFIT]}{r}"].fill = solid(cc)
-        loc = loc_color(rec.get(H_WORKLOC, ""), rec.get(H_LOCFIT, ""), cfg)
+        loc = loc_color(rec.get(H_WORKLOC, ""), cfg)
         ws[f"{letter[H_WORKLOC]}{r}"].fill = solid(loc)
         ws[f"{letter[H_LOCFIT]}{r}"].fill = solid(loc)
         dcc = completeness_color(rec.get(H_DATACOMPLETE, ""))
