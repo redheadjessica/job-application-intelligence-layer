@@ -11,6 +11,38 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Comp Range contract: applicable-bands outer envelope + midpoint Comp Fit rule (resolves the "optimistic green" open question)
+
+Second contract into `norm_contracts.py`, closing the comp question flagged on 7/14 ("a `151-201`
+band vs a 180 floor / 200 target painted green because only the high endpoint was evaluated").
+Investigation confirmed the label is purely cosmetic — it never feeds the final score, status, or
+sort — so this is a color/label-only change with no rescore needed.
+
+- **Prompt (vet-jobs.js `comp_range:`)** rewritten from "lowest-highest across all bands shown" to
+  the OUTER ENVELOPE of APPLICABLE bands: include every band covering a way the candidate could
+  genuinely take the job (their remote state, an acceptable home-metro office, a configured
+  relocation option, unresolved geo/level bands); exclude candidate expectations, bands for
+  untakeable locations, unrelated roles, inapplicable levels, and bonus/commission/equity/OTE.
+  Endpoints may come from different bands. Never a midpoint, first tier, or model-picked band.
+- **`norm_contracts.normalize_comp_range()`** mechanically enforces `N-N` or `??`: repairs `$`, `K`,
+  commas, full-dollar figures (`232,000-282,000` → `232-282`), en/em dashes, `to` ranges, and single
+  values (`180` → `180-180`); anything unparseable (prose, ambiguous multi-band text) becomes `??`
+  WITH a printed warning — never a silently-picked band.
+- **`norm_contracts.comp_fit_label()`** implements the approved MIDPOINT rule: red `Below floor` iff
+  max < floor; green `Meets/above target` iff midpoint ≥ target; else yellow `Near target`
+  (`Unknown` / `No comp prefs` unchanged). This is the single implementation: the post-scoring CLI
+  pass re-derives the Comp Fit column from the normalized range (its output wins), and
+  `make_rankings_xlsx.py` re-derives it again on read so OLD CSVs regenerate with honest colors.
+  The JS `compFitLabel` was updated to the same logic but is only the initial fallback value.
+  Comp cells keep the existing green/yellow/red/grey palette (the exact-hex mandate is the
+  Working Location column's).
+- Tests: repair matrix, midpoint label matrix (e.g. `125-250` vs floor 180/target 200 → yellow now,
+  green before), and an XLSX read-back proving a stale optimistic label in an old CSV is corrected
+  in the actually-written Comp Range + Comp Fit cells.
+- Deferred to the prep-side pass (02-PREP, out of this change's scope): populating
+  `compensation_sources` so the CONFLICTING status becomes reachable, prose-miner OTE/total-comp
+  exclusion + multi-band collection, and the "Mentioned (no details)" equity/benefits third state.
+
 ## 2026-07-29 — Working Location output contract: canonical grammar + exact 4-hex colors, enforced mechanically (SUPERSEDES the 7/14 location-color rule and its 7/29 engine port)
 
 The user issued an authoritative spec for the Working Location column after a real batch proved that

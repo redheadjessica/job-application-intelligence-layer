@@ -498,6 +498,13 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
     for rec in records:
         if H_WORKLOC in rec:
             rec[H_WORKLOC] = norm_contracts.normalize_working_location(rec.get(H_WORKLOC), cfg)
+        if H_COMPRANGE in rec:
+            rec[H_COMPRANGE] = norm_contracts.normalize_comp_range(rec.get(H_COMPRANGE))
+            # Re-derive Comp Fit from the normalized range (midpoint rule) so old CSVs
+            # written under the superseded high-endpoint-only rule regenerate with
+            # honest colors. Comp colors keep the COMP_LABEL_COLORS palette.
+            if H_COMPFIT in rec:
+                rec[H_COMPFIT] = norm_contracts.comp_fit_label(rec.get(H_COMPRANGE), cfg)
     # Data Completeness column: present in CSVs written by current vet-jobs.js. For OLDER CSVs (pre-
     # column), synthesize it here — insert the header after Comp Fit and derive each value from the
     # row's own comp/location text — so regenerating any batch still gets the column + coloring + flag.

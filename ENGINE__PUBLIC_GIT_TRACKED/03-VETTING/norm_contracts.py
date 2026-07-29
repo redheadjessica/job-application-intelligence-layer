@@ -289,10 +289,77 @@ def working_location_color(canonical, cfg=None):
 
 
 # --------------------------------------------------------------------------- #
+# Comp Range — outer envelope of APPLICABLE bands, displayed as whole thousands
+# ("125-250"), or "??" when unknown. The band-applicability judgment lives in the
+# vet-jobs.js scoring prompt (the LLM has the posting + preferences); the FORMAT
+# is enforced mechanically here.
+# --------------------------------------------------------------------------- #
+def normalize_comp_range(text, warn=_warn):
+    """Enforce `^\\d+-\\d+$` or `??`. Repairs $, K, commas, full-dollar values
+    (232,000-282,000 -> 232-282), en/em dashes, "to" ranges, and a single value
+    N -> N-N. Anything unparseable becomes `??` WITH a printed warning."""
+    t = re.sub(r"\s+", " ", str(text or "").strip())
+    if not t or "?" in t or t.lower() in {"unknown", "n/a", "na", "none", "not posted", "tbd"}:
+        return "??"
+    if re.fullmatch(r"\d+-\d+", t):
+        return t
+    s = t.replace(",", "").replace("$", "")
+    s = s.replace("–", "-").replace("—", "-")  # en/em dash
+    s = re.sub(r"\bto\b", "-", s, flags=re.I)
+    nums = []
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*([kK])?", s):
+        if not m.group(1):
+            continue
+        v = float(m.group(1))
+        if not m.group(2) and v >= 10000:  # full-dollar figure -> whole thousands
+            v = v / 1000.0
+        nums.append(int(round(v)))
+    if len(nums) == 1:
+        lo = hi = nums[0]
+    elif len(nums) == 2:
+        lo, hi = nums
+        if lo > hi:
+            warn(f"comp range endpoints were reversed — swapped: {t!r}")
+            lo, hi = hi, lo
+    else:
+        warn(f"comp range unparseable ({len(nums)} numbers found) — set to ??: {t!r}")
+        return "??"
+    if not (10 <= lo <= 2000 and 10 <= hi <= 2000):  # sanity: whole-thousands base salary
+        warn(f"comp range out of plausible whole-thousands bounds — set to ??: {t!r}")
+        return "??"
+    return f"{lo}-{hi}"
+
+
+def comp_fit_label(comp_range, cfg):
+    """Candidate-relative Comp Fit label — the APPROVED midpoint rule (2026-07-29),
+    replacing the old high-endpoint-only rule that painted a below-floor-midpoint
+    band green. `Unknown` for ??/empty; `No comp prefs` when the config has neither
+    floor nor target; else: RED `Below floor` iff max < floor; GREEN
+    `Meets/above target` iff midpoint >= target; else YELLOW `Near target`.
+    (`Above floor` when only a floor is configured and it's met.)"""
+    t = (comp_range or "").strip()
+    m = re.fullmatch(r"(\d+)-(\d+)", t)
+    if not m:
+        return "Unknown"
+    comp = (cfg or {}).get("comp") or {}
+    floor, target = comp.get("floor_base"), comp.get("target_base")
+    if floor is None and target is None:
+        return "No comp prefs"
+    lo, hi = int(m.group(1)), int(m.group(2))
+    if floor is not None and hi < floor:
+        return "Below floor"
+    if target is not None:
+        return "Meets/above target" if (lo + hi) / 2 >= target else "Near target"
+    return "Above floor"
+
+
+# --------------------------------------------------------------------------- #
 # CLI — normalize a rankings CSV in place (invoked by vet-jobs.js post-scoring,
 # before the XLSX build). Prints every repair it makes.
 # --------------------------------------------------------------------------- #
 H_WORKLOC = "Working Location"
+H_COMPRANGE = "Comp Range"
+H_COMPFIT = "Comp Fit"
 H_COMPANY = "Company"
 
 
@@ -335,6 +402,14 @@ def normalize_rankings_csv(csv_path, cfg, out=print):
         if H_WORKLOC in idx and idx[H_WORKLOC] < len(row):
             fix(row, H_WORKLOC, normalize_working_location(row[idx[H_WORKLOC]], cfg),
                 H_WORKLOC, n)
+        if H_COMPRANGE in idx and idx[H_COMPRANGE] < len(row):
+            fix(row, H_COMPRANGE, normalize_comp_range(row[idx[H_COMPRANGE]]),
+                H_COMPRANGE, n)
+            # Re-derive Comp Fit from the NORMALIZED comp range — this pass is the
+            # single implementation of the midpoint rule; the JS label is a fallback.
+            if H_COMPFIT in idx and idx[H_COMPFIT] < len(row):
+                fix(row, H_COMPFIT, comp_fit_label(row[idx[H_COMPRANGE]], cfg),
+                    H_COMPFIT, n)
     if changed:
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             csv.writer(f).writerows(rows)

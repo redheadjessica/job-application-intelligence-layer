@@ -114,6 +114,50 @@ def test_no_home_metro_configured_cannot_judge_geography_orange_not_red():
 
 
 # --------------------------------------------------------------------------- #
+# Comp Range — format repair matrix + the APPROVED midpoint Comp Fit rule
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("raw,expected", [
+    ("190-210", "190-210"),                 # canonical passthrough
+    ("??", "??"),                           # unknown passthrough
+    ("$125K–$250K", "125-250"),             # $, K, en dash
+    ("125,000 - 250,000", "125-250"),       # commas + full-dollar
+    ("232,000-282,000", "232-282"),         # full-dollar, no spaces
+    ("180", "180-180"),                     # single value -> N-N
+    ("150k to 190k", "150-190"),            # "to" range
+    ("", "??"),
+])
+def test_normalize_comp_range_repairs(raw, expected):
+    assert norm_contracts.normalize_comp_range(raw, warn=quiet) == expected
+
+
+def test_normalize_comp_range_garbage_warns_loudly():
+    warnings = []
+    assert norm_contracts.normalize_comp_range("competitive salary", warn=warnings.append) == "??"
+    assert warnings
+    warnings2 = []
+    assert norm_contracts.normalize_comp_range("Zone A 200-250 Zone B 180-220", warn=warnings2.append) == "??"
+    assert warnings2, "ambiguous multi-band text must fail loudly, not silently pick a band"
+
+
+# Midpoint rule vs floor 180 / target 200 (approved 2026-07-29): red iff max < floor;
+# green iff midpoint >= target; else yellow.
+@pytest.mark.parametrize("comp_range,label", [
+    ("125-250", "Near target"),          # midpoint 187.5 < 200 -> yellow (old rule said green)
+    ("210-250", "Meets/above target"),   # midpoint 230 -> green
+    ("120-170", "Below floor"),          # max 170 < 180 -> red
+    ("190-210", "Meets/above target"),   # midpoint exactly 200 -> green
+    ("??", "Unknown"),
+    ("", "Unknown"),
+])
+def test_comp_fit_label_midpoint_rule(comp_range, label):
+    assert norm_contracts.comp_fit_label(comp_range, CFG) == label
+
+
+def test_comp_fit_label_no_comp_prefs():
+    assert norm_contracts.comp_fit_label("190-210", {}) == "No comp prefs"
+
+
+# --------------------------------------------------------------------------- #
 # CSV CLI pass
 # --------------------------------------------------------------------------- #
 HEADERS = [
@@ -165,6 +209,21 @@ def test_cli_normalizes_csv_in_place_and_reports_repairs(tmp_path, capsys):
     assert rows[2][i] == "Remote"
 
 
+def test_cli_repairs_comp_range_and_recomputes_comp_fit(tmp_path, capsys):
+    csv_path = tmp_path / "b-rankings.csv"
+    write_csv(csv_path, [
+        # Full-dollar comp + an optimistic legacy Comp Fit label (old high-only rule).
+        make_row(company="EnvelopeCo", comp="$125,000 - $250,000", comp_fit="Meets/above target"),
+    ])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG)
+    capsys.readouterr()
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    assert rows[1][HEADERS.index("Comp Range")] == "125-250"
+    # midpoint 187.5 vs target 200 -> the CLI's re-derived midpoint label wins
+    assert rows[1][HEADERS.index("Comp Fit")] == "Near target"
+
+
 # --------------------------------------------------------------------------- #
 # End-to-end: build a real XLSX and read the ACTUAL written cell fills back
 # --------------------------------------------------------------------------- #
@@ -206,3 +265,36 @@ def test_xlsx_written_cells_carry_the_exact_spec_hexes(tmp_path):
     # no grey anywhere in the populated Working Location column
     greys = {cell_hex(ws.cell(i + 2, wl_col)) for i in range(len(cases))}
     assert "D9D9D9" not in greys
+
+
+def test_xlsx_comp_cells_recolored_by_midpoint_rule(tmp_path):
+    """Old CSVs regenerate with honest comp colors: the Comp Fit label is re-derived
+    from the NORMALIZED Comp Range on read (midpoint rule), and the actual written
+    Comp Range + Comp Fit cell fills reflect it (COMP_LABEL_COLORS palette kept)."""
+    cfg_path = tmp_path / "jail.config.json"
+    cfg_path.write_text(json.dumps(CFG), encoding="utf-8")
+    csv_path = tmp_path / "comp-rankings.csv"
+    xlsx_path = tmp_path / "comp-rankings.xlsx"
+    GREEN, YELLOW, RED, GREY = "A9D08E", "FFE699", "F4A6A6", "D9D9D9"
+    cases = [
+        # (raw comp, stale legacy Comp Fit label, expected normalized, expected label, expected hex)
+        ("125-250", "Meets/above target", "125-250", "Near target", YELLOW),
+        ("210-250", "Near target", "210-250", "Meets/above target", GREEN),
+        ("120-170", "Meets/above target", "120-170", "Below floor", RED),
+        ("$190K–$210K", "Unknown", "190-210", "Meets/above target", GREEN),
+        ("??", "Meets/above target", "??", "Unknown", GREY),
+    ]
+    write_csv(csv_path, [make_row(company=f"C{i}", comp=raw, comp_fit=stale)
+                         for i, (raw, stale, _, _, _) in enumerate(cases)])
+    make_rankings_xlsx.build(str(csv_path), str(xlsx_path), config_path=str(cfg_path))
+    wb = load_workbook(str(xlsx_path))
+    ws = wb["Job Rankings"]
+    headers = [c.value for c in ws[1]]
+    cr_col = headers.index("Comp Range") + 1
+    cf_col = headers.index("Comp Fit") + 1
+    for i, (raw, _stale, norm, label, hexcode) in enumerate(cases):
+        r = i + 2
+        assert ws.cell(r, cr_col).value == norm, f"Comp Range text for {raw!r}"
+        assert ws.cell(r, cf_col).value == label, f"Comp Fit label for {raw!r}"
+        assert cell_hex(ws.cell(r, cr_col)) == hexcode, f"Comp Range fill for {raw!r}"
+        assert cell_hex(ws.cell(r, cf_col)) == hexcode, f"Comp Fit fill for {raw!r}"
