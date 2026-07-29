@@ -177,6 +177,104 @@ def test_normalize_lane(raw, expected):
 
 
 # --------------------------------------------------------------------------- #
+# Tailored-application names — "Company - Canonical Role" (spec's required
+# examples + incorrect-form repairs; company names here are generic engine
+# test data, same precedent as the BetterUp prep fixtures)
+# --------------------------------------------------------------------------- #
+APP_NAME_MATRIX = [
+    # ((company, raw role), exact required output)
+    (("Asana", "Senior Product Manager, Project & Task Experience"), "Asana - Senior PM, Project & Task Experience"),
+    (("ClickUp", "Senior Product Manager"), "ClickUp - Senior PM"),
+    (("ClickUp", "Staff Product Manager"), "ClickUp - Staff PM"),
+    # "Chief Product Officer" is NOT "Product Manager" — stays verbatim.
+    (("Feeld", "Chief Product Officer"), "Feeld - Chief Product Officer"),
+    (("Courier Health", "Senior Product Manager"), "Courier Health - Senior PM"),
+    (("Dorsia", "Product Manager, Consumer Experience"), "Dorsia - PM, Consumer Experience"),
+    # Employer " - " separator inside the title becomes the comma separator.
+    (("Fetch", "Staff Product Manager - Referral, Growth"), "Fetch - Staff PM, Referral Growth"),
+    (("Figma", "Product Manager, AI Growth"), "Figma - PM, AI Growth"),
+    (("Findem", "Principal Product Manager"), "Findem - Principal PM"),
+    (("Google", "Product Manager, Google Docs"), "Google - PM, Google Docs"),
+    (("Willow Health", "Senior Product Manager, Care Delivery"), "Willow Health - Senior PM, Care Delivery"),
+    # Incorrect-form repairs (the spec's listed bad forms must repair):
+    (("Courier Health", "Sr Product Manager"), "Courier Health - Senior PM"),
+    (("Courier Health", "Sr. Product Manager"), "Courier Health - Senior PM"),
+    (("Dorsia", "PM Consumer Experience"), "Dorsia - PM, Consumer Experience"),
+    (("Fetch", "Staff PM Referral Growth"), "Fetch - Staff PM, Referral Growth"),
+    (("Google", "Product Manager Google Docs"), "Google - PM, Google Docs"),
+    (("Willow Health", "Sr PM, Care Delivery"), "Willow Health - Senior PM, Care Delivery"),
+    # Her explicit answers: Vice President -> VP; Director stays Director.
+    (("Acme", "Vice President of Product"), "Acme - VP of Product"),
+    (("Acme", "Director of Product"), "Acme - Director of Product"),
+    # Filesystem rule: slash and colon are stripped.
+    (("Acme", "PM: Growth/Retention"), "Acme - PM, Growth Retention"),
+    # Preserve Staff/Principal + qualifiers verbatim.
+    (("Acme", "Principal Product Manager, Platform"), "Acme - Principal PM, Platform"),
+]
+
+
+@pytest.mark.parametrize("inputs,expected", APP_NAME_MATRIX)
+def test_canonical_application_name_matrix(inputs, expected):
+    company, role = inputs
+    assert norm_contracts.canonical_application_name(company, role) == expected
+
+
+@pytest.mark.parametrize("inputs,expected", APP_NAME_MATRIX)
+def test_canonical_application_name_is_idempotent(inputs, expected):
+    """Re-running the canonicalizer on its own output changes nothing — a re-run
+    of a workflow must land in the SAME folder, never a variant."""
+    company, _ = inputs
+    canonical_role = expected.split(" - ", 1)[1]
+    assert norm_contracts.canonical_application_name(company, canonical_role) == expected
+
+
+def test_never_senior_to_sr_and_existing_comma_never_removed():
+    assert norm_contracts.canonical_application_role("Senior PM") == "Senior PM"
+    assert norm_contracts.canonical_application_role("Senior PM, Care Delivery") == "Senior PM, Care Delivery"
+    # comma insertion only ADDs the separator; it never fires when one exists
+    assert "," in norm_contracts.canonical_application_role("PM, Consumer Experience")
+
+
+def test_application_name_cli_prints_the_exact_string():
+    """The CLI is the contract surface the agents actually call — invoke it for real."""
+    import subprocess
+    import sys as _sys
+    from pathlib import Path as _Path
+    script = _Path(norm_contracts.__file__)
+    out = subprocess.run(
+        [_sys.executable, str(script), "--application-name",
+         "--company", "Fetch", "--role", "Staff Product Manager - Referral, Growth"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    assert out == "Fetch - Staff PM, Referral Growth\n"
+    out2 = subprocess.run(
+        [_sys.executable, str(script), "--application-role", "--role", "Sr Product Manager"],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    assert out2 == "Senior PM\n"
+
+
+def test_application_name_survives_the_real_filesystem_layer(tmp_path):
+    """mkdir with the CLI's output and assert the exact on-disk directory name —
+    the final artifact is the folder, not the string."""
+    import subprocess
+    import sys as _sys
+    from pathlib import Path as _Path
+    script = _Path(norm_contracts.__file__)
+    name = subprocess.run(
+        [_sys.executable, str(script), "--application-name",
+         "--company", "Willow Health", "--role", "Sr PM, Care Delivery"],
+        capture_output=True, text=True, check=True,
+    ).stdout.rstrip("\n")
+    (tmp_path / name).mkdir()
+    assert [p.name for p in tmp_path.iterdir()] == ["Willow Health - Senior PM, Care Delivery"]
+    # the resume-base filename uses the same string verbatim
+    resume = tmp_path / name / f"Candidate-Resume - {name}.docx"
+    resume.write_bytes(b"")
+    assert resume.name == "Candidate-Resume - Willow Health - Senior PM, Care Delivery.docx"
+
+
+# --------------------------------------------------------------------------- #
 # CSV CLI pass
 # --------------------------------------------------------------------------- #
 HEADERS = [

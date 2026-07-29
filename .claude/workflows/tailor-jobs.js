@@ -67,13 +67,29 @@ function batchOf(p) {
 
 const CONFIRM_SCHEMA = {
   type: 'object', additionalProperties: false,
-  required: ['job_folder', 'output_file', 'recommended_base', 'open_questions'],
+  required: ['job_folder', 'output_file', 'company', 'role', 'recommended_base', 'open_questions'],
   properties: {
     job_folder: { type: 'string' },
     output_file: { type: 'string' },
+    company: { type: 'string', description: 'the hiring company, exactly as used in the canonical folder name' },
+    role: { type: 'string', description: 'the CANONICAL role — the part of the canonicalizer output after "Company - "' },
     recommended_base: { type: 'string' },
     open_questions: { type: 'integer' },
   },
+}
+
+// Single source of truth for tailored-application names: the shared canonicalizer CLI.
+// Workflow scripts can't run shell directly, so the agent is told to run this exact
+// command FIRST and use its output verbatim as the folder name (never derive/abbreviate
+// its own). When the pick carries company/title from the rankings, the command arrives
+// fully filled-in; otherwise the agent fills in company/role from the job post.
+const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`   // safe single-quoted shell arg
+const NAME_CLI = 'PY=".venv/bin/python3"; [ -x "$PY" ] || PY="python3"; "$PY" ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py --application-name'
+function nameCmdFor(p) {
+  const roleGuess = p.title_and_link ? String(p.title_and_link).split(' | ')[0].trim() : ''
+  return (p.company && roleGuess)
+    ? `${NAME_CLI} --company ${shq(p.company)} --role ${shq(roleGuess)}`
+    : `${NAME_CLI} --company '<Company from the job post>' --role '<Role/title from the job post>'`
 }
 
 phase('Tailor')
@@ -88,11 +104,17 @@ for (let i = 0; i < picks.length; i++) {
 
 Job description file (read this exact file): ${p.abs_path}
 ${p.company ? `Company: ${p.company}\n` : ''}${p.title_and_link ? `Role/title: ${p.title_and_link}\n` : ''}
-Create the destination job folder INSIDE "${resumesDir}" using the naming convention
-"Company - Role" (NO date — the parent batch folder is already dated; abbreviate long titles sensibly, e.g. Senior -> Sr,
-Vice President -> VP). Use mkdir -p and quote paths since they contain spaces. Copy the job file in,
-and write the output file ("application_resume_output - [Company] - [Role].md") there per your spec,
-with the "Questions for the candidate" section at the top. Do not ask questions — defer them to that section.
+Create the destination job folder INSIDE "${resumesDir}". The folder name must be EXACTLY the output
+of the shared canonicalizer — run this command FIRST and use its printed string verbatim (NO date —
+the parent batch folder is already dated; never invent your own abbreviations):
+
+${nameCmdFor(p)}
+
+Use mkdir -p and quote paths since they contain spaces. Copy the job file in, and write the output
+file ("application_resume_output - <canonical name>.md") there per your spec, with the "Questions
+for the candidate" section at the top. Do not ask questions — defer them to that section.
+In your structured return, "company" and "role" are the canonical values: role = the part of the
+canonicalizer output after "<Company> - ".
 
 REBUILD-ON-STALE: if an "application_resume_output*.md" ALREADY EXISTS in that folder, treat it as
 STALE — the candidate's canon (profile, boundary rules, experience bank, summary/skills sources,
@@ -116,7 +138,6 @@ const urlOf = (t) => { const m = /https?:\/\/\S+/.exec(String(t || '')); return 
 
 if (tailored.length) {
   phase('Record')
-  const shq = (s) => `'${String(s).replace(/'/g, `'\\''`)}'`   // safe single-quoted shell arg
   const cmds = tailored.filter((t) => t.recommended_base).map((t) => {
     const batchDir = `__READY_TO_REVIEW__PRIVATE_GITIGNORED/${batchOf(t.abs_path)}`
     const url = urlOf(t.title_and_link)
@@ -151,7 +172,9 @@ how many updated, and the full text of any WARNING lines.`,
 // land, and the base/cover-letter data would otherwise only exist buried in each job's .md file.
 // This table is unconditional: it's the thing Jessica actually copies into her Google Sheet, and
 // it must show up every run regardless of whether the rankings writeback found a home.
-const roleOf = (t) => (t.title_and_link || '').split(' | ')[0] || (t.job_folder || '').split('/').pop().split(' - ').slice(1).join(' - ') || ''
+// Prefer the agent's returned canonical company/role; folder-name splitting is a
+// last-resort fallback only (it breaks on roles containing " - ").
+const roleOf = (t) => t.role || (t.title_and_link || '').split(' | ')[0] || (t.job_folder || '').split('/').pop().split(' - ').slice(1).join(' - ') || ''
 const tableRows = tailored.map((t) => ({
   company: t.company || (t.job_folder || '').split('/').pop().split(' - ')[0] || '',
   role: roleOf(t),

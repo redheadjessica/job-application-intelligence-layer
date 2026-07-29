@@ -436,7 +436,7 @@ The main actionable output must be written into **one markdown file** in the act
 
 `application_resume_output - [Company] - [Role].md`
 
-where `[Company]` is the hiring company name and `[Role]` is the job title (abbreviate long titles sensibly, e.g. Sr Analyst, VP Ops, Dir Marketing). Example: `application_resume_output - Acme - Sr Analyst.md`. Use the same company and role names from the active job folder where possible.
+where `[Company] - [Role]` is the active job folder's canonical `Company - Role` name, matched **verbatim** (the folder name comes from the shared canonicalizer — `.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py --application-name --company "<Company>" --role "<Role>"` — which handles all abbreviation: `Product Manager` → `PM`, `Sr` → `Senior`, `Vice President` → `VP`; never invent your own abbreviations). Example: folder `Acme - Senior PM, Growth` → `application_resume_output - Acme - Senior PM, Growth.md`.
 
 This file should contain the full actionable output for the run, in this order (**work-on-it sections at the top, explanatory/diagnostic sections at the bottom**, so the candidate can open the file and immediately start working. Not extremely rigid — merge or adapt sections when it genuinely reads better — but default to this order and always keep the paste-ready material in the top half and the Read Log/system notes last):
 
@@ -793,10 +793,10 @@ Preferred format (Company before Role — same order as the job folder name), ke
 
 `{{CANDIDATE_NAME}}-Resume - [Company] - [Role].<original-extension>`
 
-- The `[Company] - [Role]` part must match the `Company - Role` job folder name **verbatim** — same order (company first), same words. The simplest correct approach: name the file `{{CANDIDATE_NAME}}-Resume - <job folder name>.<original-extension>`.
+- The `[Company] - [Role]` part must match the canonical `Company - Role` job folder name **verbatim** — same order (company first), same words. The ONLY correct approach: name the file `{{CANDIDATE_NAME}}-Resume - <job folder name>.<original-extension>`. Do not re-derive or re-abbreviate the name yourself — the folder name already came from the shared canonicalizer (`ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py --application-name`), which owns all abbreviation rules (`Product Manager` → `PM`, `Sr` → `Senior`, `Vice President` → `VP`, `Director` stays `Director`, never `Senior` → `Sr`).
 - **Keep the base file’s original extension** — whatever format the base is in (e.g. `.docx`, `.pdf`, `.pages`, `.md`). Do not hardcode `.pages` and do not convert the file to another format.
-- Keep the **full role title**. Do NOT shorten it or drop qualifiers that carry meaning (keep specializations like "Consumer", "Payments", "Public Sector", "Lifecycle", etc.). Only abbreviate long, unambiguous title words (e.g. `Senior` → `Sr`, `Vice President` → `VP`, `Director` → `Dir`).
-- Example: folder `Acme - Sr Manager Lifecycle Marketing`, base in Word → `{{CANDIDATE_NAME}}-Resume - Acme - Sr Manager Lifecycle Marketing.docx` (NOT `{{CANDIDATE_NAME}}-Resume - Sr Manager - Acme.docx`). If the base were a `.pages` file, the copy keeps `.pages`; if a `.pdf`, it keeps `.pdf`.
+- Keep the **full role title** as the canonical name renders it. Do NOT shorten it or drop qualifiers that carry meaning (keep specializations like "Consumer", "Payments", "Public Sector", "Lifecycle", etc.).
+- Example: folder `Acme - Senior PM, Lifecycle Marketing`, base in Word → `{{CANDIDATE_NAME}}-Resume - Acme - Senior PM, Lifecycle Marketing.docx` (NOT `{{CANDIDATE_NAME}}-Resume - Senior PM - Acme.docx`). If the base were a `.pages` file, the copy keeps `.pages`; if a `.pdf`, it keeps `.pdf`.
 
 If a matching base file cannot be found:
 - flag that clearly
@@ -1212,7 +1212,7 @@ For resume generation, write the full actionable output into:
 
 `application_resume_output - [Company] - [Role].md`
 
-in the active job folder. Use the hiring company name and abbreviated job title (e.g. `application_resume_output - Acme - Sr Analyst.md`).
+in the active job folder. Use the active job folder's canonical `Company - Role` name verbatim (e.g. folder `Acme - Senior PM, Growth` → `application_resume_output - Acme - Senior PM, Growth.md`) — the canonicalizer in `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py` owns all title abbreviation; never abbreviate on your own.
 
 The output should use this structure:
 

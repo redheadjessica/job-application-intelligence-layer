@@ -91,11 +91,15 @@ Job description file (read this exact file): ${jobPath}
 
 Working location: ${outOverride
         ? `use this existing folder directly: "${outOverride}"`
-        : `find or create the job folder inside "${destParent}" using the "Company - Role" naming convention (no date; abbreviate Product Manager -> PM, Vice President -> VP; mkdir -p with quoted paths). If a folder for this company/role already exists there, use it.`}
+        : `find or create the job folder inside "${destParent}". The folder name is the canonical "Company - Role" string — obtain it by running the shared canonicalizer FIRST with the company and role from the job post, and use its printed output verbatim (no date; never invent your own abbreviations):
+
+PY=".venv/bin/python3"; [ -x "$PY" ] || PY="python3"; "$PY" ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py --application-name --company '<Company>' --role '<Role/title>'
+
+If a folder with exactly that canonical name already exists there (the resume-tailoring step creates it with the same command), use it — do not create a second variant folder. mkdir -p with quoted paths.`}
 
 Inside the job folder create a work directory "_cl_work/" and write your draft to "_cl_work/draft-v1.md". Run the lint gate on it as your spec requires. ${NO_WRAP}
 
-Return (structured): job_folder, draft_path, company, role, links_used [{anchor,url,why}], word_count, lint_errors (must be 0), lint_warnings [strings], open_questions [strings].`,
+Return (structured): job_folder, draft_path, company, role, links_used [{anchor,url,why}], word_count, lint_errors (must be 0), lint_warnings [strings], open_questions [strings]. "company" and "role" must be the CANONICAL values from the canonicalizer output (role = the part after "<Company> - ") — they are interpolated verbatim into the .docx and packet filenames downstream.`,
       { agentType: 'cover-letter-writer', phase: 'Draft', schema: DRAFT_SCHEMA, label: `draft:${jobPath.split('/').pop()}` }
     )
     if (!draft) throw new Error(`draft agent failed for ${jobPath}`)

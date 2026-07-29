@@ -383,6 +383,73 @@ def normalize_lane(lane):
 
 
 # --------------------------------------------------------------------------- #
+# Tailored-application names — "Company - Canonical Role" (authoritative spec,
+# 2026-07-29). ONE canonicalizer for the job folder, the copied job file, the
+# resume filename, cover-letter names, and manifests — replacing four mutually
+# inconsistent prompt-instruction sites (job-applier.md, 00-job_application_agent.md,
+# tailor-jobs.js, cover-letter.js). Agents obtain the exact string by running:
+#
+#   .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py \
+#       --application-name --company "<Company>" --role "<Role>"
+#
+# The transformation is DELIBERATELY NARROW — no other rewriting:
+#   - "Product Manager" -> "PM" (also inside compounds: "Senior Product Manager"
+#     -> "Senior PM"; "Chief Product Officer" is NOT "Product Manager" and stays).
+#   - "Sr"/"Sr." -> "Senior". NEVER Senior -> Sr (her explicit answer).
+#   - "Vice President" -> "VP"; "Director" stays "Director" (her explicit answer).
+#   - "Staff"/"Principal"/"Chief" and meaningful qualifiers are preserved verbatim.
+#   - Comma+space separates the core PM title from a trailing specialization:
+#     inserted when missing ("Staff PM Referral Growth" -> "Staff PM, Referral
+#     Growth"); an existing comma is NEVER removed.
+#   - An employer " - " separator INSIDE a title becomes the comma separator
+#     ("Staff Product Manager - Referral, Growth" -> "Staff PM, Referral Growth").
+#   - "/" and ":" are stripped (filesystem rule — these can't appear in names).
+# --------------------------------------------------------------------------- #
+_SENIORITY = r"(?:Senior|Staff|Principal|Lead|Group|Associate|Junior|Founding)"
+_ROLE_CORE_RE = re.compile(rf"^((?:{_SENIORITY} )*PM)\s+(.+)$", re.I)
+
+
+def canonical_application_role(role):
+    """Canonicalize a job title for tailored-application naming. Idempotent:
+    an already-canonical role passes through unchanged."""
+    s = re.sub(r"\s+", " ", str(role or "").strip())
+    # Filesystem rule: no slash or colon in folder/file names.
+    s = re.sub(r"\s*[/:]\s*", " ", s).strip()
+    # An employer " - " separator inside the title becomes the comma separator;
+    # any further dashes/commas in the trailing part demote to spaces (the
+    # canonical grammar has ONE comma: "<core title>, <specialization>").
+    parts = re.split(r"\s+[-–—]\s+", s, maxsplit=1)
+    if len(parts) == 2:
+        head, tail = parts
+        tail = re.sub(r"\s+[-–—]\s+|,", " ", tail)
+        tail = re.sub(r"\s+", " ", tail).strip()
+        s = f"{head}, {tail}" if tail else head
+    # Narrow word substitutions (and nothing else).
+    s = re.sub(r"\bSr\.?(?=[\s,]|$)", "Senior", s, flags=re.I)
+    s = re.sub(r"\bProduct Manager\b", "PM", s, flags=re.I)
+    s = re.sub(r"\bVice President\b", "VP", s, flags=re.I)
+    s = re.sub(r"\s+", " ", s).strip(" ,")
+    # Insert the missing comma between a core PM title and its trailing
+    # specialization. Never remove an existing comma.
+    if "," not in s:
+        m = _ROLE_CORE_RE.match(s)
+        if m:
+            s = f"{m.group(1)}, {m.group(2)}"
+    return s
+
+
+def canonical_application_name(company, role):
+    """The exact `Company - Canonical Role` string used verbatim for the job
+    folder, the resume-base filename, and cover-letter names. The company is
+    passed through with only whitespace collapse + the filesystem strip — no
+    other rewriting."""
+    c = re.sub(r"\s+", " ", str(company or "").strip())
+    c = re.sub(r"\s*[/:]\s*", " ", c)
+    c = re.sub(r"\s+", " ", c).strip(" ,")
+    return f"{c} - {canonical_application_role(role)}"
+
+
+# --------------------------------------------------------------------------- #
 # CLI — normalize a rankings CSV in place (invoked by vet-jobs.js post-scoring,
 # before the XLSX build). Prints every repair it makes.
 # --------------------------------------------------------------------------- #
@@ -454,7 +521,25 @@ def main(argv):
     parser.add_argument("--normalize-rankings-csv", metavar="CSV",
                         help="rewrite the contract-governed columns of a rankings CSV in place")
     parser.add_argument("--config", default=None, help="path to jail.config.json")
+    parser.add_argument("--application-name", action="store_true",
+                        help="print the exact canonical 'Company - Role' string for a tailored "
+                             "application (folder name, resume filename, cover-letter names); "
+                             "requires --company and --role")
+    parser.add_argument("--application-role", action="store_true",
+                        help="print just the canonical role; requires --role")
+    parser.add_argument("--company", default=None, help="company name for --application-name")
+    parser.add_argument("--role", default=None, help="role/title for --application-name / --application-role")
     args = parser.parse_args(argv[1:])
+    if args.application_name:
+        if not args.company or not args.role:
+            parser.error("--application-name requires both --company and --role")
+        print(canonical_application_name(args.company, args.role))
+        return 0
+    if args.application_role:
+        if not args.role:
+            parser.error("--application-role requires --role")
+        print(canonical_application_role(args.role))
+        return 0
     if args.normalize_rankings_csv:
         cfg = load_config(args.config)
         normalize_rankings_csv(args.normalize_rankings_csv, cfg)

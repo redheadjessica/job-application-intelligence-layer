@@ -11,6 +11,38 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Tailored-application names: one canonicalizer replaces four inconsistent instruction sites
+
+Fourth contract into `norm_contracts.py`. Tailored job folders (and the resume-base / cover-letter
+filenames that must match them verbatim) were named by FOUR mutually inconsistent prompt
+instructions — job-applier.md said `Senior → Sr, VP, Dir`, tailor-jobs.js said `Senior -> Sr, VP`,
+cover-letter.js said `Product Manager -> PM, VP`, and 00-job_application_agent.md carried its own
+`Sr Analyst / VP Ops / Dir Marketing` examples — so the tailor and cover-letter workflows could
+create two different folders for the same job. Now:
+
+- **`canonical_application_role()` / `canonical_application_name()`** in `norm_contracts.py` +
+  CLI (`--application-name --company "X" --role "Y"` prints the exact `Company - Canonical Role`
+  string; `--application-role` prints just the role). Deliberately narrow rules, per her answers:
+  `Product Manager` → `PM` (compounds included; `Chief Product Officer` is not "Product Manager"
+  and stays), `Sr`/`Sr.` → `Senior` (NEVER Senior → Sr), `Vice President` → `VP`, `Director` stays
+  `Director`, Staff/Principal/Chief + qualifiers preserved verbatim, comma+space inserted between a
+  core PM title and a trailing specialization (never removed), an employer `" - "` separator inside
+  a title becomes the comma separator, `/` and `:` stripped (filesystem rule). No other rewriting.
+  Idempotent, so re-runs land in the same folder.
+- **All four instruction sites replaced, not layered over**: agents/workflows now obtain the name
+  by running the CLI and use its output verbatim for the folder AND the
+  `{{CANDIDATE_NAME}}-Resume - <canonical name>.<ext>` filename (e.g. `Acme - Senior PM, Growth`).
+  tailor-jobs.js embeds the fully-filled command (company/role from the rankings pick) in the agent
+  prompt; cover-letter.js has the draft agent run the same command and return the canonical
+  company/role, which the finalize prompt already interpolates into the .docx/packet names — the
+  two workflows can no longer diverge.
+- tailor-jobs.js's paste-table reverse-parse now prefers the agent's returned company/role fields
+  (folder-name `" - "` splitting, which broke on roles containing " - ", is a last-resort fallback
+  only); `company`/`role` added to the tailor confirm schema.
+- Tests: the spec's required examples + incorrect-form repair matrix, an idempotency sweep, a real
+  CLI invocation test, and a filesystem-layer test (mkdir with the CLI output, exact on-disk name
+  asserted).
+
 ## 2026-07-29 — Lane contract: bucket renamed "Work Tools" → "Work", taxonomy enforced mechanically
 
 Third contract into `norm_contracts.py`. The Lane bucket set is now **Health / Consumer / Work /
