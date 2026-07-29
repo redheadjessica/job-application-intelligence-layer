@@ -89,3 +89,57 @@ A local, git-tracked workspace — routine file changes are reversible, so optim
 - Capture what changed and, when you know it, why — the user problem, confusion, or test result that prompted it, a privacy/trust concern, a simplification or complexity-removal decision, or a case where real use contradicted the plan. Rough and unpolished is fine; keep it dated and terse. Don't wait for synthesis to clean it up before capturing it.
 - If you're committing the related work, commit the changelog entry in the same commit.
 - **Synthesis** (consolidating rough entries into readable threads and refreshing `docs/v2-end-to-end-workflow.md`) is a separate, occasional pass that only runs when the user asks for it — see `scripts/README.md`. Don't run it automatically as part of ordinary work, and don't wait for it before capturing a rough entry.
+
+---
+
+## Git checkpoint policy (required — applies to every coding agent)
+
+**Meaningful implemented work is not complete until it has been verified, recorded in the changelog, committed, and pushed.**
+
+### At the beginning of a coding task
+1. Run `git status --short --branch`.
+2. Check the latest commit and its date.
+3. Identify any pre-existing tracked changes before editing.
+4. Treat pre-existing changes as user work. Do not discard, overwrite, or silently mix unrelated work into the new task.
+5. If the repository already contains a backlog of apparently completed changes, audit and checkpoint that work before adding another large layer. If ownership or readiness is unclear, report it immediately rather than letting the backlog grow invisibly.
+
+### During implementation
+1. Keep each commit focused on one coherent task or milestone.
+2. Update `docs/changelog.md` in the same turn as every meaningful behavior, engine, workflow, template, privacy, architecture, or documentation change, following the existing changelog rules above.
+3. Keep candidate data, private configuration, live application artifacts, and review-batch output out of tracked files.
+4. Do not put candidate-specific company lists, rankings, compensation preferences, strategy, or score changes into the public changelog. Summarize the generic engine lesson and leave the private evidence in gitignored records.
+5. Do not use the privacy-firewall override unless the user explicitly approves a reviewed false positive.
+
+### Before committing
+1. Run the relevant tests and syntax checks.
+2. Run `git diff --check`.
+3. Inspect `git status` and the staged diff.
+4. Stage only the files belonging to the coherent task.
+5. Run the repository's privacy firewall against the staged changes.
+6. Confirm that the changelog accurately describes the final implementation — not an abandoned intermediate design, a future plan, or a limitation that a later change already resolved.
+7. Do not claim that work "shipped" unless the corresponding implementation is included in the commit.
+
+### Commit and push
+When meaningful implementation is complete and checks pass:
+1. Commit it in the same turn with a descriptive message.
+2. Push the current normal branch to its configured remote.
+3. Never force-push.
+4. Do not wait for the user to notice an accumulating dirty working tree.
+5. Do not leave completed work uncommitted merely because the user did not separately ask for a commit.
+
+**Exceptions:**
+- If the user explicitly says not to commit or push, obey that instruction.
+- Do not commit incomplete or failing work merely to make the tree appear clean. Report the unfinished state, failing checks, and exact changed files instead.
+- Read-only analysis, planning, and conversations with no repository changes require no commit.
+- Tiny changes may be grouped into the current coherent task, but completed work must not accumulate across unrelated tasks or multiple days.
+
+### Required completion report
+Every coding-task completion message must state:
+- Tests/checks run and whether they passed.
+- Changelog entry added or why none was warranted.
+- Commit hash and commit message.
+- Whether the commit was pushed.
+- Whether the tracked working tree is clean.
+- Any intentionally uncommitted files and why.
+
+If there is no commit hash, explicitly say why. Never leave commit status implicit.
