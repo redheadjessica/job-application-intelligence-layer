@@ -23,10 +23,12 @@ from playwright.sync_api import sync_playwright
 import prep_common
 from ats_fetchers import (
     ats_company_from_url,
+    detect_apply_ats,
     extract_jsonld_jobposting,
     fetch_via_ats,
     filter_questions,
-    normalize_ashby_apply_fields,
+    normalize_apply_fields,
+    normalize_ashby_apply_fields,  # noqa: F401  (back-compat alias re-export)
 )
 
 LIKELY_SELECTORS = [
@@ -107,15 +109,137 @@ def ashby_apply_url(url: str) -> str:
     return f"{p.scheme or 'https'}://{p.netloc}{path}"
 
 
-def _render_ashby_questions(browser, url: str, apply_url_hint: str | None = None) -> list:
-    """Best-effort scrape of an Ashby apply-page's form fields (the posting-api
-    does NOT expose them). Wrapped defensively — any failure degrades to []. The
-    fields are normalized + run through the shared narrow filter so only the
-    thoughtful / job-material questions (compose essays, office-cadence) survive."""
+def lever_apply_url(url: str) -> str:
+    """Build a Lever apply-page URL from a job URL (path only; query/fragment
+    dropped — same rule as `ashby_apply_url`)."""
+    p = urlparse(url)
+    path = (p.path or "").rstrip("/")
+    if not path.endswith("/apply"):
+        path += "/apply"
+    return f"{p.scheme or 'https'}://{p.netloc}{path}"
+
+
+def workable_apply_url(url: str) -> str:
+    """Build a Workable apply-page URL: apply.workable.com/{sub}/j/{code}/apply/."""
+    p = urlparse(url)
+    path = (p.path or "").rstrip("/")
+    if not path.endswith("/apply"):
+        path += "/apply"
+    return f"{p.scheme or 'https'}://{p.netloc}{path}/"
+
+
+def homerun_apply_url(url: str) -> str:
+    """Build a Homerun apply-page URL: {job-url}/apply (it redirects to the
+    localized `/en/apply?step=1` form)."""
+    p = urlparse(url)
+    path = (p.path or "").rstrip("/")
+    if not path.endswith("/apply"):
+        path += "/apply"
+    return f"{p.scheme or 'https'}://{p.netloc}{path}"
+
+
+# ATSes whose application questions exist ONLY on the rendered apply page (their
+# job API returns none), mapped to the apply-URL builder for that ATS. Rippling and
+# Greenhouse are absent on purpose — their APIs return the questions inline, so
+# rendering them would be pure cost.
+APPLY_URL_BUILDERS = {
+    "ashby": ashby_apply_url,
+    "lever": lever_apply_url,
+    "workable": workable_apply_url,
+    "homerun": homerun_apply_url,
+}
+
+
+def apply_page_url(url: str, ats: str | None = None) -> str | None:
+    """The apply-page URL for a job URL, or None when this ATS's questions are not
+    behind an apply page (or the ATS is unknown)."""
+    ats = ats or detect_apply_ats(url)
+    builder = APPLY_URL_BUILDERS.get(ats or "")
+    return builder(url) if builder else None
+
+
+# One DOM scrape for every apply page. The container/label/control walk is generic:
+# each ATS renders a labeled field container, and the label's control is either
+# inside it or referenced by `for=`. Selectors are additive per ATS, never forked.
+_APPLY_FIELD_SCRAPE_JS = """() => {
+    const out = [];
+    const seen = new Set();
+    const conts = document.querySelectorAll([
+        '.ashby-application-form-field-entry',
+        '[class*="_fieldEntry"]',
+        '[data-ui="field"]',
+        '.application-question',
+        '.application-field',
+        'form label',
+        'form fieldset'
+    ].join(','));
+    const control = (c) => {
+        // The control usually lives inside the container. When the container IS a
+        // bare <label> (Homerun, some Lever cards) it can be the label's `for=`
+        // target or an adjacent sibling instead — check those too, or every essay
+        // textarea is misread as a plain text input and dropped as non-compose.
+        let el = c.querySelector('textarea, select, input');
+        if (el) return el;
+        const forId = c.getAttribute && c.getAttribute('for');
+        if (forId) {
+            const t = document.getElementById(forId);
+            if (t) return t;
+        }
+        for (const sib of [c.nextElementSibling, c.parentElement]) {
+            if (!sib) continue;
+            el = sib.matches && sib.matches('textarea, select, input')
+                ? sib : (sib.querySelector ? sib.querySelector('textarea, select, input') : null);
+            if (el) return el;
+        }
+        return null;
+    };
+    conts.forEach(c => {
+        const labelEl = c.querySelector('label, legend, .ashby-application-form-question-title') || c;
+        const title = (labelEl.innerText || labelEl.textContent || '').trim();
+        if (!title || seen.has(title)) return;
+        const el = control(c);
+        let type = 'String', options = [];
+        if (el) {
+            const tag = el.tagName.toLowerCase();
+            if (tag === 'textarea') type = 'LongText';
+            else if (tag === 'select') {
+                type = 'ValueSelect';
+                el.querySelectorAll('option').forEach(o => {
+                    const t = (o.textContent || '').trim();
+                    if (t) options.push({label: t});
+                });
+            } else {
+                const it = (el.getAttribute('type') || '').toLowerCase();
+                if (it === 'checkbox' || it === 'radio') type = 'Boolean';
+                else if (it === 'file') type = 'File';
+                else type = 'String';
+            }
+        }
+        const path = el ? (el.getAttribute('name') || el.getAttribute('id') || '') : '';
+        seen.add(title);
+        out.push({title, type, path, isRequired: !!(el && el.required), options});
+    });
+    return out;
+}"""
+
+
+def render_apply_questions(browser, url: str, apply_url_hint: str | None = None,
+                           ats: str | None = None) -> list:
+    """Best-effort scrape of an apply page's form fields, for every ATS whose job
+    API does not carry them (Ashby, Lever, Workable, Homerun). The fields are
+    normalized and run through the shared narrow filter, so only the thoughtful /
+    job-material questions (compose essays, office cadence) survive.
+
+    Raises on render failure rather than swallowing it — the caller prints the
+    exception and degrades to []. A silently-empty result is exactly what hid the
+    broken Ashby apply-URL builder for months."""
     # Prefer the ATS-provided apply URL when we have one: it is canonical and also
-    # handles CUSTOM-DOMAIN Ashby jobs (e.g. `lark.com/careers?ashby_jid=<uuid>`),
-    # whose own host/path can't be turned into an apply URL at all.
-    apply_url = ashby_apply_url(apply_url_hint or url)
+    # handles CUSTOM-DOMAIN jobs (e.g. `lark.com/careers?ashby_jid=<uuid>`), whose
+    # own host/path can't be turned into an apply URL at all.
+    ats = ats or detect_apply_ats(apply_url_hint, url)
+    apply_url = apply_page_url(apply_url_hint or url, ats)
+    if not apply_url:
+        return []
     page = None
     try:
         page = browser.new_page()
@@ -125,47 +249,22 @@ def _render_ashby_questions(browser, url: str, apply_url_hint: str | None = None
             page.wait_for_load_state("networkidle", timeout=8000)
         except PlaywrightTimeoutError:
             pass
-        # Ashby renders each application field in a labeled container. Collect the
-        # question text, control type, and any options, plus the underlying field
-        # name/path when exposed on the input (so system fields are recognized).
-        raw = page.evaluate(
-            """() => {
-                const out = [];
-                const seen = new Set();
-                const conts = document.querySelectorAll('.ashby-application-form-field-entry, [class*="_fieldEntry"], form label');
-                conts.forEach(c => {
-                    const labelEl = c.querySelector('label, legend, .ashby-application-form-question-title') || c;
-                    const title = (labelEl.innerText || labelEl.textContent || '').trim();
-                    if (!title || seen.has(title)) return;
-                    const ta = c.querySelector('textarea');
-                    const sel = c.querySelector('select');
-                    const inp = c.querySelector('input');
-                    let type = 'String', options = [];
-                    if (ta) type = 'LongText';
-                    else if (sel) { type = 'ValueSelect';
-                        sel.querySelectorAll('option').forEach(o => { const t=(o.textContent||'').trim(); if(t) options.push({label:t}); }); }
-                    else if (inp) {
-                        const it = (inp.getAttribute('type')||'').toLowerCase();
-                        if (it==='checkbox'||it==='radio') type='Boolean'; else if(it==='file') type='File'; else type='String';
-                    }
-                    const el = ta || sel || inp;
-                    const path = el ? (el.getAttribute('name') || el.getAttribute('id') || '') : '';
-                    seen.add(title);
-                    out.push({title, type, path, isRequired: !!(el && el.required), options});
-                });
-                return out;
-            }"""
-        )
-        fields = normalize_ashby_apply_fields({"fields": raw or []})
+        raw = page.evaluate(_APPLY_FIELD_SCRAPE_JS)
+        fields = normalize_apply_fields({"fields": raw or []})
         return filter_questions(fields)
-    except Exception:
-        return []
     finally:
         if page is not None:
             try:
                 page.close()
             except Exception:
                 pass
+
+
+def _render_ashby_questions(browser, url: str, apply_url_hint: str | None = None) -> list:
+    """Back-compat wrapper: the renderer began Ashby-only. Callers should use
+    `render_apply_questions`, which auto-detects the ATS. Kept because the primary
+    fetcher and its tests wire this name in as the question-render callback."""
+    return render_apply_questions(browser, url, apply_url_hint)
 
 
 def make_fetch_one(browser):
@@ -177,9 +276,24 @@ def make_fetch_one(browser):
                 meta["method"] = "ats"
                 meta["structured_source"] = True
                 questions = ats.get("questions") or []
-                # Ashby questions aren't on the posting-api — render the apply page.
-                if not questions and "ashbyhq.com" in urlparse(url).netloc.lower():
-                    rendered = _render_ashby_questions(browser, url)
+                # Several ATSes keep their questions off the job API (Ashby, Lever,
+                # Workable, Homerun) — render the apply page for those. Detect the
+                # ATS from the apply URL / job URL / source label, NOT from the host
+                # alone: custom-domain jobs (e.g. `lark.com/careers?ashby_jid=<uuid>`)
+                # are served by Ashby under the employer's own domain, and a
+                # host-only check skipped question capture for them entirely.
+                ats_kind = detect_apply_ats(ats.get("apply_url"), url, ats.get("source"))
+                if not questions and ats_kind:
+                    try:
+                        rendered = render_apply_questions(
+                            browser, url, ats.get("apply_url"), ats_kind) or []
+                    except Exception as exc:
+                        # Best-effort: never fail the fetch. But never silent either —
+                        # a swallowed exception is what hid the broken apply-URL
+                        # builder while every test still passed.
+                        print(f"  ! {ats_kind} question render failed for {url}: "
+                              f"{type(exc).__name__}: {exc}")
+                        rendered = []
                     if rendered:
                         questions = rendered
                         meta["questions"] = rendered
@@ -231,8 +345,21 @@ def make_fetch_one(browser):
                     "raw_html": rendered_html,
                     "questions": [],
                 }
+                # An ATS with no job API (Homerun) lands here, not in the ATS branch,
+                # but its questions are still on a renderable apply page.
+                questions = []
+                ats_kind = detect_apply_ats(url)
+                if ats_kind:
+                    try:
+                        questions = render_apply_questions(browser, url, None, ats_kind) or []
+                    except Exception as exc:
+                        print(f"  ! {ats_kind} question render failed for {url}: "
+                              f"{type(exc).__name__}: {exc}")
+                        questions = []
+                    meta["questions"] = questions
                 return {"ok": True, "title": title, "company": company, "body": text,
-                        "method": "playwright", "error": None, "meta": meta, "questions": []}
+                        "method": "playwright", "error": None, "meta": meta,
+                        "questions": questions}
             finally:
                 page.close()
         except Exception as e:

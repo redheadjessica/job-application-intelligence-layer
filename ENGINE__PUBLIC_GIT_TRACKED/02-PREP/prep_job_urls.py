@@ -20,7 +20,12 @@ import trafilatura
 from bs4 import BeautifulSoup
 
 import prep_common
-from ats_fetchers import ats_company_from_url, extract_jsonld_jobposting, fetch_via_ats
+from ats_fetchers import (
+    ats_company_from_url,
+    detect_apply_ats,
+    extract_jsonld_jobposting,
+    fetch_via_ats,
+)
 
 HEADERS = {
     "User-Agent": (
@@ -95,19 +100,23 @@ def detect_company(url: str, title: str) -> str:
     return host_guess.title()
 
 
-def fetch_one(url: str, ashby_question_renderer=None) -> dict:
+def fetch_one(url: str, question_renderer=None, ashby_question_renderer=None) -> dict:
     """Return prep_common's fetch contract for one URL, including the full
     structured `meta` dict + kept `questions` so the completeness gate, provenance
     header, and normalized block downstream have everything to work with.
 
-    `ashby_question_renderer(url) -> list` is an optional best-effort callback that
-    renders an Ashby apply page for its (filtered) questions. Ashby's posting-api
-    ALWAYS returns comp/location but NEVER returns questions, so a normal
-    requests-first Ashby run is "complete" and no fallback pass ever fires to
-    capture the thoughtful questions. We therefore always attempt this render for
-    Ashby (only) when a renderer is available, merging the questions into the
-    posting-api meta WITHOUT re-fetching comp/location. Non-Ashby jobs never touch
-    it, so the requests-first fast path is unchanged for them."""
+    `question_renderer(url, apply_url_hint) -> list` is an optional best-effort
+    callback that renders an APPLY PAGE for its (filtered) questions. Several ATSes
+    (Ashby, Lever, Workable, Homerun) return comp/location from their job API but
+    NEVER the questions, so a requests-first run for them looks "complete" and no
+    fallback pass ever fires to capture the thoughtful questions. We therefore
+    always attempt the render for those ATSes when a renderer is available, merging
+    the questions into the API meta WITHOUT re-fetching comp/location. ATSes whose
+    API DOES carry questions (Greenhouse, Rippling) never touch it, so the
+    requests-first fast path is unchanged for them.
+
+    `ashby_question_renderer` is the former name of this argument, still accepted."""
+    renderer = question_renderer or ashby_question_renderer
     try:
         ats = fetch_via_ats(url)
         if ats:
@@ -115,21 +124,19 @@ def fetch_one(url: str, ashby_question_renderer=None) -> dict:
             meta["method"] = "ats"
             meta["structured_source"] = True
             questions = ats.get("questions") or []
-            # Detect Ashby by the SOURCE, not just the host: custom-domain Ashby jobs
-            # (e.g. `lark.com/careers/open-positions?ashby_jid=<uuid>`) are served by
-            # Ashby but their host is the employer's own domain, so a host-only check
-            # skipped question capture for them entirely (fixed 2026-07-29).
-            is_ashby = ("ashbyhq.com" in urlparse(url).netloc.lower()
-                        or "ashby_jid=" in url.lower()
-                        or "ashby" in str(ats.get("source") or "").lower())
-            if not questions and ashby_question_renderer is not None and is_ashby:
+            # Detect the ATS by the SOURCE too, not just the host: custom-domain
+            # Ashby jobs (e.g. `lark.com/careers/open-positions?ashby_jid=<uuid>`)
+            # are served by Ashby but their host is the employer's own domain, so a
+            # host-only check skipped question capture for them entirely.
+            ats_kind = detect_apply_ats(ats.get("apply_url"), url, ats.get("source"))
+            if not questions and renderer is not None and ats_kind:
                 try:
-                    rendered = ashby_question_renderer(url, ats.get("apply_url")) or []
+                    rendered = renderer(url, ats.get("apply_url")) or []
                 except Exception as exc:
                     # Best-effort: never fail the fetch. But do NOT swallow silently —
                     # a fully-silent except is what hid the broken apply-URL builder
                     # (questions quietly came back empty for months of real URLs).
-                    print(f"  ! Ashby question render failed for {url}: "
+                    print(f"  ! {ats_kind} question render failed for {url}: "
                           f"{type(exc).__name__}: {exc}")
                     rendered = []
                 if rendered:
@@ -167,8 +174,22 @@ def fetch_one(url: str, ashby_question_renderer=None) -> dict:
             "raw_html": html,
             "questions": [],
         }
+        # Some ATSes have no job API at all (Homerun) — the job page is plain
+        # server-rendered HTML, so it lands here rather than in the ATS branch. Their
+        # questions still live on a renderable apply page, so try it from here too.
+        questions = []
+        ats_kind = detect_apply_ats(url)
+        if renderer is not None and ats_kind:
+            try:
+                questions = renderer(url, None) or []
+            except Exception as exc:
+                print(f"  ! {ats_kind} question render failed for {url}: "
+                      f"{type(exc).__name__}: {exc}")
+                questions = []
+            meta["questions"] = questions
         return {"ok": True, "title": title, "company": company, "body": body,
-                "method": "requests", "error": None, "meta": meta, "questions": []}
+                "method": "requests", "error": None, "meta": meta,
+                "questions": questions}
     except Exception as e:
         return {"ok": False, "title": None, "company": None, "body": "",
                 "method": "requests", "error": f"{type(e).__name__}: {e}",
@@ -220,19 +241,19 @@ def main() -> None:
     if HAVE_PLAYWRIGHT:
         import prep_job_urls_playwright as pjp
         print(f"Found {len(urls)} URL(s). Fetching (ATS API first, then requests; "
-              f"Ashby apply-page questions always rendered; "
+              f"apply-page questions always rendered for Ashby/Lever/Workable/Homerun; "
               f"Playwright auto-retry enabled for thin/failed results)...")
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             try:
-                # Ashby posting-api never carries questions, so always render the
-                # apply page for them on the primary pass (best-effort; the render
-                # degrades to [] on any failure and never fails the fetch).
-                def ashby_renderer(u, apply_hint=None):
-                    return pjp._render_ashby_questions(browser, u, apply_hint)
+                # The Ashby/Lever/Workable/Homerun job APIs never carry questions, so
+                # always render their apply page on the primary pass (best-effort; the
+                # render degrades to [] on failure and never fails the fetch).
+                def apply_renderer(u, apply_hint=None):
+                    return pjp.render_apply_questions(browser, u, apply_hint)
 
                 def primary(u):
-                    return fetch_one(u, ashby_question_renderer=ashby_renderer)
+                    return fetch_one(u, question_renderer=apply_renderer)
 
                 prep_common.process_urls(urls, batch_dir, primary, force=args.force,
                                           fetch_fallback=pjp.make_fetch_one(browser),

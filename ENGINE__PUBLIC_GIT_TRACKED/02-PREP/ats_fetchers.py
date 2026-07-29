@@ -20,7 +20,22 @@ Currently supported:
   pay_transparency=true` — structured pay ranges (when posted), offices, and the
   application questions (EEO/demographics stay in their own keys, never merged).
 - Lever (lever.co) via the per-posting JSON endpoint (salaryRange + workplace).
+  The Lever payload carries NO questions, but it does carry `applyUrl`, so a
+  caller can render that apply page for the questions.
 - LinkedIn (linkedin.com/jobs) via the logged-out "guest" jobPosting endpoint.
+- Rippling (ats.rippling.com) via the public ATS board API. This one is unusually
+  rich: comp per pay zone, work locations, employment type, AND the application
+  questions inline — `activeJobApplication.additionalQuestions` holds the CUSTOM
+  questions (screening/knockout/essay) and `.basicQuestions` the routine fields.
+  No apply-page render is needed for Rippling.
+- Workable (apply.workable.com) via the public accounts/jobs API (content,
+  location, workplace). Comp is usually absent and questions are NOT on the API,
+  so a caller renders `/<sub>/j/<shortcode>/apply/` for the questions.
+- Workday (<tenant>.wdN.myworkdayjobs.com) via the CxS API. The required
+  `Job_Posting_Site_ID` is simply the first path segment of the public job URL
+  (e.g. `.../WG/job/...` -> site id `WG`), so it needs no guessing. Comp and
+  application questions are NOT exposed (the questionnaire is behind candidate
+  auth), so Workday yields content/location/company only.
 
 To add another ATS, write a `_fetch_<name>` function returning the same dict
 shape (see below) and register it in `fetch_via_ats`. Extraction stays PII-free:
@@ -112,6 +127,9 @@ _EXCLUDE_FIELD_NAMES = {
     "current_location", "city", "country", "pronouns", "gender", "race",
     "ethnicity", "hispanic_ethnicity", "veteran_status", "disability_status",
     "work_authorization", "visa", "sponsorship",
+    # Workable apply-form / Rippling basicQuestions naming variants.
+    "firstname", "lastname", "phone_number", "linkedin_link", "current_company",
+    "org", "gdpr", "resume_file", "cover_letter_file",
 }
 
 # Label patterns that mark a question as routine / identity / EEO / work-auth /
@@ -137,7 +155,14 @@ _EXCLUDE_LABEL_RE = re.compile(
     r"underrepresented (communit|group|background)|"
     r"diverse perspective|diversity of our team|advancing the diversity|"
     r"country of residence|current (city|residence|address)|home address|"
-    r"where (do|are) you (currently )?(live|located|residing|reside)"
+    r"where (do|are) you (currently )?(live|located|residing|reside)|"
+    r"where are you (currently )?based|"
+    # Routine sourcing + accommodation fields. These are often free-text (so the
+    # compose keep-rule would otherwise retain them) but they are administrative:
+    # they say nothing about the job and need no thought to answer.
+    r"(how|where) did you (hear|find out|learn) about|how were you referred|"
+    r"referral source|"
+    r"accommodations?.{0,40}(interview|application|process|recruit)"
     r")"
 )
 
@@ -276,7 +301,7 @@ def mine_benefits_equity(text: str) -> tuple[Optional[str], Optional[str]]:
 def fetch_via_ats(url: str, timeout: int = 20) -> Optional[dict]:
     """Dispatch to the matching ATS fetcher, or return None if unrecognized.
 
-    Beyond the four known ATS hosts, a CUSTOM career domain that carries an ATS
+    Beyond the known ATS hosts, a CUSTOM career domain that carries an ATS
     id in its query string is routed to that ATS: `?ashby_jid=<uuid>` -> Ashby,
     `?gh_jid=<digits>` -> Greenhouse. This rescues postings like
     `lark.com/careers?ashby_jid=...` whose own page renders only a cookie banner.
@@ -294,6 +319,12 @@ def fetch_via_ats(url: str, timeout: int = 20) -> Optional[dict]:
             return _fetch_lever(url, timeout=timeout)
         if "linkedin.com" in host:
             return _fetch_linkedin(url, timeout=timeout)
+        if host.endswith("rippling.com"):
+            return _fetch_rippling(url, timeout=timeout)
+        if host.endswith("workable.com"):
+            return _fetch_workable(url, timeout=timeout)
+        if "myworkdayjobs.com" in host:
+            return _fetch_workday(url, timeout=timeout)
         # Custom (non-ATS) host carrying an ATS id in the query string.
         if qs.get("ashby_jid"):
             hit = _fetch_ashby_by_jid(url, qs["ashby_jid"][0], timeout=timeout)
@@ -521,41 +552,130 @@ def _ashby_job_to_result(job: dict, org: str) -> Optional[dict]:
     }
 
 
-def normalize_ashby_apply_fields(form: dict) -> list[dict]:
-    """Normalize the fields scraped from a rendered Ashby apply page into the
-    shared question shape. Ashby form-field types seen: LongText, String, Email,
-    Phone, File, Boolean, ValueSelect, Name, Location. System/identity fields are
-    named `_systemfield_*`. This does NOT filter — pass the result through
-    `filter_questions`."""
-    type_map = {
-        "longtext": "textarea", "string": "input_text", "email": "input_text",
-        "phone": "input_text", "file": "file", "boolean": "boolean",
-        "valueselect": "select", "multiselect": "select", "name": "input_text",
-        "location": "input_text", "number": "input_number", "date": "input_date",
-    }
+# --------------------------------------------------------------------------- #
+# Rendered apply-page field normalization (shared by Ashby / Lever / Workable /
+# Homerun — every ATS whose questions are only visible on the apply page).
+# --------------------------------------------------------------------------- #
+
+# Field types emitted by the DOM scrape (Ashby's own vocabulary is the canon).
+_APPLY_TYPE_MAP = {
+    "longtext": "textarea", "textarea": "textarea",
+    "string": "input_text", "email": "input_text", "phone": "input_text",
+    "file": "file", "boolean": "boolean",
+    "valueselect": "select", "multiselect": "select", "select": "select",
+    "name": "input_text", "location": "input_text",
+    "number": "input_number", "date": "input_date",
+}
+
+# Required-marker glyphs apply forms append to a label ("First name *", "Email ✱").
+_REQUIRED_MARKER_CLASS = r"[\*✱✲＊⁎٭]"
+
+# Rendered chrome that lands inside a label container but is not question text.
+_APPLY_LABEL_NOISE = {
+    "select...", "select…", "choose file", "attach resume/cv", "attach",
+    "svgs not supported by this browser.", "upload", "browse",
+}
+
+
+def clean_apply_label(title: str, options: Optional[list] = None) -> tuple[str, bool]:
+    """Turn a scraped label container's raw innerText into a clean question label.
+
+    Rendered containers pick up more than the question: a required-marker glyph on
+    its own line, the select's own option text, and file-input chrome. Returns
+    (clean_label, required_marker_seen) — the second value lets a form that marks
+    required-ness only visually still report `required`."""
+    text = (title or "").replace("\xa0", " ")
+    noise = set(_APPLY_LABEL_NOISE)
+    for o in (options or []):
+        label = (o.get("label") or o.get("value") or "") if isinstance(o, dict) else str(o or "")
+        if label.strip():
+            noise.add(label.strip().lower())
+    lines = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.lower() in noise:
+            continue
+        lines.append(line)
+    joined = " ".join(lines)
+    stripped = re.sub(rf"^\s*(?:{_REQUIRED_MARKER_CLASS}\s*)+", "", joined)
+    stripped = re.sub(rf"(?:\s*{_REQUIRED_MARKER_CLASS})+\s*$", "", stripped)
+    marker = stripped != joined
+    return re.sub(r"\s{2,}", " ", stripped).strip(), marker
+
+
+def normalize_apply_fields(form: dict) -> list[dict]:
+    """Normalize the fields scraped from a rendered apply page into the shared
+    question shape. Field types follow Ashby's vocabulary (LongText, String, Email,
+    Phone, File, Boolean, ValueSelect, Name, Location) because the DOM scrape emits
+    it for every ATS. Ashby system/identity fields are named `_systemfield_*`.
+    This does NOT filter — pass the result through `filter_questions`."""
     out: list[dict] = []
     for f in (form.get("fields") or []):
         if not isinstance(f, dict):
             continue
         raw_type = (f.get("type") or "").strip()
+        raw_options = f.get("options") or []
         options = []
-        for o in (f.get("options") or []):
+        for o in raw_options:
             if isinstance(o, dict):
                 options.append(o.get("label") or o.get("value") or "")
             elif o:
                 options.append(str(o))
         name = f.get("path") or f.get("id") or ""
+        label, marker = clean_apply_label(f.get("title") or "", raw_options)
         out.append({
-            "label": (f.get("title") or "").strip(),
+            "label": label,
             "help": (f.get("descriptionPlain") or f.get("description") or None),
-            "type": type_map.get(raw_type.lower(), raw_type.lower() or "input_text"),
+            "type": _APPLY_TYPE_MAP.get(raw_type.lower(), raw_type.lower() or "input_text"),
             "source_type": raw_type,
-            "required": bool(f.get("isRequired")),
+            "required": bool(f.get("isRequired")) or marker,
             "name": name,
             "names": [name],
             "options": [o for o in options if o],
         })
     return out
+
+
+# Back-compat alias: the normalizer started out Ashby-only and callers/tests still
+# reference that name.
+normalize_ashby_apply_fields = normalize_apply_fields
+
+
+# ATSes whose application questions live ONLY on the rendered apply page, because
+# their job API returns none. Rippling and Greenhouse are deliberately absent:
+# their APIs carry the questions inline, so rendering them would be pure cost.
+APPLY_RENDER_ATSES = ("ashby", "lever", "workable", "homerun")
+
+
+def detect_apply_ats(*hints: Optional[str]) -> Optional[str]:
+    """Identify the ATS behind a job from any mix of apply-URL / job-URL / `source`
+    label, returning one of APPLY_RENDER_ATSES (or None).
+
+    Host-based first, then the `?ashby_jid=` custom-domain marker, then a substring
+    of the ATS source label. Detecting by SOURCE and not host alone is what lets
+    custom-domain jobs (`lark.com/careers?ashby_jid=<uuid>` is served by Ashby under
+    the employer's own domain) get their questions captured at all."""
+    hosts = {"ashbyhq.com": "ashby", "lever.co": "lever",
+             "workable.com": "workable", "homerun.co": "homerun"}
+    for hint in hints:
+        text = str(hint or "").strip().lower()
+        if not text:
+            continue
+        if "://" in text:
+            # A URL: match on the HOST only. Matching the whole string would let a
+            # role slug like "clever-analytics" masquerade as Lever.
+            host = urlparse(text).netloc
+            for needle, ats in hosts.items():
+                if host == needle or host.endswith("." + needle):
+                    return ats
+            if "ashby_jid=" in text:
+                return "ashby"
+        else:
+            # A `source` label such as "ashby-posting-api (custom-domain jid)".
+            for ats in APPLY_RENDER_ATSES:
+                if ats in text:
+                    return ats
+    return None
 
 
 # --------------------------------------------------------------------------- #
@@ -1157,6 +1277,509 @@ def _fetch_lever(url: str, timeout: int = 20) -> Optional[dict]:
         "source": "lever-postings-api",
         "comp_expected": False,
         "location_expected": bool(location or working_location),
+        "structured_source": True,
+        # Not on the postings API — the caller renders `applyUrl` for these.
+        "questions": [],
+        "text": body,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Rippling
+#
+# URL shape:  https://ats.rippling.com/{board}/jobs/{uuid}[?jobSite=...]
+# API:        https://api.rippling.com/platform/api/ats/v1/board/{board}/jobs/{uuid}
+#
+# The `Accept: application/json` header is REQUIRED — without it the API returns
+# a 404 HTML page, which is what makes this endpoint look nonexistent.
+#
+# Rippling is the only ATS here that returns the application questions on the same
+# call as the job content, so no apply-page render is ever needed for it.
+# --------------------------------------------------------------------------- #
+
+_RIPPLING_API = "https://api.rippling.com/platform/api/ats/v1/board/{board}/jobs/{job_id}"
+
+# Rippling `questionType` (the reliable signal) -> coarse type. `dataType` is a
+# poor compose signal on its own: a LONG_ANSWER essay can carry dataType "Text".
+_RIPPLING_QUESTION_TYPE_MAP = {
+    "long_answer": "textarea",
+    "short_answer": "input_text",
+    "knockout": "select",
+    "single_select_radio": "select",
+    "single_select_dropdown": "select",
+    "multi_select": "select",
+    "yes_no_scale_4": "select",
+    "number": "input_number",
+    "date": "input_date",
+    "file": "file",
+}
+
+# Rippling `basicQuestions` fieldType, and the secondary `dataType` fallback.
+_RIPPLING_FIELD_TYPE_MAP = {
+    "short_answer": "input_text",
+    "long_answer": "textarea",
+    "phone_number": "input_text",
+    "pronoun": "select",
+    "file": "file",
+    "number": "input_number",
+    "date": "input_date",
+    "select": "select",
+    "enum": "select",
+    "text": "input_text",
+    "paragraph": "textarea",
+    "boolean": "boolean",
+}
+
+
+def _rippling_ids(url: str):
+    """Return (board_slug, job_uuid) for a Rippling ATS URL, or (None, None)."""
+    parsed = urlparse(url)
+    parts = [unquote(p) for p in parsed.path.split("/") if p]
+    if not parts:
+        return None, None
+    board = parts[0]
+    job_id = None
+    for p in parts[1:]:
+        if UUID_RE.fullmatch(p):
+            job_id = p.lower()
+            break
+    if job_id is None:
+        m = UUID_RE.search(url)
+        job_id = m.group(0).lower() if m else None
+    return board, job_id
+
+
+def _fetch_rippling(url: str, timeout: int = 20) -> Optional[dict]:
+    board, job_id = _rippling_ids(url)
+    if not board or not job_id:
+        return None
+    resp = requests.get(
+        _RIPPLING_API.format(board=board, job_id=job_id),
+        # Accept: application/json is mandatory — without it Rippling serves a
+        # 404 HTML shell instead of the job record.
+        headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+        timeout=timeout,
+    )
+    if resp.status_code != 200:
+        return None
+    try:
+        job = resp.json()
+    except Exception:
+        return None
+    if not isinstance(job, dict):
+        return None
+    return _rippling_job_to_result(job, board, url)
+
+
+def parse_rippling_questions(job: dict) -> list[dict]:
+    """Normalize Rippling's application questions into the shared question shape.
+
+    Two sources, both on `activeJobApplication`:
+      - `basicQuestions`: the routine/identity fields ({oid, fieldType, title,
+        required}). Included so the shared filter drops them by NAME, exactly like
+        every other ATS — never special-cased here.
+      - `additionalQuestions`: the CUSTOM questions. This is a list of question
+        SETS, each `{name, id, form: {questions: [...]}}`; the real questions live
+        at `form.questions[]`. May be None when the employer added none.
+
+    Does NOT filter — pass the result through `filter_questions`.
+    """
+    app = job.get("activeJobApplication") or {}
+    out: list[dict] = []
+
+    for f in (app.get("basicQuestions") or []):
+        if not isinstance(f, dict):
+            continue
+        raw_type = (f.get("fieldType") or "").strip()
+        name = (f.get("oid") or "").strip()
+        out.append({
+            "label": (f.get("title") or "").strip(),
+            "help": None,
+            "type": _RIPPLING_FIELD_TYPE_MAP.get(raw_type.lower(), "input_text"),
+            "source_type": raw_type,
+            "required": bool(f.get("required")),
+            "name": name,
+            "names": [name],
+            "options": [],
+        })
+
+    for qset in (app.get("additionalQuestions") or []):
+        if not isinstance(qset, dict):
+            continue
+        form = qset.get("form") or {}
+        for q in (form.get("questions") or []):
+            if not isinstance(q, dict):
+                continue
+            qtype = (q.get("questionType") or "").strip()
+            dtype = (q.get("dataType") or "").strip()
+            coarse = (_RIPPLING_QUESTION_TYPE_MAP.get(qtype.lower())
+                      or _RIPPLING_FIELD_TYPE_MAP.get(dtype.lower())
+                      or "input_text")
+            options = [str(c) for c in (q.get("strChoices") or []) if c not in (None, "")]
+            options += [str(c) for c in (q.get("intChoices") or []) if c not in (None, "")]
+            name = (q.get("uniqueKey") or "").strip()
+            out.append({
+                "label": (q.get("title") or "").strip(),
+                "help": (q.get("description") or None),
+                "type": coarse,
+                "source_type": qtype or dtype,
+                "required": bool(q.get("isRequired")),
+                "name": name,
+                "names": [name],
+                "options": options,
+            })
+    return out
+
+
+def _rippling_compensation(pay_ranges) -> tuple[Optional[str], Optional[str]]:
+    """Return (normalized per-zone comp, verbatim raw) from `payRangeDetails`,
+    a list of {location, currency, frequency, rangeStart, rangeEnd, isRemote}."""
+    if not isinstance(pay_ranges, list) or not pay_ranges:
+        return None, None
+    parts: list[str] = []
+    for r in pay_ranges:
+        if not isinstance(r, dict):
+            continue
+        lo, hi = r.get("rangeStart"), r.get("rangeEnd")
+        if not (lo or hi):
+            continue
+
+        def _amt(v):
+            try:
+                f = float(v)
+                return f"{int(f):,}" if f == int(f) else f"{f:,.2f}"
+            except Exception:
+                return str(v)
+
+        cur = (r.get("currency") or "").strip()
+        rng = f"{_amt(lo)}–{_amt(hi)}" if (lo and hi) else _amt(lo or hi)
+        piece = f"{cur} {rng}".strip()
+        freq = (r.get("frequency") or "").strip().lower()
+        if freq and freq not in ("year", "yearly", "annual", "annually"):
+            piece = f"{piece}/{freq}"
+        zone = (r.get("location") or "").strip()
+        if r.get("isRemote"):
+            zone = f"{zone} (remote)".strip() if zone else "Remote"
+        parts.append(f"{zone}: {piece}" if zone else piece)
+    if not parts:
+        return None, None
+    joined = " · ".join(parts)
+    return joined, joined
+
+
+def _rippling_employment_type(emp) -> Optional[str]:
+    """Rippling inverts the usual convention: `label` is the machine token
+    ("SALARIED_FT") and `id` is the human string ("Salaried, full-time")."""
+    if isinstance(emp, str):
+        return emp or None
+    if not isinstance(emp, dict):
+        return None
+    ident = (emp.get("id") or "").strip()
+    label = (emp.get("label") or "").strip()
+    # Prefer whichever value reads as prose: has a space or a lowercase letter and
+    # is not a SCREAMING_SNAKE token.
+    for cand in (ident, label):
+        if cand and not re.fullmatch(r"[A-Z0-9_]+", cand):
+            return cand
+    return ident or label or None
+
+
+def _rippling_job_to_result(job: dict, board: str, url: Optional[str] = None) -> Optional[dict]:
+    """Pure Rippling job-object -> normalized result (unit-testable vs a saved
+    board-API fixture)."""
+    desc = job.get("description")
+    if isinstance(desc, dict):
+        # Two HTML blocks: the company blurb and the role itself, in page order.
+        body = "\n\n".join(
+            t for t in (_html_to_text(desc.get(k) or "") for k in ("company", "role")) if t
+        )
+    else:
+        body = _html_to_text(desc or "")
+    body = (body or "").strip()
+    if not body:
+        return None
+
+    locations = [str(l).strip() for l in (job.get("workLocations") or []) if l]
+    locations = [l for l in dict.fromkeys(locations) if l]
+    working_location = "; ".join(locations) or None
+    location = locations[0] if locations else None
+    remote_flags = [bool(re.search(r"(?i)\bremote\b", l)) for l in locations]
+    remote = (all(remote_flags) if remote_flags else None)
+    workplace = "Remote" if remote else ("Hybrid" if any(remote_flags) else None)
+
+    comp, comp_raw = _rippling_compensation(job.get("payRangeDetails"))
+    benefits, equity = mine_benefits_equity(body)
+    questions = filter_questions(parse_rippling_questions(job))
+    job_url = job.get("url") or url
+
+    return {
+        "title": (job.get("name") or "").strip() or "Unknown Title",
+        "company": (job.get("companyName") or "").strip() or _prettify_slug(board),
+        "location": location,
+        "working_location": working_location,
+        "employment_type": _rippling_employment_type(job.get("employmentType")),
+        "remote": remote,
+        "workplace": workplace,
+        "compensation": comp,
+        "compensation_raw": comp_raw,
+        "location_raw": working_location,
+        "cadence_raw": None,
+        "benefits": benefits,
+        "equity": equity,
+        "apply_url": job_url,
+        "posting_id": str(job.get("uuid")) if job.get("uuid") else None,
+        "source": "rippling-ats-api",
+        # Rippling doesn't declare whether comp SHOULD be present, so an empty
+        # payRangeDetails is "not posted", not a capture failure.
+        "comp_expected": False,
+        "location_expected": True,
+        "structured_source": True,
+        "questions": questions,
+        "text": body,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Workable
+#
+# URL shape:  https://apply.workable.com/{subdomain}/j/{SHORTCODE}[/apply/]
+# API:        https://apply.workable.com/api/v1/accounts/{subdomain}/jobs/{SHORTCODE}
+# Company:    https://apply.workable.com/api/v1/accounts/{subdomain}  -> {"name": ...}
+#
+# The job API carries content / location / workplace / employment type but NO
+# questions and (usually) no salary, so questions come from rendering the apply
+# page — see `apply_page_url` in prep_job_urls_playwright.py.
+# --------------------------------------------------------------------------- #
+
+_WORKABLE_ACCOUNT_CACHE: dict[str, Optional[str]] = {}
+
+_WORKABLE_EMPLOYMENT_TYPES = {
+    "full": "Full-time", "part": "Part-time", "contract": "Contract",
+    "temporary": "Temporary", "internship": "Internship",
+}
+
+_WORKABLE_WORKPLACE = {
+    "remote": "Remote", "hybrid": "Hybrid", "on_site": "Onsite", "onsite": "Onsite",
+}
+
+
+def workable_ids(url: str):
+    """Return (subdomain, shortcode) for a Workable apply URL, or (None, None).
+    Shape: apply.workable.com/{subdomain}/j/{SHORTCODE}[/apply/]"""
+    parts = [unquote(p) for p in urlparse(url).path.split("/") if p]
+    if len(parts) < 3 or parts[1].lower() != "j":
+        return (parts[0] if parts else None), None
+    return parts[0], parts[2]
+
+
+def _workable_company(subdomain: str, timeout: int) -> Optional[str]:
+    """The account's display name is the clean company name ('feeldco' -> 'Feeld')."""
+    if subdomain in _WORKABLE_ACCOUNT_CACHE:
+        return _WORKABLE_ACCOUNT_CACHE[subdomain]
+    name = None
+    try:
+        resp = requests.get(
+            f"https://apply.workable.com/api/v1/accounts/{subdomain}",
+            headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+            timeout=timeout,
+        )
+        if resp.status_code == 200:
+            name = (resp.json().get("name") or "").strip() or None
+    except Exception:
+        name = None
+    _WORKABLE_ACCOUNT_CACHE[subdomain] = name
+    return name
+
+
+def _fetch_workable(url: str, timeout: int = 20) -> Optional[dict]:
+    subdomain, shortcode = workable_ids(url)
+    if not subdomain or not shortcode:
+        return None
+    resp = requests.get(
+        f"https://apply.workable.com/api/v1/accounts/{subdomain}/jobs/{shortcode}",
+        headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+        timeout=timeout,
+    )
+    if resp.status_code != 200:
+        return None
+    try:
+        job = resp.json()
+    except Exception:
+        return None
+    if not isinstance(job, dict):
+        return None
+    company = _workable_company(subdomain, timeout) or _prettify_slug(subdomain)
+    return _workable_job_to_result(job, subdomain, company, url)
+
+
+def _workable_place(loc) -> Optional[str]:
+    if not isinstance(loc, dict):
+        return None
+    city, region, country = loc.get("city"), loc.get("region"), loc.get("country")
+    piece = ", ".join(p for p in [city, region] if p)
+    return piece or (country or None)
+
+
+def _workable_job_to_result(job: dict, subdomain: str, company: str,
+                            url: Optional[str] = None) -> Optional[dict]:
+    """Pure Workable job-object -> normalized result (unit-testable vs a saved
+    accounts-API fixture)."""
+    parts = [job.get("description") or "", job.get("requirements") or "",
+             job.get("benefits") or ""]
+    body = _html_to_text("\n".join(p for p in parts if p)).strip()
+    if not body:
+        return None
+
+    location = _workable_place(job.get("location"))
+    metros = [_workable_place(l) for l in (job.get("locations") or [])
+              if isinstance(l, dict) and not l.get("hidden")]
+    metros = [m for m in dict.fromkeys([location] + metros) if m]
+    working_location = "; ".join(metros) or None
+
+    workplace_raw = (job.get("workplace") or "").strip().lower()
+    workplace = _WORKABLE_WORKPLACE.get(workplace_raw)
+    emp_raw = (job.get("type") or "").strip().lower()
+    employment_type = _WORKABLE_EMPLOYMENT_TYPES.get(emp_raw) or (job.get("type") or None)
+
+    # Workable exposes salary only when the employer opted into it; usually null.
+    comp = None
+    salary = job.get("salary")
+    if isinstance(salary, dict):
+        lo, hi = salary.get("salary_from"), salary.get("salary_to")
+        cur = salary.get("salary_currency") or ""
+        if lo or hi:
+            rng = f"{lo:,}–{hi:,}" if (lo and hi) else f"{lo or hi:,}"
+            comp = f"{cur} {rng}".strip()
+    elif isinstance(salary, str) and salary.strip():
+        comp = salary.strip()
+
+    benefits, equity = mine_benefits_equity(body)
+    shortcode = job.get("shortcode")
+    apply_url = (f"https://apply.workable.com/{subdomain}/j/{shortcode}/"
+                 if shortcode else url)
+
+    return {
+        "title": (job.get("title") or "").strip() or "Unknown Title",
+        "company": company,
+        "location": location,
+        "working_location": working_location,
+        "employment_type": employment_type,
+        "remote": job.get("remote") if isinstance(job.get("remote"), bool) else None,
+        "workplace": workplace,
+        "compensation": comp,
+        "compensation_raw": comp,
+        "location_raw": working_location,
+        "cadence_raw": None,
+        "benefits": benefits,
+        "equity": equity,
+        "apply_url": apply_url,
+        "posting_id": str(shortcode) if shortcode else None,
+        "source": "workable-api",
+        "comp_expected": False,
+        "location_expected": True,
+        "structured_source": True,
+        # Not on the API — the caller renders the apply page for these.
+        "questions": [],
+        "text": body,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Workday
+#
+# URL shape:  https://{tenant}.wd{N}.myworkdayjobs.com[/{locale}]/{siteId}/job/{...}
+# API:        https://{host}/wday/cxs/{tenant}/{siteId}/job/{...}
+#
+# The CxS API needs the tenant's `Job_Posting_Site_ID`, which is often treated as
+# undiscoverable. It isn't: it is the first non-locale path segment of the public
+# job URL (`.../WG/job/...` -> `WG`). Guessing the company name instead 404s.
+#
+# What Workday does NOT give us: compensation and the application questions. The
+# payload carries only a `questionnaireId` — the questionnaire itself is behind
+# candidate authentication — so Workday questions stay uncaptured by design.
+# --------------------------------------------------------------------------- #
+
+# Locale segments that can precede the site id (e.g. /en-US/Careers/job/...).
+_WORKDAY_LOCALE_RE = re.compile(r"^[a-z]{2}(-[A-Za-z]{2})?$")
+
+
+def workday_cxs_url(url: str) -> Optional[str]:
+    """Build the CxS job endpoint for a public Workday job URL, or None."""
+    parsed = urlparse(url)
+    host = parsed.netloc
+    tenant = host.split(".")[0].lower()
+    parts = [unquote(p) for p in parsed.path.split("/") if p]
+    # Drop a leading locale segment; already-CxS URLs pass through untouched.
+    if parts and parts[0].lower() == "wday":
+        return f"https://{host}{parsed.path}"
+    if parts and _WORKDAY_LOCALE_RE.match(parts[0]) and len(parts) > 1:
+        parts = parts[1:]
+    if len(parts) < 2 or parts[1].lower() != "job":
+        return None
+    site_id = parts[0]
+    rest = "/".join(parts[1:])
+    return f"https://{host}/wday/cxs/{tenant}/{site_id}/{rest}"
+
+
+def _fetch_workday(url: str, timeout: int = 20) -> Optional[dict]:
+    api = workday_cxs_url(url)
+    if not api:
+        return None
+    resp = requests.get(
+        api,
+        headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+        timeout=timeout,
+    )
+    if resp.status_code != 200:
+        return None
+    try:
+        payload = resp.json()
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    return _workday_payload_to_result(payload, url)
+
+
+def _workday_payload_to_result(payload: dict, url: Optional[str] = None) -> Optional[dict]:
+    """Pure Workday CxS payload -> normalized result (unit-testable vs a saved
+    CxS fixture)."""
+    info = payload.get("jobPostingInfo") or {}
+    body = _html_to_text(html.unescape(info.get("jobDescription") or "")).strip()
+    if not body:
+        return None
+
+    location = (info.get("location") or "").strip() or None
+    req_loc = info.get("jobRequisitionLocation") or {}
+    req_desc = (req_loc.get("descriptor") or "").strip() if isinstance(req_loc, dict) else ""
+    org = payload.get("hiringOrganization") or {}
+    company = (org.get("name") or "").strip() if isinstance(org, dict) else ""
+    benefits, equity = mine_benefits_equity(body)
+    remote_type = (info.get("remoteType") or "").strip() or None
+
+    return {
+        "title": (info.get("title") or "").strip() or "Unknown Title",
+        "company": company or (urlparse(url or "").netloc.split(".")[0].title() or "Unknown"),
+        "location": location,
+        "working_location": location,
+        "employment_type": (info.get("timeType") or "").strip() or None,
+        "remote": True if (remote_type and "remote" in remote_type.lower()) else None,
+        "workplace": remote_type,
+        # Workday CxS never exposes pay; it is genuinely absent, not mis-parsed.
+        "compensation": None,
+        "compensation_raw": None,
+        "location_raw": "; ".join(p for p in dict.fromkeys([location, req_desc]) if p) or None,
+        "cadence_raw": None,
+        "benefits": benefits,
+        "equity": equity,
+        "apply_url": info.get("externalUrl") or url,
+        "posting_id": (info.get("jobReqId") or info.get("id") or None),
+        "source": "workday-cxs-api",
+        "comp_expected": False,
+        "location_expected": True,
+        "structured_source": True,
+        # The questionnaire is behind candidate auth (only `questionnaireId` is
+        # public), so Workday application questions cannot be captured.
         "questions": [],
         "text": body,
     }
@@ -1263,7 +1886,12 @@ def ats_company_from_url(url: str) -> Optional[str]:
     host_guess = host_parts[-2] if len(host_parts) >= 2 else host
     if host_guess not in ATS_HOST_KEYWORDS:
         return None
-    skip = {"embed", "job_app", "jobs", "job", "o", "careers", "career", "apply"}
+    # Workday is the exception: the org lives in the HOST (the tenant subdomain),
+    # while the first path segment is the job-posting SITE id ("WG", "Careers"),
+    # which is not a company name.
+    if "myworkdayjobs.com" in host and host_parts:
+        return _prettify_slug(host_parts[0])
+    skip = {"embed", "job_app", "jobs", "job", "j", "o", "careers", "career", "apply"}
     path_parts = [unquote(p) for p in parsed.path.split("/") if p]
     slug = next((s for s in path_parts if s.lower() not in skip), None)
     if not slug:

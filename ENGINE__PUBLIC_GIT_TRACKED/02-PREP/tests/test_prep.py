@@ -751,3 +751,418 @@ def test_question_about_building_for_diverse_users_is_kept():
     }]
     kept = af.filter_questions(fields)
     assert len(kept) == 1
+
+
+# --------------------------------------------------------------------------- #
+# Multi-ATS question capture (2026-07-29)
+#
+# Before this, only Greenhouse (boards API) and Ashby (rendered apply page) could
+# produce application questions; every other source hardcoded []. These tests pin
+# the three new fetchers (Rippling / Workable / Workday), Lever question capture,
+# and the generalized apply-page renderer. All fixtures are REAL saved API
+# payloads — no test here touches the network.
+# --------------------------------------------------------------------------- #
+
+RIPPLING_WITH_QUESTIONS = "rippling_workplace_coordinator.json"
+RIPPLING_NO_EXTRA_QUESTIONS = "rippling_product_lead_no_extra_questions.json"
+WORKABLE_JOB = "workable_feeld_cpo.json"
+WORKDAY_JOB = "workday_wonder_assoc_dir_product.json"
+LEVER_JOB = "lever_findem_posting.json"
+
+
+def _rippling(name):
+    return af._rippling_job_to_result(_load(name), "rippling")
+
+
+# Rippling -------------------------------------------------------------------
+def test_rippling_parses_title_company_comp_and_all_work_locations():
+    res = _rippling(RIPPLING_NO_EXTRA_QUESTIONS)
+    assert res["title"] == "Product Lead, Talent Products"
+    # companyName gives the clean name; never the board slug guess.
+    assert res["company"] == "Rippling"
+    # Pay zone + both range ends, from payRangeDetails.
+    assert "US Tier 1" in res["compensation"]
+    assert "174,000" in res["compensation"] and "290,000" in res["compensation"]
+    assert res["compensation_raw"] == res["compensation"]
+    # EVERY work location is kept, not just the first.
+    assert res["location"] == "San Francisco, CA"
+    assert "San Francisco, CA" in res["working_location"]
+    assert "New York, NY" in res["working_location"]
+    # Rippling inverts label/id: `id` holds the human string.
+    assert res["employment_type"] == "Salaried, full-time"
+    assert res["source"] == "rippling-ats-api"
+    assert res["structured_source"] is True
+    assert res["posting_id"] == "0889e2ac-a30c-43b7-8c8c-5312264416db"
+    assert res["apply_url"].startswith("https://ats.rippling.com/rippling/jobs/")
+    # Both description blocks (company blurb + role) land in the body.
+    assert len(res["text"]) > 2000
+
+
+def test_rippling_null_additional_questions_yields_zero_kept_without_crashing():
+    """`activeJobApplication.additionalQuestions` is None whenever the employer
+    added no custom questions — the common case. It must parse to zero KEPT
+    questions rather than raising."""
+    job = _load(RIPPLING_NO_EXTRA_QUESTIONS)
+    assert job["activeJobApplication"]["additionalQuestions"] is None
+    parsed = af.parse_rippling_questions(job)
+    assert parsed, "the routine basicQuestions must still be parsed"
+    assert _rippling(RIPPLING_NO_EXTRA_QUESTIONS)["questions"] == []
+
+
+def test_rippling_keeps_essay_and_office_cadence_and_drops_routine_fields():
+    res = _rippling(RIPPLING_WITH_QUESTIONS)
+    kept = res["questions"]
+    assert len(kept) == 2, [q["label"] for q in kept]
+    essay = next(q for q in kept if q["type"] == "textarea")
+    assert "competing priorities" in essay["label"]
+    assert essay["required"] is True
+    office = _office_question(kept)
+    assert "5 days a week" in office["label"]
+    assert office["options"] == ["Yes", "No"]
+    # The routine basicQuestions set is dropped by the SHARED filter, by name.
+    labels = " ".join(q["label"].lower() for q in kept)
+    for dropped in ("first name", "last name", "email", "pronouns", "phone",
+                    "resume", "cover letter", "linkedin", "current company",
+                    "location (city only)"):
+        assert dropped not in labels
+
+
+def test_rippling_office_cadence_question_is_recognized_as_working_location():
+    office = next(q for q in _rippling(RIPPLING_WITH_QUESTIONS)["questions"]
+                  if q["type"] == "select")
+    assert af.question_provides_working_location(office)
+    parsed = af.parse_office_cadence(office)
+    assert parsed and parsed["cadence"] == "5 days a week"
+
+
+def test_rippling_hourly_comp_keeps_its_frequency():
+    """A non-annual pay frequency must survive: $27–44 an HOUR read as a salary
+    band would be a catastrophic mis-score."""
+    comp = _rippling(RIPPLING_WITH_QUESTIONS)["compensation"]
+    assert comp.endswith("/hour"), comp
+    assert "27" in comp and "44" in comp
+
+
+def test_rippling_long_answer_is_a_compose_type_despite_text_datatype():
+    """Rippling's `dataType` is an unreliable compose signal (a LONG_ANSWER essay
+    can carry dataType "Text"); `questionType` is the one to trust."""
+    raw = next(q for qs in _load(RIPPLING_WITH_QUESTIONS)["activeJobApplication"]
+               ["additionalQuestions"] for q in qs["form"]["questions"]
+               if q["questionType"] == "LONG_ANSWER")
+    assert raw["dataType"] == "Text"  # the trap
+    parsed = next(q for q in af.parse_rippling_questions(_load(RIPPLING_WITH_QUESTIONS))
+                  if q["label"] == raw["title"])
+    assert parsed["type"] == "textarea"
+
+
+@pytest.mark.parametrize("url,expected", [
+    ("https://ats.rippling.com/rippling/jobs/0889e2ac-a30c-43b7-8c8c-5312264416db",
+     ("rippling", "0889e2ac-a30c-43b7-8c8c-5312264416db")),
+    # a jobSite query param must not confuse the id parse
+    ("https://ats.rippling.com/acme-co/jobs/0889E2AC-A30C-43B7-8C8C-5312264416DB?jobSite=LinkedIn",
+     ("acme-co", "0889e2ac-a30c-43b7-8c8c-5312264416db")),
+    ("https://ats.rippling.com/acme-co", ("acme-co", None)),
+])
+def test_rippling_url_id_parsing(url, expected):
+    assert af._rippling_ids(url) == expected
+
+
+# Workable -------------------------------------------------------------------
+def _workable():
+    return af._workable_job_to_result(_load(WORKABLE_JOB), "feeldco", "Feeld")
+
+
+def test_workable_parses_title_location_workplace_and_employment_type():
+    res = _workable()
+    assert res["title"] == "Chief Product Officer"
+    # The account API's display name, not the raw subdomain ("feeldco").
+    assert res["company"] == "Feeld"
+    assert res["location"] == "New York, New York"
+    for metro in ("New York", "Los Angeles", "London"):
+        assert metro in res["working_location"]
+    assert res["workplace"] == "Remote" and res["remote"] is True
+    assert res["employment_type"] == "Full-time"
+    assert res["source"] == "workable-api" and res["structured_source"] is True
+    assert res["posting_id"] == "AA731B2DD7"
+    assert res["apply_url"] == "https://apply.workable.com/feeldco/j/AA731B2DD7/"
+    # description + requirements + benefits all folded into the body.
+    assert len(res["text"]) > 5000
+
+
+def test_workable_api_carries_no_comp_and_no_questions():
+    """Workable's job API has no questions and usually a null salary. Those must
+    come back empty (so the caller renders the apply page / reports not-posted),
+    never invented."""
+    res = _workable()
+    assert res["compensation"] is None and res["compensation_raw"] is None
+    assert res["questions"] == []
+
+
+@pytest.mark.parametrize("url,expected", [
+    ("https://apply.workable.com/feeldco/j/AA731B2DD7", ("feeldco", "AA731B2DD7")),
+    ("https://apply.workable.com/feeldco/j/AA731B2DD7/apply/", ("feeldco", "AA731B2DD7")),
+    ("https://apply.workable.com/feeldco/j/AA731B2DD7/?utm_source=x", ("feeldco", "AA731B2DD7")),
+])
+def test_workable_url_id_parsing(url, expected):
+    assert af.workable_ids(url) == expected
+
+
+# Workday --------------------------------------------------------------------
+@pytest.mark.parametrize("url,expected", [
+    # The Job_Posting_Site_ID is simply the first path segment ("WG"), NOT the
+    # company name — guessing the company 404s with `not found: Job_Posting_Site_ID`.
+    ("https://acme.wd1.myworkdayjobs.com/WG/job/New-York-NY/Product-Lead_JR101195?source=LinkedIn",
+     "https://acme.wd1.myworkdayjobs.com/wday/cxs/acme/WG/job/New-York-NY/Product-Lead_JR101195"),
+    # a locale segment before the site id is dropped
+    ("https://acme.wd108.myworkdayjobs.com/en-US/Acme_Careers/job/NY/Product-Manager_JR8636-1",
+     "https://acme.wd108.myworkdayjobs.com/wday/cxs/acme/Acme_Careers/job/NY/Product-Manager_JR8636-1"),
+])
+def test_workday_cxs_url_uses_the_path_site_id(url, expected):
+    assert af.workday_cxs_url(url) == expected
+
+
+@pytest.mark.parametrize("url", [
+    "https://acme.wd1.myworkdayjobs.com/WG",                 # board root, no job
+    "https://acme.wd1.myworkdayjobs.com/WG/search/Product",  # search page
+])
+def test_workday_cxs_url_none_without_a_job_path(url):
+    assert af.workday_cxs_url(url) is None
+
+
+def test_workday_payload_parses_title_company_location_and_type():
+    res = af._workday_payload_to_result(
+        _load(WORKDAY_JOB), "https://acme.wd1.myworkdayjobs.com/WG/job/x/y")
+    assert res["title"] == "Associate Director of Product, Retention"
+    # hiringOrganization, not the tenant slug.
+    assert "Wonder" in res["company"]
+    assert res["location"] == "New York, NY"
+    assert res["employment_type"] == "Full time"
+    assert res["source"] == "workday-cxs-api" and res["structured_source"] is True
+    assert res["posting_id"] == "JR101195"
+    assert len(res["text"]) > 2000
+
+
+def test_workday_reports_comp_and_questions_as_absent_not_invented():
+    """Workday CxS exposes no pay and only a `questionnaireId` (the questionnaire
+    itself is behind candidate auth), so both must come back empty."""
+    res = af._workday_payload_to_result(_load(WORKDAY_JOB), "http://x")
+    assert res["compensation"] is None and res["compensation_raw"] is None
+    assert res["questions"] == []
+
+
+def test_workday_company_from_url_is_the_tenant_not_the_site_id():
+    """The first path segment is the posting SITE id ("WG"), which would otherwise
+    be written out as the hiring company."""
+    assert af.ats_company_from_url(
+        "https://acme.wd1.myworkdayjobs.com/WG/job/New-York-NY/Product-Lead_JR1") == "Acme"
+
+
+# Lever ----------------------------------------------------------------------
+def test_lever_exposes_the_apply_url_that_carries_its_questions(monkeypatch):
+    """Lever's postings API has no questions field but DOES carry `applyUrl`, which
+    is how the renderer reaches them."""
+    job = _load(LEVER_JOB)
+    assert "questions" not in job
+
+    class FakeRequests:
+        def get(self, url, **kw):
+            return _FakeResp(200, job) if "api.lever.co" in url else _FakeResp(404, {})
+
+    monkeypatch.setattr(af, "requests", FakeRequests())
+    res = af._fetch_lever(
+        "https://jobs.lever.co/findem/d1f48556-a8c9-46b7-b089-4317ec2dd280")
+    assert res["source"] == "lever-postings-api"
+    assert res["structured_source"] is True
+    assert res["questions"] == []          # never on the API
+    assert res["apply_url"].endswith("/apply")
+    assert af.detect_apply_ats(res["apply_url"], None, res["source"]) == "lever"
+
+
+# Dispatch -------------------------------------------------------------------
+@pytest.mark.parametrize("url,fetcher", [
+    ("https://ats.rippling.com/acme/jobs/0889e2ac-a30c-43b7-8c8c-5312264416db",
+     "_fetch_rippling"),
+    ("https://apply.workable.com/acme/j/AA731B2DD7", "_fetch_workable"),
+    ("https://acme.wd1.myworkdayjobs.com/WG/job/NY/Product_JR1", "_fetch_workday"),
+])
+def test_fetch_via_ats_dispatches_the_new_hosts(monkeypatch, url, fetcher):
+    seen = {}
+    for name in ("_fetch_rippling", "_fetch_workable", "_fetch_workday"):
+        monkeypatch.setattr(af, name,
+                            lambda u, name=name, **kw: seen.setdefault("hit", name))
+    af.fetch_via_ats(url)
+    assert seen.get("hit") == fetcher
+
+
+# Generalized apply-page renderer -------------------------------------------
+def _pjp():
+    return pytest.importorskip("prep_job_urls_playwright")
+
+
+@pytest.mark.parametrize("url,expected", [
+    ("https://jobs.ashbyhq.com/acme/fa0a5d05?src=LinkedIn",
+     "https://jobs.ashbyhq.com/acme/fa0a5d05/application"),
+    ("https://jobs.lever.co/acme/d1f48556?lever-source=LinkedIn",
+     "https://jobs.lever.co/acme/d1f48556/apply"),
+    ("https://jobs.lever.co/acme/d1f48556/apply",     # no double-append
+     "https://jobs.lever.co/acme/d1f48556/apply"),
+    ("https://apply.workable.com/acme/j/AA731B2DD7?utm_source=x",
+     "https://apply.workable.com/acme/j/AA731B2DD7/apply/"),
+    ("https://apply.workable.com/acme/j/AA731B2DD7/",
+     "https://apply.workable.com/acme/j/AA731B2DD7/apply/"),
+    ("https://acme.homerun.co/founding-product-manager",
+     "https://acme.homerun.co/founding-product-manager/apply"),
+])
+def test_apply_page_url_per_ats_drops_query_and_never_double_appends(url, expected):
+    assert _pjp().apply_page_url(url) == expected
+
+
+@pytest.mark.parametrize("url", [
+    # These ATSes return their questions ON the job API, so there is nothing to
+    # render and no apply URL to build — rendering them would be pure cost.
+    "https://ats.rippling.com/acme/jobs/0889e2ac-a30c-43b7-8c8c-5312264416db",
+    "https://job-boards.greenhouse.io/acme/jobs/4705550005",
+    "https://acme.wd1.myworkdayjobs.com/WG/job/NY/Product_JR1",
+])
+def test_apply_page_url_is_none_when_questions_come_from_the_api(url):
+    assert _pjp().apply_page_url(url) is None
+
+
+@pytest.mark.parametrize("hint,expected", [
+    ("https://jobs.ashbyhq.com/acme/fa0a5d05", "ashby"),
+    ("https://jobs.lever.co/acme/d1f48556", "lever"),
+    ("https://apply.workable.com/acme/j/AA731B2DD7", "workable"),
+    ("https://acme.homerun.co/role", "homerun"),
+    # custom employer domain carrying the Ashby job id
+    ("https://www.acme.com/careers/open-positions?ashby_jid=4ccf1e87-0317-4dca-949d-f7cb4f76fad7",
+     "ashby"),
+    # a `source` label, which is how custom-domain jobs get identified
+    ("ashby-posting-api (custom-domain jid)", "ashby"),
+    ("workable-api", "workable"),
+    # ATSes whose API carries the questions must NOT be routed to a render
+    ("https://job-boards.greenhouse.io/acme/jobs/4705550005", None),
+    ("greenhouse-boards-api", None),
+    ("rippling-ats-api", None),
+    # a URL is matched on HOST only, so a role slug can't masquerade as an ATS
+    ("https://boards.acme.com/jobs/clever-analytics-product-manager", None),
+    ("https://careers.acme.com/jobs/workable-integrations-engineer", None),
+])
+def test_detect_apply_ats(hint, expected):
+    assert af.detect_apply_ats(hint) == expected
+
+
+def test_detect_apply_ats_prefers_the_first_informative_hint():
+    assert af.detect_apply_ats(None, "", "https://jobs.lever.co/a/b") == "lever"
+    assert af.detect_apply_ats("https://jobs.ashbyhq.com/a/b",
+                               "https://www.acme.com/careers") == "ashby"
+
+
+def test_workable_apply_page_is_rendered_on_the_primary_pass(monkeypatch):
+    """Workable's API looks 'complete' (content + location), so no fallback pass
+    would ever fire — the questions must be captured by the always-on apply-page
+    render, merged in WITHOUT losing the API's location/workplace."""
+    pju = pytest.importorskip("prep_job_urls")
+    ats_res = af._workable_job_to_result(_load(WORKABLE_JOB), "feeldco", "Feeld")
+    monkeypatch.setattr(pju, "fetch_via_ats", lambda u, **k: dict(ats_res))
+    rendered = [{"label": "Have you worked in an all-remote environment?",
+                 "type": "textarea", "required": True, "name": "CA_6815",
+                 "names": ["CA_6815"], "options": []}]
+    calls = {"n": 0}
+
+    def renderer(u, apply_hint=None):
+        calls["n"] += 1
+        calls["hint"] = apply_hint
+        return rendered
+
+    out = pju.fetch_one("https://apply.workable.com/feeldco/j/AA731B2DD7",
+                        question_renderer=renderer)
+    assert calls["n"] == 1
+    assert calls["hint"] == ats_res["apply_url"]
+    assert out["questions"] == rendered and out["meta"]["questions"] == rendered
+    assert "London" in out["meta"]["working_location"]
+    assert out["meta"]["workplace"] == "Remote"
+
+
+def test_rippling_never_renders_an_apply_page(monkeypatch):
+    """Rippling returns its questions inline, so the render must not fire for it —
+    no speed regression for an ATS that needs no browser."""
+    pju = pytest.importorskip("prep_job_urls")
+    ats_res = _rippling(RIPPLING_WITH_QUESTIONS)
+    ats_res["questions"] = []  # force the empty branch so only the ATS gate decides
+    monkeypatch.setattr(pju, "fetch_via_ats", lambda u, **k: dict(ats_res))
+    calls = {"n": 0}
+
+    def renderer(u, apply_hint=None):
+        calls["n"] += 1
+        return [{"label": "should never be called"}]
+
+    out = pju.fetch_one(
+        "https://ats.rippling.com/rippling/jobs/8df88337-6e68-4137-96b3-6045f7865d6f",
+        question_renderer=renderer)
+    assert calls["n"] == 0
+    assert out["questions"] == []
+
+
+def test_apply_render_failure_prints_and_degrades(monkeypatch, capsys):
+    """A render failure must never fail the fetch — and must never be silent
+    either: a swallowed exception is what hid the broken Ashby apply-URL builder."""
+    pju = pytest.importorskip("prep_job_urls")
+    ats_res = af._workable_job_to_result(_load(WORKABLE_JOB), "feeldco", "Feeld")
+    monkeypatch.setattr(pju, "fetch_via_ats", lambda u, **k: dict(ats_res))
+
+    def boom(u, apply_hint=None):
+        raise RuntimeError("render failed")
+
+    out = pju.fetch_one("https://apply.workable.com/feeldco/j/AA731B2DD7",
+                        question_renderer=boom)
+    assert out["ok"] is True and out["questions"] == []
+    assert "render failed" in capsys.readouterr().out
+
+
+# Rendered-label cleanup ----------------------------------------------------
+@pytest.mark.parametrize("raw,options,label,required", [
+    # Workable puts the required marker on its own line ABOVE the label.
+    ("*\nHave you worked in an all-remote or a remote-first environment?", [],
+     "Have you worked in an all-remote or a remote-first environment?", True),
+    # Lever / Homerun put it after the label.
+    ("Full name\n✱", [], "Full name", True),
+    ("Tell us about a launch you shipped. *", [],
+     "Tell us about a launch you shipped.", True),
+    # A select's own option text lands in the container innerText — drop it, or the
+    # option list is duplicated into the question label.
+    ("Which location are you applying for?\nSelect...\nUS (Remote)\nSan Francisco",
+     [{"label": "Select..."}, {"label": "US (Remote)"}, {"label": "San Francisco"}],
+     "Which location are you applying for?", False),
+    # File-input chrome.
+    ("Resume/CV\nATTACH RESUME/CV", [], "Resume/CV", False),
+    # An unadorned label is returned untouched.
+    ("Why do you want to work here?", [], "Why do you want to work here?", False),
+])
+def test_clean_apply_label(raw, options, label, required):
+    assert af.clean_apply_label(raw, options) == (label, required)
+
+
+def test_normalize_apply_fields_infers_required_from_a_visual_marker():
+    """Homerun marks required-ness only with a trailing asterisk (no `required`
+    attribute), so the marker is the only signal available."""
+    out = af.normalize_apply_fields({"fields": [
+        {"title": "Describe a feature you took from discovery to launch. *",
+         "type": "LongText", "path": "", "isRequired": False, "options": []},
+    ]})
+    assert out[0]["required"] is True
+    assert out[0]["label"].endswith("launch.")
+    assert out[0]["type"] == "textarea"
+
+
+# Filter: routine sourcing / accommodation / candidate-location free-text -----
+@pytest.mark.parametrize("label", [
+    "Where are you based? (More than one place is fine!)",
+    "Where did you find out about this open role?",
+    "How did you hear about us?",
+    "Are there any accommodations you require for the interview process?",
+])
+def test_routine_free_text_fields_are_dropped(label):
+    """These are free-text, so the compose keep-rule would otherwise retain them,
+    but they are administrative: they say nothing about the job."""
+    assert af.filter_questions(
+        [{"label": label, "type": "textarea", "required": False, "options": []}]) == []

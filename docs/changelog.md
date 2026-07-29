@@ -11,6 +11,35 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Multi-ATS application-question capture: three new fetchers + one generalized apply-page renderer
+
+Before this, only two of the supported sources could produce application questions at all: Greenhouse (questions come back on the boards API) and Ashby (questions only exist on the rendered apply page). Every other source hardcoded `"questions": []`, so a whole class of postings looked like they had no questions when they simply had no capture path. Fixed by adding three fetchers and generalizing the render, all in `02-PREP/`.
+
+**New: Rippling** (`ats.rippling.com/<board>/jobs/<uuid>`) — the best of the bunch. Its public board API returns the job content, per-zone pay, work locations, employment type **and** the application questions on one call, so it needs no browser at all. Gotchas worth recording:
+- The endpoint 404s with an HTML page unless you send `Accept: application/json`. That's what makes it look like there's no API.
+- Its `employmentType` inverts the usual convention: `label` holds the machine token (`SALARIED_FT`) and `id` holds the human string (`Salaried, full-time`).
+- The custom questions live at `activeJobApplication.additionalQuestions`, a list of question *sets* each wrapping `form.questions[]`, and it is `null` whenever the employer added none (the common case). Routine fields are a separate `basicQuestions` list; those are fed through the *shared* filter and dropped by name, never special-cased.
+- `dataType` is an unreliable compose signal — a long-essay question can carry `dataType: "Text"`. `questionType` (`LONG_ANSWER` / `SHORT_ANSWER` / `KNOCKOUT` / …) is the one to trust. Pinned by a test.
+- Non-annual pay frequency is preserved: an hourly band read as an annual salary would be a catastrophic mis-score.
+
+**New: Workable** (`apply.workable.com/<sub>/j/<CODE>`) — the accounts/jobs API gives content, all locations, workplace type and employment type, plus a clean company display name from the account record (the subdomain alone reads wrong). It carries **no** questions and usually a null salary, so questions come from rendering the apply page.
+
+**New: Workday** (`<tenant>.wdN.myworkdayjobs.com`) — previously unsupported because the CxS API needs a `Job_Posting_Site_ID` that's widely treated as undiscoverable. It isn't: **it is simply the first non-locale path segment of the public job URL** (`.../WG/job/...` → site id `WG`). Guessing the company name instead 404s with `not found: Job_Posting_Site_ID=<name>`. Verified against two unrelated tenants. Workday gives content / location / employment type / hiring-organization name, but **no pay and no questions** — the payload exposes only a `questionnaireId`, and the questionnaire itself is behind candidate auth. Recorded as genuinely absent rather than as a capture failure. Also fixed the company derivation for these hosts: the org is the tenant *subdomain*, while the first path segment is the posting site id, which was previously being written out as the hiring company.
+
+**Extended: Lever** — the postings API has no questions field but does carry `applyUrl`, so Lever now gets questions the same way Ashby does.
+
+**Generalized the render instead of copy-pasting it per ATS.** `_render_ashby_questions` was Ashby-named but its DOM scrape (labeled field container → title / type / options / required) was already generic. It's now `render_apply_questions`, with a small per-ATS apply-URL builder table and a single shared field-scrape. Ashby / Lever / Workable / Homerun all route through it; Greenhouse and Rippling deliberately do not, since rendering an ATS whose API already carries the questions is pure cost. Two real bugs surfaced while generalizing:
+- The label container is sometimes a bare `<label>` whose control is the `for=` target or an adjacent sibling rather than a descendant. The old scrape only looked *inside* the container, so essay textareas were misread as plain text inputs and then dropped as non-compose. Now it checks `for=`, next sibling, and parent.
+- Some forms mark required-ness only visually (a trailing asterisk, no `required` attribute), and rendered containers also pick up the select's own option text and file-input chrome inside the label. Added `clean_apply_label`, which strips required-marker glyphs (reporting `required` from them), drops option/chrome lines, and collapses the rest.
+
+**Also fixed** the host-only Ashby check left behind in the Playwright fetcher — the primary fetcher had already been corrected to detect by host **or** `ashby_jid=` **or** an ATS-ish `source`, but the render path still tested the host alone, so custom-domain jobs skipped question capture there. Both paths now share one `detect_apply_ats` helper. It matches URLs on **host only** so a role slug can't masquerade as an ATS (a "clever-…" title is not Lever), and matches `source` labels as substrings, which is how custom-domain jobs get identified at all. The render's best-effort `except` still **prints** the exception rather than swallowing it — a silent except is what previously let a broken URL builder masquerade as "this job has no questions" — and an ATS with no job API at all now also gets an apply-page render from the plain-HTML path, since its job page never reaches the ATS branch.
+
+**Filter additions** (narrow, same rationale as the diversity-prompt exclusion): routine free-text fields that the compose-a-response keep-rule would otherwise retain even though they're administrative and say nothing about the job — "where are you based", "where did you find out about / how did you hear about this role", and interview-accommodation requests.
+
+**Investigated, not implemented: Homerun.** Its `/api/jobs` returns HTTP 200 but serves the page HTML, not JSON — the host answers every path with the same shell, so a 200 there means nothing. Its `application/ld+json` block is literally `{}`. There is no clean job-by-id endpoint, so there's no Homerun *fetcher*; the job page is plain server-rendered HTML that the existing generic path already reads, and its **questions do now get captured** via the generalized apply-page render.
+
+Durable offline fixtures (real saved API payloads, no network in tests) added for Rippling (including the `additionalQuestions: null` case, which must yield zero kept questions without crashing), Workable, Workday, and Lever. Suite: **67 → 128 passed**.
+
 ## 2026-07-29 — Question filter: exclude voluntary diversity-statement prompts
 
 Found while replacing an aggregator-sourced capture with the employer's own ATS post: the newly-visible application questions included an optional "we recruit from underrepresented communities — if you bring a diverse perspective based on your background, share more here" prompt, and the narrow filter KEPT it. The exclusion regex covered `self-identif` / `demographic` / the explicit gender/race/veteran/disability terms, but not this phrasing.
