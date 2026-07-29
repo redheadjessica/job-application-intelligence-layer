@@ -354,10 +354,40 @@ def comp_fit_label(comp_range, cfg):
 
 
 # --------------------------------------------------------------------------- #
+# Lane — the job-centric category taxonomy: "<Bucket> - <descriptor>" with
+# buckets Health / Consumer / Work / Other. ("Work", NEVER "Work Tools" — the
+# bucket was renamed 2026-07-29.) Lane Fit is candidate data and is untouched:
+# the candidate's own lane NAMES (which may legitimately contain "Work Tools")
+# never flow through this function.
+# --------------------------------------------------------------------------- #
+_LANE_RE = re.compile(r"^(health|consumer|work tools|work|other)\s*[-–—]\s*(.+)$", re.I)
+
+
+def normalize_lane(lane):
+    """Repair a Lane value into the canonical taxonomy: `Work Tools - X` ->
+    `Work - X`; bare `Work Tools` -> `Work`; enforce `<Bucket> - <descriptor>`
+    spacing; force the exact `Health - Mental Health` spelling (no extra
+    qualifier words). Mirrored by normalizeLane() in vet-jobs.js — this Python
+    copy is the canonical implementation (CLI pass + XLSX regeneration)."""
+    s = re.sub(r"\s+", " ", str(lane or "").strip())
+    m = _LANE_RE.match(s)
+    if m:
+        bucket = "Work" if m.group(1).lower() == "work tools" else m.group(1).capitalize()
+        desc = m.group(2).strip()
+        if bucket == "Health" and re.search(r"mental health", desc, re.I):
+            return "Health - Mental Health"
+        return f"{bucket} - {desc}"
+    if re.fullmatch(r"work tools", s, re.I):
+        return "Work"
+    return s
+
+
+# --------------------------------------------------------------------------- #
 # CLI — normalize a rankings CSV in place (invoked by vet-jobs.js post-scoring,
 # before the XLSX build). Prints every repair it makes.
 # --------------------------------------------------------------------------- #
 H_WORKLOC = "Working Location"
+H_LANE = "Lane"
 H_COMPRANGE = "Comp Range"
 H_COMPFIT = "Comp Fit"
 H_COMPANY = "Company"
@@ -410,6 +440,8 @@ def normalize_rankings_csv(csv_path, cfg, out=print):
             if H_COMPFIT in idx and idx[H_COMPFIT] < len(row):
                 fix(row, H_COMPFIT, comp_fit_label(row[idx[H_COMPRANGE]], cfg),
                     H_COMPFIT, n)
+        if H_LANE in idx and idx[H_LANE] < len(row):
+            fix(row, H_LANE, normalize_lane(row[idx[H_LANE]]), H_LANE, n)
     if changed:
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             csv.writer(f).writerows(rows)

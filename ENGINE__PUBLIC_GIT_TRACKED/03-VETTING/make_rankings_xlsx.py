@@ -505,6 +505,10 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
             # honest colors. Comp colors keep the COMP_LABEL_COLORS palette.
             if H_COMPFIT in rec:
                 rec[H_COMPFIT] = norm_contracts.comp_fit_label(rec.get(H_COMPRANGE), cfg)
+        if H_LANE in rec:
+            # Lane taxonomy repair ("Work Tools - X" -> "Work - X"); Lane Fit is
+            # candidate data and is deliberately NOT touched.
+            rec[H_LANE] = norm_contracts.normalize_lane(rec.get(H_LANE))
     # Data Completeness column: present in CSVs written by current vet-jobs.js. For OLDER CSVs (pre-
     # column), synthesize it here — insert the header after Comp Fit and derive each value from the
     # row's own comp/location text — so regenerating any batch still gets the column + coloring + flag.

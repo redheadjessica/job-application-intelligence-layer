@@ -158,6 +158,25 @@ def test_comp_fit_label_no_comp_prefs():
 
 
 # --------------------------------------------------------------------------- #
+# Lane — bucket taxonomy (Health / Consumer / Work / Other; NEVER "Work Tools")
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("raw,expected", [
+    ("Work Tools - Collaboration", "Work - Collaboration"),
+    ("Work Tools", "Work"),
+    ("work tools - Productivity", "Work - Productivity"),
+    ("Work - Project Management", "Work - Project Management"),     # already canonical
+    ("Health - Mental Health", "Health - Mental Health"),           # exact rule unchanged
+    ("Health - Consumer Mental Health", "Health - Mental Health"),  # qualifier stripped
+    ("Health-Provider Tools", "Health - Provider Tools"),           # spacing enforced
+    ("Consumer - Home Sharing", "Consumer - Home Sharing"),
+    ("Other - Fintech", "Other - Fintech"),
+    ("Fintech Infrastructure", "Fintech Infrastructure"),           # non-bucket passthrough
+])
+def test_normalize_lane(raw, expected):
+    assert norm_contracts.normalize_lane(raw) == expected
+
+
+# --------------------------------------------------------------------------- #
 # CSV CLI pass
 # --------------------------------------------------------------------------- #
 HEADERS = [
@@ -265,6 +284,44 @@ def test_xlsx_written_cells_carry_the_exact_spec_hexes(tmp_path):
     # no grey anywhere in the populated Working Location column
     greys = {cell_hex(ws.cell(i + 2, wl_col)) for i in range(len(cases))}
     assert "D9D9D9" not in greys
+
+
+def test_work_tools_cannot_survive_csv_to_xlsx_regeneration(tmp_path, capsys):
+    """A model-emitted (or legacy-CSV) 'Work Tools' Lane value must be repaired by
+    BOTH enforcement layers: the CLI pass rewrites the CSV, and the XLSX build
+    re-normalizes on read — so 'Work Tools' can never reach a final artifact.
+    Lane Fit is candidate data and stays byte-identical."""
+    cfg_path = tmp_path / "jail.config.json"
+    cfg_path.write_text(json.dumps(CFG), encoding="utf-8")
+    lane_fit = "Work Tools / Collaboration / Productivity (medium)"  # user's lane NAME — untouched
+    csv_path = tmp_path / "lane-rankings.csv"
+    xlsx_path = tmp_path / "lane-rankings.xlsx"
+    write_csv(csv_path, [
+        make_row(company="ToolsCo", lane="Work Tools - Collaboration", lane_fit=lane_fit),
+        make_row(company="BareCo", lane="Work Tools", lane_fit=lane_fit),
+        make_row(company="MindCo", lane="Health - Mental Health", lane_fit="Mental Health (high)"),
+    ])
+    # Layer 1: the CLI pass (what vet-jobs.js runs) rewrites the CSV in place.
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG)
+    capsys.readouterr()
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    li, lfi = HEADERS.index("Lane"), HEADERS.index("Lane Fit")
+    assert rows[1][li] == "Work - Collaboration"
+    assert rows[2][li] == "Work"
+    assert rows[3][li] == "Health - Mental Health"
+    assert rows[1][lfi] == lane_fit and rows[2][lfi] == lane_fit  # Lane Fit untouched
+    # Layer 2: even a CSV that DIDN'T go through the CLI regenerates clean.
+    write_csv(csv_path, [make_row(company="ToolsCo", lane="Work Tools - Collaboration", lane_fit=lane_fit)])
+    make_rankings_xlsx.build(str(csv_path), str(xlsx_path), config_path=str(cfg_path))
+    wb = load_workbook(str(xlsx_path))
+    ws = wb["Job Rankings"]
+    headers = [c.value for c in ws[1]]
+    assert ws.cell(2, headers.index("Lane") + 1).value == "Work - Collaboration"
+    assert ws.cell(2, headers.index("Lane Fit") + 1).value == lane_fit
+    for row in ws.iter_rows():
+        for cell in row:
+            assert cell.value != "Work Tools - Collaboration"
 
 
 def test_xlsx_comp_cells_recolored_by_midpoint_rule(tmp_path):

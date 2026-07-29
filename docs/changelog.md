@@ -11,6 +11,25 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Lane contract: bucket renamed "Work Tools" → "Work", taxonomy enforced mechanically
+
+Third contract into `norm_contracts.py`. The Lane bucket set is now **Health / Consumer / Work /
+Other** — the vet prompt previously INSTRUCTED "Work Tools", which drifted from the intended
+taxonomy. The prompt rule was rewritten (buckets, `Work - Collaboration` / `Work - Productivity` /
+`Work - Project Management` / `Work - Legal` / `Work - Consumer Research` examples, 1–2 word
+descriptors, reuse-existing-descriptor rule; the exact `Health - Mental Health` rule is retained
+verbatim), and the repair now exists in BOTH layers so an old or model-emitted `Work Tools` value
+cannot survive into a final artifact:
+
+- `norm_contracts.normalize_lane()` (canonical): `Work Tools - X` → `Work - X`; bare `Work Tools` →
+  `Work`; `<Bucket> - <descriptor>` spacing enforced; Mental-Health exact rule preserved. Run by the
+  post-scoring CLI pass over the CSV and again by `make_rankings_xlsx.py` on read.
+- `normalizeLane()` in vet-jobs.js extended to the same rules (kept in sync; the Python copy wins).
+- **Lane Fit is untouched**: the candidate's own priority-lane NAMES are user data (one of them may
+  legitimately contain "Work Tools") and never flow through this normalizer — pinned by test.
+- Tests: repair matrix + an end-to-end proof that a `Work Tools` Lane value in a CSV is repaired by
+  both the CLI pass and XLSX regeneration while the Lane Fit string stays byte-identical.
+
 ## 2026-07-29 — Comp Range contract: applicable-bands outer envelope + midpoint Comp Fit rule (resolves the "optimistic green" open question)
 
 Second contract into `norm_contracts.py`, closing the comp question flagged on 7/14 ("a `151-201`
