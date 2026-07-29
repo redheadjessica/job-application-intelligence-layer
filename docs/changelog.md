@@ -11,6 +11,14 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Question filter: exclude voluntary diversity-statement prompts
+
+Found while replacing an aggregator-sourced capture with the employer's own ATS post: the newly-visible application questions included an optional "we recruit from underrepresented communities — if you bring a diverse perspective based on your background, share more here" prompt, and the narrow filter KEPT it. The exclusion regex covered `self-identif` / `demographic` / the explicit gender/race/veteran/disability terms, but not this phrasing.
+
+These prompts are free-text, so the compose-a-response keep-rule retains them by default — yet they are candidate **self-identification**: they reveal nothing about the job and aren't a job-specific response, so they fail both keep-tests and belong with the rest of the excluded EEO/identity set. Added narrow patterns (`underrepresented communit|group|background`, `diverse perspective`, `diversity of our team`, `advancing the diversity`), deliberately scoped so a genuine job-material question that happens to mention diverse USERS still survives — pinned by a test asserting exactly that ("how would you design onboarding for a diverse set of users" is KEPT). Suite: **67 passed**.
+
+Also of note for the aggregator-vs-source question generally: re-fetching the same posting from the employer's own ATS rather than a job-board aggregator yielded identical JD prose but added the application questions and a canonical apply URL — aggregator captures silently lack the application form. Prefer the employer/ATS URL when both exist.
+
 ## 2026-07-29 — Ashby application-question capture was broken for ~every real URL (query-string bug); silent-except hid it
 
 The user spotted that two jobs reported "(none kept)" for application questions when both plainly have one — including the very posting used as the Ashby calibration example when this feature was built. Root cause was NOT the DOM scraper or the narrow filter (both verified working when given a correct URL); it was apply-URL construction in `_render_ashby_questions`:

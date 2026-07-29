@@ -712,3 +712,42 @@ def test_ashby_apply_url_never_puts_path_after_query():
         out = _apply_url(raw)
         assert "?" not in out, f"query string must be dropped: {out}"
         assert out.endswith("/application")
+
+
+# --------------------------------------------------------------------------- #
+# Voluntary diversity-statement prompts must be EXCLUDED (2026-07-29)
+#
+# These are free-text, so the compose-a-response keep-rule would otherwise retain
+# them, but they are candidate SELF-IDENTIFICATION: they reveal nothing about the
+# job and aren't a job-specific response. Real example that slipped through before
+# this fix (a Greenhouse post's optional third question).
+# --------------------------------------------------------------------------- #
+_DIVERSITY_PROMPTS = [
+    ("Blue-Rose-style optional diversity statement",
+     "Blue Rose Research is invested in advancing the diversity of our teams by "
+     "recruiting from underrepresented communities. If you believe you bring a "
+     "diverse perspective based on your background, communities or experience, we "
+     "invite you to share more here. This is completely optional."),
+    ("underrepresented groups phrasing",
+     "We recruit from underrepresented groups — tell us about your background."),
+    ("diverse perspective phrasing",
+     "Do you bring a diverse perspective you'd like to share?"),
+]
+
+
+@pytest.mark.parametrize("name,label", _DIVERSITY_PROMPTS)
+def test_voluntary_diversity_statements_are_excluded(name, label):
+    fields = [{"label": label, "type": "textarea", "required": False, "options": []}]
+    assert af.filter_questions(fields) == [], f"{name} must be dropped"
+
+
+def test_question_about_building_for_diverse_users_is_kept():
+    # Guard against over-exclusion: a genuine job-material question that happens to
+    # mention diverse USERS is a compose-a-response question and must SURVIVE.
+    fields = [{
+        "label": "How would you approach designing an onboarding flow that works for "
+                 "a diverse set of users with very different needs?",
+        "type": "textarea", "required": True, "options": [],
+    }]
+    kept = af.filter_questions(fields)
+    assert len(kept) == 1

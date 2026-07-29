@@ -129,6 +129,13 @@ _EXCLUDE_LABEL_RE = re.compile(
     r"salary expectation|compensation expectation|"
     r"\bgender\b|\brace\b|ethnic|hispanic|latino|veteran|disabilit|"
     r"sexual orientation|self[- ]identif|demographic|"
+    # Voluntary DIVERSITY-STATEMENT prompts. These are free-text (so the
+    # compose-a-response keep-rule would otherwise retain them) but they are
+    # candidate self-identification, not job-material: they tell you nothing about
+    # the role and aren't a job-specific response. Patterns kept narrow so a
+    # genuine question about building for diverse USERS still survives.
+    r"underrepresented (communit|group|background)|"
+    r"diverse perspective|diversity of our team|advancing the diversity|"
     r"country of residence|current (city|residence|address)|home address|"
     r"where (do|are) you (currently )?(live|located|residing|reside)"
     r")"
