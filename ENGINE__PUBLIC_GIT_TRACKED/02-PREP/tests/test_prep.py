@@ -387,14 +387,18 @@ def test_ashby_questions_always_rendered_even_when_api_complete(monkeypatch):
     kept = af.filter_questions(af.normalize_ashby_apply_fields(form))
     calls = {"n": 0}
 
-    def renderer(u):
+    def renderer(u, apply_hint=None):
         calls["n"] += 1
+        calls["apply_hint"] = apply_hint
         return kept
 
     out = pju.fetch_one(
         "https://jobs.ashbyhq.com/betterup/fa0a5d05-39f9-47d5-9fc9-0a0540ff9018",
         ashby_question_renderer=renderer)
     assert calls["n"] == 1, "the apply-page render must fire on the primary pass"
+    # The ATS-provided apply URL must be handed to the renderer (canonical; also the
+    # only way custom-domain Ashby jobs can be resolved to an apply page).
+    assert calls["apply_hint"] == ats_res["apply_url"]
     assert out["questions"] == kept and len(kept) == 2
     assert out["meta"]["questions"] == kept
     # Rich comp/location from the posting-api are preserved (not lost / re-fetched).
@@ -650,3 +654,61 @@ def test_assess_completeness_no_false_found_on_nav_label():
     fs = pc.assess_completeness(meta, body, [])
     assert fs["working_location"] == pc.CAPTURE_FAILED
     assert not fs.get("working_location_prose")
+
+
+# --------------------------------------------------------------------------- #
+# Ashby apply-URL construction (REGRESSION 2026-07-29)
+#
+# The apply URL used to be built as `url.rstrip('/') + '/application'`, which
+# broke silently for any job URL carrying a query string: `.../<id>?src=LinkedIn`
+# became `.../<id>?src=LinkedIn/application`, the apply page never loaded, and
+# question capture degraded to [] with no error. Every prior test used a CLEAN
+# url, so the suite passed while real LinkedIn/job-board URLs (which nearly always
+# carry ?src=/?departmentId=/?utm_source=) failed in production. These tests pin
+# the query-string cases specifically.
+# --------------------------------------------------------------------------- #
+def _apply_url(url):
+    import prep_job_urls_playwright as pjp
+    return pjp.ashby_apply_url(url)
+
+
+@pytest.mark.parametrize("raw,expected", [
+    # clean url (the only case the original suite covered)
+    ("https://jobs.ashbyhq.com/betterup/fa0a5d05",
+     "https://jobs.ashbyhq.com/betterup/fa0a5d05/application"),
+    # trailing slash
+    ("https://jobs.ashbyhq.com/betterup/fa0a5d05/",
+     "https://jobs.ashbyhq.com/betterup/fa0a5d05/application"),
+    # THE BUG: single query param (LinkedIn src)
+    ("https://jobs.ashbyhq.com/headway/82fd0412?src=LinkedIn",
+     "https://jobs.ashbyhq.com/headway/82fd0412/application"),
+    # THE BUG: multiple query params (departmentId + src)
+    ("https://jobs.ashbyhq.com/betterup/f0a6faee?departmentId=988d779c&src=LinkedIn",
+     "https://jobs.ashbyhq.com/betterup/f0a6faee/application"),
+    # THE BUG: utm params, mixed case keys
+    ("https://jobs.ashbyhq.com/grow-therapy/80716f86?utm_source=vgRZolJeYV&Source=LinkedIn",
+     "https://jobs.ashbyhq.com/grow-therapy/80716f86/application"),
+    # fragment as well as query
+    ("https://jobs.ashbyhq.com/lark/4ccf1e87?x=1#top",
+     "https://jobs.ashbyhq.com/lark/4ccf1e87/application"),
+    # already an apply url — must not double-append
+    ("https://jobs.ashbyhq.com/betterup/fa0a5d05/application",
+     "https://jobs.ashbyhq.com/betterup/fa0a5d05/application"),
+    # already an apply url WITH a query string
+    ("https://jobs.ashbyhq.com/betterup/fa0a5d05/application?src=LinkedIn",
+     "https://jobs.ashbyhq.com/betterup/fa0a5d05/application"),
+])
+def test_ashby_apply_url_strips_query_and_fragment(raw, expected):
+    assert _apply_url(raw) == expected
+
+
+def test_ashby_apply_url_never_puts_path_after_query():
+    # The precise failure signature: '/application' must never appear after a '?'.
+    for raw in [
+        "https://jobs.ashbyhq.com/headway/82fd0412?src=LinkedIn",
+        "https://jobs.ashbyhq.com/betterup/f0a6faee?departmentId=988d779c",
+        "https://jobs.ashbyhq.com/grow-therapy/80716f86?utm_source=x&Source=LinkedIn",
+    ]:
+        out = _apply_url(raw)
+        assert "?" not in out, f"query string must be dropped: {out}"
+        assert out.endswith("/application")

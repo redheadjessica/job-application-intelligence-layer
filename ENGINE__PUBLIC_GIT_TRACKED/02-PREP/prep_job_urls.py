@@ -115,11 +115,22 @@ def fetch_one(url: str, ashby_question_renderer=None) -> dict:
             meta["method"] = "ats"
             meta["structured_source"] = True
             questions = ats.get("questions") or []
-            if (not questions and ashby_question_renderer is not None
-                    and "ashbyhq.com" in urlparse(url).netloc.lower()):
+            # Detect Ashby by the SOURCE, not just the host: custom-domain Ashby jobs
+            # (e.g. `lark.com/careers/open-positions?ashby_jid=<uuid>`) are served by
+            # Ashby but their host is the employer's own domain, so a host-only check
+            # skipped question capture for them entirely (fixed 2026-07-29).
+            is_ashby = ("ashbyhq.com" in urlparse(url).netloc.lower()
+                        or "ashby_jid=" in url.lower()
+                        or "ashby" in str(ats.get("source") or "").lower())
+            if not questions and ashby_question_renderer is not None and is_ashby:
                 try:
-                    rendered = ashby_question_renderer(url) or []
-                except Exception:
+                    rendered = ashby_question_renderer(url, ats.get("apply_url")) or []
+                except Exception as exc:
+                    # Best-effort: never fail the fetch. But do NOT swallow silently —
+                    # a fully-silent except is what hid the broken apply-URL builder
+                    # (questions quietly came back empty for months of real URLs).
+                    print(f"  ! Ashby question render failed for {url}: "
+                          f"{type(exc).__name__}: {exc}")
                     rendered = []
                 if rendered:
                     questions = rendered
@@ -217,8 +228,8 @@ def main() -> None:
                 # Ashby posting-api never carries questions, so always render the
                 # apply page for them on the primary pass (best-effort; the render
                 # degrades to [] on any failure and never fails the fetch).
-                def ashby_renderer(u):
-                    return pjp._render_ashby_questions(browser, u)
+                def ashby_renderer(u, apply_hint=None):
+                    return pjp._render_ashby_questions(browser, u, apply_hint)
 
                 def primary(u):
                     return fetch_one(u, ashby_question_renderer=ashby_renderer)

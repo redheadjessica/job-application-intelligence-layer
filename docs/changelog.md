@@ -11,6 +11,27 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Ashby application-question capture was broken for ~every real URL (query-string bug); silent-except hid it
+
+The user spotted that two jobs reported "(none kept)" for application questions when both plainly have one — including the very posting used as the Ashby calibration example when this feature was built. Root cause was NOT the DOM scraper or the narrow filter (both verified working when given a correct URL); it was apply-URL construction in `_render_ashby_questions`:
+
+```
+url.rstrip("/") + "/application"
+```
+
+For any job URL carrying a query string this produced `.../<id>?src=LinkedIn/application` — `/application` landed AFTER the query string, the apply page never loaded, and the `except Exception: return []` swallowed it into a silent "no questions". Real URLs from LinkedIn/job boards essentially always carry `?src=` / `?departmentId=` / `?utm_source=`, so question capture was failing for nearly every Ashby job in practice — while the test suite passed because **every existing test used a clean, query-less URL.** Classic false-confidence: the one case the tests covered was the one case that worked.
+
+Fixes (all in `02-PREP/`):
+- New `ashby_apply_url()` builds the apply URL from the parsed PATH only (drops query + fragment), and is idempotent when the path already ends in `/application`.
+- `_render_ashby_questions()` now accepts an `apply_url_hint` and prefers the **ATS-provided** `applyUrl`. This is canonical and additionally fixes a second, independent gap: **custom-domain Ashby** jobs (e.g. `lark.com/careers?ashby_jid=<uuid>`) whose own host/path can't be turned into an apply URL at all.
+- `fetch_one()` now detects Ashby by SOURCE (`ashbyhq.com` host **or** `ashby_jid=` param **or** an ashby-ish `source`), not host alone — custom-domain Ashby jobs previously skipped question capture entirely.
+- The best-effort `except` now PRINTS the exception type/message instead of failing silently. The fully-silent except is what let a signature/selector break masquerade as "this job has no questions"; a surfaced warning would have caught this immediately.
+- Tests: added a parametrized regression suite for apply-URL construction covering single/multiple query params, utm params, fragments, trailing slashes, and already-`/application` URLs (with and without a query string), plus an assertion that `/application` never appears after a `?`. Also fixed the existing always-render test, whose single-arg stub renderer was masking the new signature via the same silent except. Suite: **63 passed**.
+
+Re-fetched every Ashby-sourced post in the active review folder with `--force`; question capture now populates correctly (compose-a-response essays and office-cadence questions both come through). Verified the remaining zero-question posts are legitimately zero — those postings expose only routine/identity/EEO fields (name/email/resume/LinkedIn/website/phone/current-location/sponsorship/gender/race/veteran), all of which the narrow filter is specified to exclude. This also corrected an earlier *over*-capture, where one post had listed several "questions" that were all routine fields (i.e. unfiltered).
+
+**Generic lesson worth keeping:** a test fixture set that only covers canonical/clean inputs can pass while the feature is broken for the input shape users actually have. Prefer fixtures drawn from real-world URLs (with tracking params and all), and never let a best-effort `except` degrade silently on a path whose empty result is indistinguishable from a legitimate empty result.
+
 ## 2026-07-29 — CLAUDE.md: durable Git checkpoint policy for all coding agents
 
 Added a "Git checkpoint policy (required)" section to `CLAUDE.md`, right after the changelog rule. Prompted by this session, where large amounts of completed engine work (prep completeness, rescore tooling) accumulated in the working tree across many turns before being committed — the user had to notice and checkpoint it herself. The rule makes checkpointing a completion requirement, not an afterthought: meaningful work isn't done until verified, changelogged, committed, and pushed. It codifies begin-task repo inspection (never mix/overwrite pre-existing user work), one-coherent-task-per-commit, before-commit checks (tests, `git diff --check`, stage only the task's files, run the privacy firewall, changelog-accuracy check, don't claim "shipped" without the implementation in the commit), commit+push the normal branch (never force-push, don't let a dirty tree accumulate), explicit exceptions (user opt-out, don't commit failing work to look clean, read-only work needs no commit), and a required per-task completion report (checks, changelog, commit hash+message, pushed?, tree clean?, any intentionally-uncommitted files). Reinforces the existing privacy rules (no candidate data/strategy/scores in the public changelog; no firewall override without explicit user approval of a reviewed false positive).

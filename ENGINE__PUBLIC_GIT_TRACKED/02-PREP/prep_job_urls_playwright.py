@@ -89,12 +89,33 @@ def extract_best_text(page) -> str:
     return candidates[0][2]
 
 
-def _render_ashby_questions(browser, url: str) -> list:
+def ashby_apply_url(url: str) -> str:
+    """Build an Ashby apply-page URL from a job URL.
+
+    BUG FIX (2026-07-29): this used to be `url.rstrip('/') + '/application'`, which
+    silently produced a broken URL whenever the job URL carried a query string —
+    e.g. `.../<id>?src=LinkedIn` became `.../<id>?src=LinkedIn/application`, so the
+    apply page never loaded and question capture degraded to [] with no error. Real
+    URLs from LinkedIn/job boards almost ALWAYS carry `?src=`, `?departmentId=`, or
+    `?utm_source=`, so in practice question capture was failing for nearly every
+    Ashby job while the clean-URL test case passed (false confidence). Build the
+    apply URL from the PATH only and drop query/fragment."""
+    p = urlparse(url)
+    path = (p.path or "").rstrip("/")
+    if not path.endswith("/application"):
+        path += "/application"
+    return f"{p.scheme or 'https'}://{p.netloc}{path}"
+
+
+def _render_ashby_questions(browser, url: str, apply_url_hint: str | None = None) -> list:
     """Best-effort scrape of an Ashby apply-page's form fields (the posting-api
     does NOT expose them). Wrapped defensively — any failure degrades to []. The
     fields are normalized + run through the shared narrow filter so only the
     thoughtful / job-material questions (compose essays, office-cadence) survive."""
-    apply_url = url if url.rstrip("/").endswith("application") else url.rstrip("/") + "/application"
+    # Prefer the ATS-provided apply URL when we have one: it is canonical and also
+    # handles CUSTOM-DOMAIN Ashby jobs (e.g. `lark.com/careers?ashby_jid=<uuid>`),
+    # whose own host/path can't be turned into an apply URL at all.
+    apply_url = ashby_apply_url(apply_url_hint or url)
     page = None
     try:
         page = browser.new_page()
