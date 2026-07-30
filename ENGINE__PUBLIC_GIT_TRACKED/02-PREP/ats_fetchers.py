@@ -241,6 +241,10 @@ _EXCLUDE_LABEL_RE = re.compile(
     # they say nothing about the job and need no thought to answer.
     r"(how|where) did you (hear|find out|learn) about|how were you referred|"
     r"referral source|"
+    # Uploads and profile links are standard fields whatever their label says.
+    r"upload (your |a |an )?|attach (your |a |an )?|"
+    r"\btwitter\b|x profile|\bbehance\b|\bdribbble\b|stack ?overflow|"
+    r"\bmailing address\b|street address|address line|city, state|zip code|postal code|"
     r"accommodations?.{0,40}(interview|application|process|recruit)"
     r")"
 )
@@ -295,20 +299,83 @@ def question_provides_employer_comp(q: dict) -> bool:
     return bool(_REVEAL_LABEL_RE.search(label) and re.search(r"(?i)(salary|compensation|pay|\$)", label))
 
 
+# Answer-choice vocabulary that is NEVER a place. An office-attendance question whose
+# options are acknowledgements ("Yes" / "No" / "I understand") used to leak those
+# options into Working Location(s) ("… or Yes or No" — the live Spring/Knit class).
+# Killed HERE, at the writer's source, not merely caught by the QA gate.
+_CHOICE_OPTION_RE = re.compile(
+    r"(?i)^(yes|no|maybe|n/?a|true|false|other|none|not sure|unsure|"
+    r"prefer not to (say|answer)|decline to (state|answer)|"
+    r"i (understand|agree|acknowledge|confirm|accept)\b.*|agree|disagree)[.!]?$")
+
+
+def _metroish_option(option) -> bool:
+    """True when an answer option reads as a PLACE rather than a choice/acknowledgement."""
+    s = str(option or "").strip()
+    if not s or _CHOICE_OPTION_RE.match(s):
+        return False
+    if not re.search(r"[A-Za-z]", s) or re.fullmatch(r"[\d\s./-]+", s):
+        return False
+    return True
+
+
 def parse_office_cadence(q: dict) -> Optional[dict]:
     """From an office-attendance question, return the employer's COMPLETE
     eligible-metro list + the cadence, verbatim-ish and PII-free. No mapping to
     any candidate city (that happens at vetting from jail.config.json).
+    Only PLACE-like options qualify as metros — a Yes/No acknowledgement option
+    structurally cannot reach a location field.
     Returns {"metros": [...], "cadence": str|None, "verbatim": str} or None."""
     if not question_provides_working_location(q):
         return None
     label = q.get("label") or ""
-    metros = [o for o in (q.get("options") or []) if o]
+    metros = [o for o in (q.get("options") or []) if _metroish_option(o)]
     cadence = None
     m = _CADENCE_RE.search(label)
     if m:
         cadence = m.group(1).strip()
     return {"metros": metros, "cadence": cadence, "verbatim": label.strip()}
+
+
+# --------------------------------------------------------------------------- #
+# Question classification (B7) — three mechanically separated concepts:
+#   "standard"    — always excluded (identity/contact/uploads/socials/authorization/
+#                   demographics/catch-alls); never captured, never answered.
+#   "logistical"  — informs Working Location / Office Expectation / employer comp;
+#                   captured, but NOT a written-response question (the answer-drafting
+#                   step gives guidance + a confirmation ask, never an essay).
+#   "substantive" — a thought-requiring compose-a-response question worth preparing.
+# --------------------------------------------------------------------------- #
+QUESTION_STANDARD = "standard"
+QUESTION_LOGISTICAL = "logistical"
+QUESTION_SUBSTANTIVE = "substantive"
+# A bare catch-all ("Additional information") is standard; wording that clearly asks a
+# substantive custom question ("Anything else about how you'd approach the role?") is not.
+_CATCHALL_RE = re.compile(
+    r"(?i)^(additional (information|comments|notes|details)|comments|"
+    r"anything else( you('|’)d like (us )?to (know|share|add))?|"
+    r"is there anything else.{0,40})[?.!]?$")
+_SUBSTANTIVE_WORDING_RE = re.compile(
+    r"(?i)\b(describe|tell us about|walk us through|explain|why do|why are|why would|"
+    r"how (do|did|would|have)|what (do|did|would|excites|interests|draws|made))\b")
+
+
+def classify_question(q: dict) -> str:
+    """One of QUESTION_STANDARD / QUESTION_LOGISTICAL / QUESTION_SUBSTANTIVE."""
+    q = q or {}
+    label = (q.get("label") or "").strip()
+    names = [(n or "").lower() for n in (q.get("names") or [q.get("name")]) if n]
+    if any(n.startswith("_systemfield_") for n in names) \
+            or any(n in _EXCLUDE_FIELD_NAMES for n in names):
+        return QUESTION_STANDARD
+    if _EXCLUDE_LABEL_RE.search(label.lower()):
+        return QUESTION_STANDARD
+    if _CATCHALL_RE.match(label) and not _SUBSTANTIVE_WORDING_RE.search(label):
+        return QUESTION_STANDARD
+    if _is_compose_type(q.get("type") or q.get("source_type")) \
+            or _SUBSTANTIVE_WORDING_RE.search(label):
+        return QUESTION_SUBSTANTIVE
+    return QUESTION_LOGISTICAL
 
 
 def filter_questions(questions: list[dict]) -> list[dict]:
@@ -328,9 +395,13 @@ def filter_questions(questions: list[dict]) -> list[dict]:
         label = q.get("label") or ""
         if _EXCLUDE_LABEL_RE.search(label.lower()):
             continue
+        if _CATCHALL_RE.match(label.strip()) and not _SUBSTANTIVE_WORDING_RE.search(label):
+            continue   # a bare "Additional information" catch-all is a standard field
         is_compose = _is_compose_type(q.get("type") or q.get("source_type"))
         reveals = question_provides_working_location(q) or bool(_REVEAL_LABEL_RE.search(label))
         if is_compose or reveals:
+            q = dict(q)
+            q["question_class"] = classify_question(q)
             kept.append(q)
     return kept
 

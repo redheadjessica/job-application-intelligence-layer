@@ -4379,3 +4379,126 @@ def test_backfill_replay_is_idempotent_for_a_no_change_refetch(tmp_path):
     snapshot = reg_path.read_text(encoding="utf-8")
     bf.backfill(root, reg_path, out=lambda *_: None)
     assert reg_path.read_text(encoding="utf-8") == snapshot
+
+
+# ===========================================================================
+# B7 — question-filter hardening: three mechanically separated concepts
+# (standard / logistical / substantive), and the Yes/No-into-location leak
+# killed at the WRITER, not just caught by the gate.
+# ===========================================================================
+def _q(label, qtype="input_text", options=(), required=False, name="qx"):
+    return {"label": label, "type": qtype, "required": required,
+            "name": name, "names": [name], "options": list(options)}
+
+
+@pytest.mark.parametrize("label,qtype", [
+    # identity / contact / uploads / socials / pronunciation
+    ("Upload your portfolio (optional)", "file"),
+    ("Attach a writing sample", "file"),
+    ("X profile", "input_text"),
+    ("Dribbble", "input_text"),
+    ("Name pronunciation", "input_text"),
+    ("Mailing address", "input_text"),
+    ("City, state, zip", "input_text"),
+    # authorization / sponsorship / demographics (already covered; re-pinned)
+    ("Are you legally authorized to work in the United States?", "select"),
+    ("Will you require sponsorship?", "select"),
+    ("Veteran status", "select"),
+    # bare catch-alls
+    ("Additional information", "textarea"),
+    ("Anything else you'd like us to know?", "textarea"),
+    ("Comments", "textarea"),
+])
+def test_standard_fields_are_always_excluded(label, qtype):
+    q = _q(label, qtype)
+    assert af.classify_question(q) == af.QUESTION_STANDARD, label
+    assert af.filter_questions([q]) == [], label
+
+
+def test_a_substantive_catch_all_is_kept():
+    """The exception the rule states: catch-all WORDING that clearly asks a
+    substantive custom question is not a standard field."""
+    q = _q("Anything else you'd like us to know about how you would approach "
+           "your first 90 days?", "textarea")
+    assert af.classify_question(q) == af.QUESTION_SUBSTANTIVE
+    assert len(af.filter_questions([q])) == 1
+
+
+@pytest.mark.parametrize("label,qtype,options,expected_class", [
+    # BetterUp/Bloomerang-style thoughtful questions -> substantive.
+    ("How does our mission resonate with you, and what draws you to this role?",
+     "textarea", (), af.QUESTION_SUBSTANTIVE),
+    ("Describe the most impactful product decision you have made.",
+     "textarea", (), af.QUESTION_SUBSTANTIVE),
+    # Office-attendance / location-choice selects -> logistical.
+    ("I understand this role requires attending an office at least 2 days per week. "
+     "Which office are you closest to?", "select",
+     ("San Francisco Bay Area", "New York City"), af.QUESTION_LOGISTICAL),
+    ("Which location are you applying for?", "select",
+     ("US Remote", "San Francisco"), af.QUESTION_LOGISTICAL),
+])
+def test_logistical_vs_substantive_classification(label, qtype, options, expected_class):
+    q = _q(label, qtype, options)
+    assert af.classify_question(q) == expected_class
+    kept = af.filter_questions([q])
+    if kept:
+        assert kept[0]["question_class"] == expected_class
+
+
+def test_kept_questions_carry_their_class_annotation():
+    res, kept = _ashby_result_with_questions()
+    classes = {q["label"][:20]: q["question_class"] for q in kept}
+    assert af.QUESTION_SUBSTANTIVE in classes.values()
+    assert af.QUESTION_LOGISTICAL in classes.values()
+
+
+# ---- The Spring/Knit leak class, killed at the writer -------------------------
+def test_yes_no_options_can_never_become_metros():
+    """An office-attendance question whose options are acknowledgements: the
+    cadence still informs Office Expectation, but the options NEVER reach
+    Working Location(s)."""
+    q = _q("This role requires working onsite 5 days a week from our office. "
+           "Are you able to do so?", "select", ("Yes", "No"), required=True)
+    parsed = af.parse_office_cadence(q)
+    assert parsed is not None
+    assert parsed["metros"] == []                  # structurally impossible to leak
+    assert parsed["cadence"] == "5 days a week"
+    out = pc.build_output_text("http://x", "PM", "Acme", _SYNTH_BODY,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 200,000",
+                                     "working_location": "San Francisco, CA"},
+                               questions=[dict(q, question_class="logistical")],
+                               methods_tried=["ats"])
+    wl_line = next(l for l in out.splitlines() if l.startswith("Working Location(s):"))
+    assert "Yes" not in wl_line and "No" not in wl_line
+    assert wl_line == "Working Location(s): SF"
+    assert "Office Expectation: 5 Days Per Week" in out
+    # The QA gate agrees (defense in depth, but the writer is the fix).
+    import qa_captures
+    assert not any("application-choice" in p
+                   for p in qa_captures.validate_capture(out, filename="acme__pm.txt"))
+
+
+@pytest.mark.parametrize("options,expected_metros", [
+    (("Yes", "No"), []),                                        # Spring/Knit
+    (("I understand and can commit to this", "No"), []),        # acknowledgement
+    (("Prefer not to say",), []),
+    (("San Francisco Bay Area", "New York City", "Yes"),        # mixed: places kept
+     ["San Francisco Bay Area", "New York City"]),
+    (("Austin, TX", "Washington, D.C."), ["Austin, TX", "Washington, D.C."]),
+])
+def test_metroish_option_filtering(options, expected_metros):
+    q = _q("Which office are you closest to? This role requires 2 days per week "
+           "in office.", "select", options)
+    parsed = af.parse_office_cadence(q)
+    assert parsed is not None
+    assert parsed["metros"] == expected_metros
+
+
+def test_the_betterup_office_question_still_supplies_its_metros():
+    """Recall preserved: real place options still flow into Working Location(s)."""
+    _res, kept = _ashby_result_with_questions()
+    office = _office_question(kept)
+    parsed = af.parse_office_cadence(office)
+    assert parsed["metros"] == ["San Francisco Bay Area", "New York City",
+                                "Austin, TX", "Washington, D.C."]

@@ -11,6 +11,25 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — B7: three question concepts, mechanically separated; the Yes/No leak killed at the writer
+
+`classify_question()` now separates what the filter previously blended: **standard** fields (always
+excluded — the vocabulary gained uploads/attachments, X/Behance/Dribbble/Stack Overflow profiles,
+mailing-address entry, name pronunciation, and bare "Additional information"-style catch-alls, while
+catch-all wording that clearly asks a substantive custom question is kept); **logistical** questions
+(inform Working Location / Office Expectation / employer comp, captured, but not written-response
+material); and **substantive** compose-a-response questions worth preparing. Kept questions carry
+their class annotation for the answer-drafting step.
+
+The Spring/Knit leak class — an office-attendance question's `Yes`/`No` answer options merged into
+`Working Location(s)` as if they were metros — is now impossible AT THE WRITER, not merely caught by
+the gate: `parse_office_cadence` only accepts PLACE-like options (acknowledgement/choice vocabulary
+and non-lexical options are rejected), so the cadence still informs Office Expectation while the
+options structurally cannot reach a location field. Mixed option lists keep their real places; the
+BetterUp office question's four metros still flow (recall pinned). Positive fixtures:
+BetterUp/Bloomerang-style thoughtful questions; negative/logistical fixtures: the upload / social /
+address / catch-all / acknowledgement-option classes. Suite: 615 → 630 green.
+
 ## 2026-07-30 — B6: ORIGINAL/LATEST hold across renames, moves, and legacy formats
 
 History discovery is by CANONICAL IDENTITY, never by current filename or directory. B5 supplied the
