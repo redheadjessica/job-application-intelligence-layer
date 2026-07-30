@@ -11,6 +11,26 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — B11: Application Question Drafts, with a derived skeleton the agent cannot re-word
+
+The tailoring step now appends `## Application Question Drafts` to the tailored-resume output. The
+section SKELETON is generated mechanically (`04-TAILOR/question_drafts.py`, CLI over the capture):
+each captured question's EXACT text in its heading, its class-specific drafting instruction under it,
+context lines quoted verbatim, `None Found` when the capture holds no questions — so the agent fills
+in answers under headings it structurally cannot re-word, re-order, or drop (the derived-not-composed
+lesson from the filename divergence). Per class: substantive questions get ONE concise answer drawn
+only from the candidate's profile, approved evidence, the JD, and voice guidance — never invented
+facts, with unverified facts routed to "Questions for the candidate"; logistical questions get
+guidance plus exactly what the candidate must confirm, never a guessed answer and never an essay; a
+standard field that somehow slipped into a capture gets a refusal note, not an answer. This is the
+lightest reliable chain — the cover-letter eval pipeline is explicitly NOT invoked.
+
+The tailor spec's old "Proposed Answers to Application Questions" section is replaced; the output
+section is now always present (its `None Found` state proves the questions were checked, not
+skipped). Fully generic — no personal answer text in any tracked file, pinned by a test; the spec
+text mandating the rules is itself pinned. (Correction: the B7 entry said 630; that suite count was
+641.) Suite: 641 → 650 green.
+
 ## 2026-07-30 — B7: three question concepts, mechanically separated; the Yes/No leak killed at the writer
 
 `classify_question()` now separates what the filter previously blended: **standard** fields (always
