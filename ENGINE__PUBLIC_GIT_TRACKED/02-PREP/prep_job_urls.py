@@ -163,6 +163,8 @@ def fetch_one(url: str, question_renderer=None, ashby_question_renderer=None) ->
             "compensation_raw": jobposting.get("compensation"),
             "location_raw": jobposting.get("location"),
             "apply_url": url,
+            "posted_date": jobposting.get("posted_date"),
+            "updated_date": jobposting.get("updated_date"),
             # A plain HTML scrape is only a STRUCTURED source when the page carried
             # its own JSON-LD JobPosting. Without that, a missing comp/location is
             # "could not verify" (capture_failed), NOT "not posted" — a render or the

@@ -3,6 +3,7 @@ Application URL: https://jobs.ashbyhq.com/betterup/fa0a5d05-39f9-47d5-9fc9-0a054
 Company: Betterup
 Role: Principal Product Manager
 Source: ashby-posting-api · Posting ID: fa0a5d05-39f9-47d5-9fc9-0a0540ff9018 · Captured: 2026-07-29 · Methods tried: ats, playwright
+Posted: 2026-03-25
 
 == NORMALIZED (for vetting) ==
 Employment Type: FullTime

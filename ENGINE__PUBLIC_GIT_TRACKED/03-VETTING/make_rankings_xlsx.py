@@ -61,6 +61,8 @@ H_COMPANY = "Company"
 H_TITLE = "Job Post Title + Link"
 H_WORKLOC = "Working Location"
 H_COMPRANGE = "Comp Range"
+H_POSTED = "Posted"           # the EMPLOYER's publication date (static ISO date; no age math)
+H_JOBFILE = "Job File"
 H_LANEFIT = "Lane Fit"
 H_LOCFIT = "Location Fit"
 H_COMPFIT = "Comp Fit"
@@ -172,7 +174,7 @@ COMP_LABEL_COLORS = {
 # Structural (non-score) column widths — these header strings don't change with score relabeling.
 WIDTHS = {
     "Applied Date? [You Fill In]": 16, H_STATUS: 30, H_LANE: 22, H_COMPANY: 18, H_TITLE: 46,
-    H_WORKLOC: 22, H_COMPRANGE: 12, "Have Intro? [You Add]": 14, "Your Notes? [You Add]": 26,
+    H_WORKLOC: 22, H_COMPRANGE: 12, H_POSTED: 12, "Have Intro? [You Add]": 14, "Your Notes? [You Add]": 26,
     "Decline/Down Date? [You Add]": 16, "Mission Fit Notes": 40, "Scope Fit Notes": 40,
     "Top Reasons Notes": 46, "Top Concerns": 46, "Job File": 28, "Base Resume Used": 26,
     H_LANEFIT: 22, H_LOCFIT: 18, H_COMPFIT: 16, H_DATACOMPLETE: 24, "Cover Letter?": 12,
@@ -410,6 +412,9 @@ INSTRUCTIONS = [
     ("Below the jobs is a legend of section colors. If you like visual breaks between groups, copy a bar in above a group after sorting — optional.", False),
     ("Pasting jobs into your own tracker? Copy only the job rows, NOT the legend bars, so you don't end up with duplicate dividers.", False),
     ("", False),
+    ("Posted", True),
+    ("\"Posted\" is the EMPLOYER's publication date from the job posting itself (blank when their job board didn't publish one) — not the date this batch was fetched. It is a fixed date on purpose: an age or \"days open\" number baked into a saved sheet goes stale and starts misleading you.", False),
+    ("", False),
     ("Colors & the dropdown", True),
     ("Status / Lane / Comp Fit cells are color-coded. Working Location + Location Fit share one fixed 4-color palette: green = remote genuinely available; yellow = acceptable home-metro office at exactly 1-3 days; orange = unknown location/cadence, >3 days, or open-ended minimums (\"3+ days\"); red = required in-person outside your home geography. In Google Sheets you can layer the native rounded \"chip\" dropdown on top if you prefer that look (that is a Sheets feature, not part of the file).", False),
     ("", False),
@@ -509,6 +514,18 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
             # Lane taxonomy repair ("Work Tools - X" -> "Work - X"); Lane Fit is
             # candidate data and is deliberately NOT touched.
             rec[H_LANE] = norm_contracts.normalize_lane(rec.get(H_LANE))
+    # Posted column (the employer's own publication date): present in CSVs written by current
+    # vet-jobs.js and filled by the norm_contracts pass. For OLDER CSVs, insert the header after
+    # Comp Range and read each row's captured "Posted:" provenance line, so regenerating any batch
+    # picks the date up. Blank stays blank — a posting whose ATS published no date is never guessed.
+    if H_POSTED not in headers:
+        insert_at = (headers.index(H_COMPRANGE) + 1) if H_COMPRANGE in headers else len(headers)
+        headers.insert(insert_at, H_POSTED)
+    base_dir = Path(input_csv).resolve().parent
+    for rec in records:
+        if not (rec.get(H_POSTED) or "").strip():
+            rec[H_POSTED] = norm_contracts.posted_date_from_capture(
+                rec.get(H_JOBFILE), base_dir=base_dir)
     # Data Completeness column: present in CSVs written by current vet-jobs.js. For OLDER CSVs (pre-
     # column), synthesize it here — insert the header after Comp Fit and derive each value from the
     # row's own comp/location text — so regenerating any batch still gets the column + coloring + flag.
@@ -541,7 +558,7 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
     # Free-text columns read left-to-right like prose — left-align them (Jessica, 7/16/26). Everything
     # else (dates, scores, short fit labels) stays centered.
     LEFT_ALIGN_HEADERS = {
-        H_LANE, H_COMPANY, H_TITLE, H_WORKLOC,
+        H_LANE, H_COMPANY, H_TITLE, H_WORKLOC, H_POSTED,
         "Have Intro? [You Add]", "Your Notes? [You Add]", "Decline/Down Date? [You Add]",
         "Mission Fit Notes", "Scope Fit Notes", "Top Reasons Notes", "Top Concerns",
         "Job File", "Base Resume Used", H_LANEFIT, H_LOCFIT, H_COMPFIT,

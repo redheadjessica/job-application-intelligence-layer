@@ -64,6 +64,80 @@ UUID_RE = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I
 )
 
+
+# --------------------------------------------------------------------------- #
+# Posting dates (2026-07-29)
+#
+# Every ATS we talk to carries a publication date in a payload we ALREADY parse, and we
+# discarded all of them — the only date in a capture was `Captured:` (our own fetch date),
+# so nothing downstream could tell a week-old posting from a nine-month-old one. Per ATS:
+#   Greenhouse  first_published / updated_at
+#   Ashby       publishedAt / updatedAt
+#   Rippling    createdOn / updatedOn
+#   Workable    published
+#   Lever       createdAt  (epoch MILLISECONDS, not seconds)
+#   Workday     postedOn is a RELATIVE string ("Posted 30 Days Ago") -> unusable; the CxS
+#               payload's startDate is a real ISO date and is used instead
+#   generic     JSON-LD datePosted
+# Everything is normalized to a plain `YYYY-MM-DD`. NEVER fabricate: an unparseable or
+# relative value yields None and the field is simply omitted.
+# --------------------------------------------------------------------------- #
+_ISO_DATE_PREFIX_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})")
+_EPOCH_RE = re.compile(r"^\d{10,13}$")
+
+
+def _epoch_to_date(value) -> Optional[str]:
+    """Epoch seconds OR milliseconds -> 'YYYY-MM-DD' (UTC). Lever uses milliseconds."""
+    from datetime import datetime, timezone
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    if v <= 0:
+        return None
+    if v > 1e11:  # milliseconds
+        v = v / 1000.0
+    try:
+        return datetime.fromtimestamp(v, tz=timezone.utc).date().isoformat()
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def normalize_posting_date(value) -> Optional[str]:
+    """Any ATS date value -> plain 'YYYY-MM-DD', or None.
+
+    Accepts ISO timestamps with times/TZ offsets ('2026-06-13T09:05:32-04:00' ->
+    '2026-06-13'; the offset and time are stripped, not shifted), plain dates, and epoch
+    seconds/milliseconds. Returns None — never a guess — for empty values, relative wording
+    ('Posted 30 Days Ago'), and anything else unparseable."""
+    from datetime import date as _date
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return _epoch_to_date(value)
+    s = str(value).strip()
+    if not s:
+        return None
+    if _EPOCH_RE.match(s):
+        return _epoch_to_date(int(s))
+    m = _ISO_DATE_PREFIX_RE.match(s)
+    if not m:
+        return None
+    y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    try:
+        _date(y, mo, d)
+    except ValueError:
+        return None
+    return f"{y:04d}-{mo:02d}-{d:02d}"
+
+
+def _dates(posted, updated=None) -> dict:
+    """The two date keys for a fetcher result, normalized. An `updated` equal to (or
+    unparseable relative to) `posted` is still recorded — build_output_text decides
+    whether to show it."""
+    return {"posted_date": normalize_posting_date(posted),
+            "updated_date": normalize_posting_date(updated)}
+
 # Normalized result shape returned by every fetcher:
 #   {
 #     "title": str,
@@ -80,6 +154,10 @@ UUID_RE = re.compile(
 #     "benefits": str | None,             # short summary mined from prose (soft)
 #     "equity": str | None,               # short summary mined from prose (soft)
 #     "apply_url": str | None,
+#     "employer_apply_url": str | None,   # employer-hosted apply page, kept verbatim when
+#                                         # apply_url was replaced by a canonical deep link
+#     "posted_date": str | None,          # "YYYY-MM-DD" — when the employer published it
+#     "updated_date": str | None,         # "YYYY-MM-DD" — last edit, when the ATS exposes one
 #     "posting_id": str | None,
 #     "source": str,                      # e.g. "ashby-posting-api"
 #     "comp_expected": bool,              # ATS says comp SHOULD be present
@@ -592,6 +670,7 @@ def _ashby_job_to_result(job: dict, org: str) -> Optional[dict]:
         "benefits": benefits,
         "equity": equity,
         "apply_url": job.get("applyUrl") or job.get("jobUrl"),
+        **_dates(job.get("publishedAt"), job.get("updatedAt")),
         "posting_id": str(job.get("id")) if job.get("id") else None,
         "source": "ashby-posting-api",
         "comp_expected": comp_expected,
@@ -980,6 +1059,47 @@ def _greenhouse_pay(job: dict) -> tuple[Optional[str], Optional[str]]:
     return joined, joined
 
 
+# --------------------------------------------------------------------------- #
+# Canonical Greenhouse apply URL (2026-07-29)
+#
+# A Greenhouse job's `absolute_url` is whatever the employer configured. Most employers point
+# it at a real deep link (careers.<co>.com/positions/<id>, <co>.com/jobs/apply/<id>/…), which
+# we keep. But some point it at their LISTING or SEARCH page and rely on `?gh_jid=<id>` to
+# redirect client-side: stripe.com/jobs/search?gh_jid=, pinterestcareers.com/jobs/?gh_jid=,
+# ordergroove.com/jobs/?gh_jid=, careers.onepeloton.com/en/all-jobs/?gh_jid=. Saved as the
+# Application URL, those are near-useless later — they load a job SEARCH, not the posting.
+#
+# Detection is generic, not a host list: the id is absent from the PATH, present in the QUERY,
+# and the path's last segment is a listing-ish one. Then we prefer the canonical ATS deep link
+# and preserve the employer URL verbatim in the archival block so nothing is lost.
+# --------------------------------------------------------------------------- #
+_LISTING_PATH_SEGMENTS = {"jobs", "job", "search", "all-jobs", "openings", "open-roles"}
+
+
+def canonical_greenhouse_apply_url(board: str, job_id) -> Optional[str]:
+    """The canonical Greenhouse deep link for a posting."""
+    if not board or not job_id:
+        return None
+    return f"https://job-boards.greenhouse.io/{board}/jobs/{job_id}"
+
+
+def greenhouse_apply_url_is_listing_page(apply_url: Optional[str], job_id) -> bool:
+    """True when an employer-hosted Greenhouse apply URL is a LISTING/SEARCH page that only
+    carries the job id in its query string (so it depends on a redirect), rather than a real
+    deep link whose PATH contains the id."""
+    if not apply_url or not job_id:
+        return False
+    jid = str(job_id)
+    parsed = urlparse(apply_url)
+    path = (parsed.path or "").lower()
+    if jid in path:
+        return False              # a genuine deep link — keep it
+    if jid not in (parsed.query or ""):
+        return False              # id isn't in the query either; don't second-guess it
+    last = path.rstrip("/").rsplit("/", 1)[-1]
+    return last in _LISTING_PATH_SEGMENTS
+
+
 def _greenhouse_job_to_result(job: dict, board: str, company: str, url: str) -> Optional[dict]:
     """Pure Greenhouse job-object -> normalized result (unit-testable vs a saved
     boards-API fixture)."""
@@ -1002,6 +1122,17 @@ def _greenhouse_job_to_result(job: dict, board: str, company: str, url: str) -> 
     # question (if any survived the filter) enriches it downstream.
     working_location = location or office_str
 
+    # Prefer the canonical ATS deep link over an employer LISTING/SEARCH page that only
+    # redirects via ?gh_jid=; the employer URL is preserved verbatim either way.
+    employer_apply_url = job.get("absolute_url")
+    apply_url = employer_apply_url or url
+    employer_apply_verbatim = None
+    if greenhouse_apply_url_is_listing_page(employer_apply_url, job.get("id")):
+        canonical = canonical_greenhouse_apply_url(board, job.get("id"))
+        if canonical:
+            apply_url = canonical
+            employer_apply_verbatim = employer_apply_url
+
     return {
         "title": (job.get("title") or "").strip() or "Unknown Title",
         "company": company,
@@ -1016,7 +1147,9 @@ def _greenhouse_job_to_result(job: dict, board: str, company: str, url: str) -> 
         "cadence_raw": None,
         "benefits": benefits,
         "equity": equity,
-        "apply_url": job.get("absolute_url") or url,
+        "apply_url": apply_url,
+        "employer_apply_url": employer_apply_verbatim,
+        **_dates(job.get("first_published"), job.get("updated_at")),
         "posting_id": str(job.get("id")) if job.get("id") else None,
         "source": "greenhouse-boards-api",
         # GH commonly omits pay even with pay_transparency=true, so an empty comp
@@ -1322,6 +1455,8 @@ def _fetch_lever(url: str, timeout: int = 20) -> Optional[dict]:
         "benefits": benefits,
         "equity": equity,
         "apply_url": job.get("applyUrl") or job.get("hostedUrl") or url,
+        # Lever's createdAt is epoch MILLISECONDS (13 digits), unlike every other ATS here.
+        **_dates(job.get("createdAt"), job.get("updatedAt")),
         "posting_id": posting_id,
         "source": "lever-postings-api",
         "comp_expected": False,
@@ -1576,6 +1711,7 @@ def _rippling_job_to_result(job: dict, board: str, url: Optional[str] = None) ->
         "benefits": benefits,
         "equity": equity,
         "apply_url": job_url,
+        **_dates(job.get("createdOn"), job.get("updatedOn")),
         "posting_id": str(job.get("uuid")) if job.get("uuid") else None,
         "source": "rippling-ats-api",
         # Rippling doesn't declare whether comp SHOULD be present, so an empty
@@ -1722,6 +1858,7 @@ def _workable_job_to_result(job: dict, subdomain: str, company: str,
         "benefits": benefits,
         "equity": equity,
         "apply_url": apply_url,
+        **_dates(job.get("published")),
         "posting_id": str(shortcode) if shortcode else None,
         "source": "workable-api",
         "comp_expected": False,
@@ -1822,6 +1959,11 @@ def _workday_payload_to_result(payload: dict, url: Optional[str] = None) -> Opti
         "benefits": benefits,
         "equity": equity,
         "apply_url": info.get("externalUrl") or url,
+        # Workday's `postedOn` is a RELATIVE string ("Posted 30 Days Ago") — unusable, and
+        # normalize_posting_date rejects it rather than fabricating a date. `startDate` is a
+        # real ISO date and is the only absolute date the CxS payload exposes, so it is the
+        # fallback (nearest available publication signal, not a literal publish timestamp).
+        **_dates(normalize_posting_date(info.get("postedOn")) or info.get("startDate")),
         "posting_id": (info.get("jobReqId") or info.get("id") or None),
         "source": "workday-cxs-api",
         "comp_expected": False,
@@ -1904,6 +2046,9 @@ def extract_jsonld_jobposting(html_text: str) -> Optional[dict]:
                     "compensation": comp,
                     "hiring_organization": _jsonld_org_name(node.get("hiringOrganization")),
                     "title": (str(node.get("title")).strip() or None) if node.get("title") else None,
+                    # The only posting date a generic career page reliably publishes.
+                    "posted_date": normalize_posting_date(node.get("datePosted")),
+                    "updated_date": normalize_posting_date(node.get("dateModified")),
                 }
     return None
 

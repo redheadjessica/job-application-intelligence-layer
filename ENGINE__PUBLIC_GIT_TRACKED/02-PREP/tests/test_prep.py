@@ -1453,3 +1453,178 @@ def test_location_conflict_only_when_city_sets_are_disjoint():
             "compensation": "USD 200,000", "working_location": "Austin, TX; New York, NY"}
     assert pc.assess_completeness(dict(base), disjoint, [])["working_location"] == pc.CONFLICTING
     assert pc.assess_completeness(dict(base), overlap, [])["working_location"] == pc.FOUND
+
+
+# ===========================================================================
+# Posting dates — every ATS carries one and we used to discard all of them.
+# The only date in a capture was `Captured:` (our fetch date), so nothing
+# downstream could tell a week-old posting from a nine-month-old one.
+# ===========================================================================
+@pytest.mark.parametrize("raw,expected", [
+    ("2026-06-13T09:05:32-04:00", "2026-06-13"),   # ISO + TZ offset (Greenhouse)
+    ("2026-03-25T17:55:55.843+00:00", "2026-03-25"),  # Ashby
+    ("2026-07-14T00:00:00.000Z", "2026-07-14"),    # Workable
+    ("2026-06-29", "2026-06-29"),                  # plain date (Workday startDate)
+    (1782932070272, "2026-07-01"),                 # Lever: epoch MILLISECONDS
+    ("1782932070272", "2026-07-01"),
+    # Never fabricate:
+    ("Posted 30 Days Ago", None),                  # Workday's relative wording
+    ("Posted Yesterday", None),
+    ("", None), (None, None), ("not a date", None),
+    ("2026-13-45T00:00:00Z", None),                # impossible date
+    (0, None), (True, None),
+])
+def test_posting_date_normalization(raw, expected):
+    assert af.normalize_posting_date(raw) == expected
+
+
+def test_posting_date_is_idempotent():
+    once = af.normalize_posting_date("2026-06-13T09:05:32-04:00")
+    assert af.normalize_posting_date(once) == once
+
+
+def test_every_ats_fixture_yields_a_posted_date():
+    """Real payloads, real fields — all of these were already parsed and discarded."""
+    gh = af._greenhouse_job_to_result(
+        _load("greenhouse_bloomerang_4705550005.json"), "bloomerang", "Bloomerang", "http://x")
+    assert gh["posted_date"] == "2026-06-13" and gh["updated_date"] == "2026-06-13"
+
+    ashby = af._ashby_job_to_result(_load("ashby_betterup_principal_pm.json"), "betterup")
+    assert ashby["posted_date"] == "2026-03-25"
+
+    rip = af._rippling_job_to_result(
+        _load("rippling_workplace_coordinator.json"), "board", "http://x")
+    assert rip["posted_date"] == "2026-06-29"
+
+    wk = af._workable_job_to_result(
+        _load("workable_feeld_cpo.json"), "feeldco", "Feeld", "http://x")
+    assert wk["posted_date"] == "2026-07-14"
+
+    wd = af._workday_payload_to_result(_load("workday_wonder_assoc_dir_product.json"), "http://x")
+    # Workday's postedOn is the relative string "Posted 30 Days Ago" — rejected, so the
+    # payload's real ISO startDate is used instead of inventing a date.
+    assert wd["posted_date"] == "2026-06-29"
+
+
+def test_lever_posting_date_converts_epoch_milliseconds():
+    job = _load("lever_findem_posting.json")
+    assert isinstance(job["createdAt"], int) and job["createdAt"] > 10 ** 12
+    assert af.normalize_posting_date(job["createdAt"]) == "2026-07-01"
+
+
+def test_jsonld_date_posted_is_captured_for_generic_pages():
+    html = """<script type="application/ld+json">{"@type":"JobPosting","title":"PM",
+      "employmentType":"FULL_TIME","datePosted":"2026-05-02T00:00:00Z",
+      "dateModified":"2026-05-09"}</script>"""
+    jp = af.extract_jsonld_jobposting(html)
+    assert jp["posted_date"] == "2026-05-02" and jp["updated_date"] == "2026-05-09"
+
+
+def test_posted_provenance_line_is_emitted_and_omitted_correctly():
+    base = dict(title="PM", source="greenhouse-boards-api")
+    out = pc.build_output_text("http://x", "PM", "Acme", "Responsibilities...",
+                               meta={**base, "posted_date": "2026-06-13",
+                                     "updated_date": "2026-06-20"},
+                               field_status={"conflicts": []}, captured="2026-07-29")
+    assert "Posted: 2026-06-13 · Updated: 2026-06-20" in out
+    # No update (or an update equal to the posted date) -> just the posted date.
+    same = pc.build_output_text("http://x", "PM", "Acme", "Responsibilities...",
+                                meta={**base, "posted_date": "2026-06-13",
+                                      "updated_date": "2026-06-13"},
+                                field_status={"conflicts": []}, captured="2026-07-29")
+    assert "Posted: 2026-06-13\n" in same and "Updated" not in same
+    # No posted date at all -> the whole line is omitted (never a fabricated date).
+    none = pc.build_output_text("http://x", "PM", "Acme", "Responsibilities...",
+                                meta=base, field_status={"conflicts": []}, captured="2026-07-29")
+    assert "Posted:" not in none
+
+
+def test_manifest_records_the_posting_dates(tmp_path):
+    src = _batch_source(tmp_path)
+
+    def fetch(u):
+        return {"ok": True, "title": "PM", "company": "Acme", "body": _LONG_BODY,
+                "method": "ats", "error": None,
+                "meta": {"title": "PM", "source": "greenhouse-boards-api",
+                         "structured_source": True, "compensation": "USD 200,000",
+                         "working_location": "Remote", "posted_date": "2026-06-13",
+                         "updated_date": "2026-06-20"},
+                "questions": []}
+
+    manifest = pc.process_urls(["https://example.com/job/9"], src, fetch)
+    entry = manifest["entries"][0]
+    assert entry["posted_date"] == "2026-06-13"
+    assert entry["updated_date"] == "2026-06-20"
+    assert "Posted: 2026-06-13 · Updated: 2026-06-20" in (
+        src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
+
+
+# ===========================================================================
+# Canonical apply-URL deep links — four employer-hosted Greenhouse apply URLs are
+# LISTING/SEARCH pages that only redirect via ?gh_jid=. Saved as the Application
+# URL, they open a job SEARCH later, not the posting.
+# ===========================================================================
+_GH_JOB_ID = 4705550005
+
+
+def _gh_result(absolute_url):
+    job = dict(_load("greenhouse_bloomerang_4705550005.json"))
+    job["absolute_url"] = absolute_url
+    job["id"] = _GH_JOB_ID
+    return af._greenhouse_job_to_result(job, "acmeboard", "Acme", "http://original")
+
+
+@pytest.mark.parametrize("listing_url", [
+    f"https://stripe.com/jobs/search?gh_jid={_GH_JOB_ID}",
+    f"https://www.pinterestcareers.com/jobs/?gh_jid={_GH_JOB_ID}",
+    f"https://www.ordergroove.com/jobs/?gh_jid={_GH_JOB_ID}",
+    f"https://careers.onepeloton.com/en/all-jobs/?gh_jid={_GH_JOB_ID}&gh_src=abc",
+])
+def test_listing_page_apply_urls_become_canonical_deep_links(listing_url):
+    assert af.greenhouse_apply_url_is_listing_page(listing_url, _GH_JOB_ID) is True
+    res = _gh_result(listing_url)
+    assert res["apply_url"] == f"https://job-boards.greenhouse.io/acmeboard/jobs/{_GH_JOB_ID}"
+    # The employer URL is preserved verbatim — nothing is lost.
+    assert res["employer_apply_url"] == listing_url
+    out = pc.build_output_text("http://original", res["title"], res["company"], res["text"],
+                               meta=res, questions=[], methods_tried=["ats"])
+    assert f"Application URL: https://job-boards.greenhouse.io/acmeboard/jobs/{_GH_JOB_ID}" in out
+    assert f"Employer apply page (verbatim): {listing_url}" in out
+
+
+@pytest.mark.parametrize("deep_link", [
+    f"https://careers.airbnb.com/positions/{_GH_JOB_ID}",
+    f"https://asana.com/jobs/apply/{_GH_JOB_ID}/product-manager",
+    f"https://job-boards.greenhouse.io/acmeboard/jobs/{_GH_JOB_ID}",
+    f"https://boards.greenhouse.io/acmeboard/jobs/{_GH_JOB_ID}?gh_src=x",
+])
+def test_real_employer_deep_links_are_kept_unchanged(deep_link):
+    assert af.greenhouse_apply_url_is_listing_page(deep_link, _GH_JOB_ID) is False
+    res = _gh_result(deep_link)
+    assert res["apply_url"] == deep_link
+    assert res["employer_apply_url"] is None
+    out = pc.build_output_text("http://original", res["title"], res["company"], res["text"],
+                               meta=res, questions=[], methods_tried=["ats"])
+    assert "Employer apply page (verbatim):" not in out
+
+
+def test_listing_detection_needs_the_id_in_the_query_and_not_the_path():
+    # A listing-ish path with no job id anywhere: don't second-guess it.
+    assert af.greenhouse_apply_url_is_listing_page("https://acme.com/jobs/", _GH_JOB_ID) is False
+    # Missing pieces are never a match.
+    assert af.greenhouse_apply_url_is_listing_page(None, _GH_JOB_ID) is False
+    assert af.greenhouse_apply_url_is_listing_page("https://acme.com/jobs/?gh_jid=1", None) is False
+
+
+def test_other_ats_apply_urls_are_untouched():
+    """The rewrite is Greenhouse-specific: no other ATS result gains an override."""
+    ashby = af._ashby_job_to_result(_load("ashby_betterup_principal_pm.json"), "betterup")
+    assert ashby["apply_url"].endswith("/application")
+    assert ashby.get("employer_apply_url") is None
+    rip = af._rippling_job_to_result(
+        _load("rippling_workplace_coordinator.json"), "board", "http://x")
+    assert rip.get("employer_apply_url") is None
+    wk = af._workable_job_to_result(
+        _load("workable_feeld_cpo.json"), "feeldco", "Feeld", "http://x")
+    assert "apply.workable.com" in wk["apply_url"]
+    assert wk.get("employer_apply_url") is None

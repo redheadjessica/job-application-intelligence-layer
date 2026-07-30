@@ -279,7 +279,7 @@ def test_application_name_survives_the_real_filesystem_layer(tmp_path):
 # --------------------------------------------------------------------------- #
 HEADERS = [
     "Applied Date? [You Fill In]", "Status? [You Change]", "Lane", "Company",
-    "Job Post Title + Link", "Working Location", "Comp Range",
+    "Job Post Title + Link", "Working Location", "Comp Range", "Posted",
     "Have Intro? [You Add]", "Your Notes? [You Add]", "Decline/Down Date? [You Add]",
     "FINAL Weighted Score", "How They May See Your Profile", "Your Desire Score",
     "Culture Fit", "Comp + Lifestyle Fit",
@@ -302,7 +302,7 @@ def make_row(company="Acme", location="Remote", comp="190-210", lane="Health - M
              status="Apply ASAP: High Prio"):
     return [
         "", status, lane, company, f"Senior PM | https://example.com/{company.lower()}",
-        location, comp, "", "", "",
+        location, comp, "", "", "", "",
         "80", "80", "80", "80", "80",
         "m", "s", "r", "c",
         f"{company.lower()}.txt", "", lane_fit, loc_fit, comp_fit, "✓ complete", "",
@@ -453,3 +453,132 @@ def test_xlsx_comp_cells_recolored_by_midpoint_rule(tmp_path):
         assert ws.cell(r, cf_col).value == label, f"Comp Fit label for {raw!r}"
         assert cell_hex(ws.cell(r, cr_col)) == hexcode, f"Comp Range fill for {raw!r}"
         assert cell_hex(ws.cell(r, cf_col)) == hexcode, f"Comp Fit fill for {raw!r}"
+
+# --------------------------------------------------------------------------- #
+# Posted column — the EMPLOYER's publication date, read back out of the capture.
+# Static ISO date by design: no age / "days open" math, which would go stale in a
+# saved sheet. Filled by the same back-fill mechanism as the other contract columns,
+# so regenerating an OLD rankings CSV picks the date up too.
+# --------------------------------------------------------------------------- #
+CAPTURE_TEMPLATE = """URL: https://example.com/job/1
+Application URL: https://example.com/job/1
+Company: {company}
+Role: Senior PM
+Source: greenhouse-boards-api · Posting ID: 1 · Captured: 2026-07-29 · Methods tried: ats
+{posted}
+== NORMALIZED (for vetting) ==
+Working Location: Remote   [found]
+
+--- JOB TEXT START ---
+body
+--- JOB TEXT END ---
+"""
+
+
+def write_capture(batch_root, company, posted="Posted: 2026-06-13"):
+    src = batch_root / "3 - Source Material" / "All Job Posts (full text)"
+    src.mkdir(parents=True, exist_ok=True)
+    path = src / f"{company.lower()}.txt"
+    path.write_text(CAPTURE_TEMPLATE.format(company=company, posted=posted), encoding="utf-8")
+    return path
+
+
+def test_posted_is_read_out_of_the_capture_provenance_line(tmp_path):
+    write_capture(tmp_path, "Acme")
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    assert norm_contracts.posted_date_from_capture("acme.txt", base_dir=rankings) == "2026-06-13"
+    # Absent line / absent file -> blank, never a guess.
+    write_capture(tmp_path, "NoDate", posted="")
+    assert norm_contracts.posted_date_from_capture("nodate.txt", base_dir=rankings) == ""
+    assert norm_contracts.posted_date_from_capture("missing.txt", base_dir=rankings) == ""
+    assert norm_contracts.posted_date_from_capture("", base_dir=rankings) == ""
+
+
+def test_cli_pass_fills_the_posted_column_from_the_captures(tmp_path):
+    write_capture(tmp_path, "Acme")
+    write_capture(tmp_path, "NoDate", posted="")
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    csv_path = rankings / "b-rankings.csv"
+    write_csv(csv_path, [make_row(company="Acme"), make_row(company="NoDate")])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    pi = HEADERS.index("Posted")
+    assert rows[1][pi] == "2026-06-13"
+    assert rows[2][pi] == ""          # employer published no date -> stays blank
+    # It is a static date: no age/"days open" value is ever written.
+    assert "days" not in rows[1][pi]
+
+
+def test_a_posted_value_already_in_the_sheet_is_never_overwritten(tmp_path):
+    write_capture(tmp_path, "Acme")
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    csv_path = rankings / "b-rankings.csv"
+    row = make_row(company="Acme")
+    row[HEADERS.index("Posted")] = "2020-01-01"
+    write_csv(csv_path, [row])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    assert rows[1][HEADERS.index("Posted")] == "2020-01-01"
+
+
+LEGACY_HEADERS = [h for h in HEADERS if h != "Posted"]
+
+
+def write_legacy_csv(path, rows):
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(LEGACY_HEADERS)
+        for r in rows:
+            w.writerow(r)
+
+
+def legacy_row(**kw):
+    row = make_row(**kw)
+    del row[HEADERS.index("Posted")]
+    return row
+
+
+def test_an_old_csv_without_the_column_gets_it_inserted_and_filled(tmp_path):
+    write_capture(tmp_path, "Acme")
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    csv_path = rankings / "old-rankings.csv"
+    write_legacy_csv(csv_path, [legacy_row(company="Acme")])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    # Inserted right after Comp Range, ahead of the editable columns; every other column
+    # keeps its meaning.
+    assert rows[0] == HEADERS
+    assert rows[0][rows[0].index("Comp Range") + 1] == "Posted"
+    assert rows[0].index("Posted") < rows[0].index("Have Intro? [You Add]")
+    assert rows[1][HEADERS.index("Posted")] == "2026-06-13"
+    assert rows[1][HEADERS.index("Comp Range")] == "190-210"
+    assert rows[1][HEADERS.index("Job File")] == "acme.txt"
+
+
+def test_posted_column_reaches_the_written_spreadsheet(tmp_path):
+    write_capture(tmp_path, "Acme")
+    cfg_path = tmp_path / "jail.config.json"
+    cfg_path.write_text(json.dumps(CFG), encoding="utf-8")
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    csv_path = rankings / "batch-rankings.csv"
+    xlsx_path = rankings / "batch-rankings.xlsx"
+    # A LEGACY csv (no Posted column) that never went through the CLI still regenerates
+    # with the column populated — the XLSX build re-runs the same back-fill on read.
+    write_legacy_csv(csv_path, [legacy_row(company="Acme")])
+    make_rankings_xlsx.build(str(csv_path), str(xlsx_path), config_path=str(cfg_path))
+    wb = load_workbook(str(xlsx_path))
+    ws = wb["Job Rankings"]
+    headers = [c.value for c in ws[1]]
+    assert headers[headers.index("Comp Range") + 1] == "Posted"
+    col = headers.index("Posted") + 1
+    assert ws.cell(2, col).value == "2026-06-13"
+    assert ws.cell(2, col).alignment.horizontal == "left"
+    assert ws.column_dimensions[ws.cell(1, col).column_letter].width == 12

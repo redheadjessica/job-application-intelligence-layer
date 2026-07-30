@@ -489,14 +489,18 @@ function csvCell(v) {
 }
 const laneFitStr = (lf) => lf ? `${lf.primary_lane} (${lf.confidence})${lf.secondary_lane ? ' · +' + lf.secondary_lane : ''}` : ''
 
-// 24-column tracker layout, exact order: essential job info -> the 3 human-editable workflow
-// columns (positions 8-10) -> the SCORE BLOCK (5 columns, contiguous at positions 11-15) -> notes ->
-// Job File -> Base Resume Used (filled later by the tailor step; blank at vet time) -> AI fit detail.
-// CSV and XLSX share this exact header set + order. The 5 score-column labels are DYNAMIC — resolved
-// above from score-dimensions.json (or the candidate's scoring card, where it overrides weights).
+// 25-column tracker layout, exact order: essential job info (incl. `Posted`, the employer's own
+// publication date, right after Comp Range so the human-scannable block stays contiguous and ahead
+// of the editable columns) -> the 3 human-editable workflow columns -> the SCORE BLOCK (5 columns,
+// contiguous) -> notes -> Job File -> Base Resume Used (filled later by the tailor step; blank at
+// vet time) -> AI fit detail. CSV and XLSX share this exact header set + order. The 5 score-column
+// labels are DYNAMIC — resolved above from score-dimensions.json (or the candidate's scoring card,
+// where it overrides weights).
+// `Posted` is written BLANK here on purpose: it is not model output. The norm_contracts pass below
+// fills it by reading each row's captured job file, which is also what back-fills an old CSV.
 const HEADERS = [
   'Applied Date? [You Fill In]', 'Status? [You Change]', 'Lane', 'Company', 'Job Post Title + Link',
-  'Working Location', 'Comp Range',
+  'Working Location', 'Comp Range', 'Posted',
   'Have Intro? [You Add]', 'Your Notes? [You Add]', 'Decline/Down Date? [You Add]',
   LABELS.final, LABELS.market, LABELS.desire, LABELS.style, LABELS.practicality,
   'Mission Fit Notes', 'Scope Fit Notes', 'Top Reasons Notes', 'Top Concerns',
@@ -514,7 +518,7 @@ const HEADERS = [
 function dataCells(r) {
   return [
     '', r.status, r.lane, r.company, r.title_and_link,
-    r.location, r.comp_range,
+    r.location, r.comp_range, '',
     '', '', '',
     r.final_score, r.market_perception_score, r.desire_score, r.company_style_score, r.practicality_score,
     r.mission_fit_notes, r.scope_fit_notes, r.top_reasons, r.top_concerns,
@@ -602,7 +606,8 @@ Return the list of paths you wrote.`,
 // ---- Mechanically normalize the output-contract columns of the CSV (repair-or-fail-loudly) ----
 // norm_contracts.py is the ONE canonical normalizer (no JS port): it enforces the Working Location
 // grammar, the Comp Range N-N format (re-deriving Comp Fit via the midpoint rule), and the Lane
-// taxonomy on the CSV in place, printing every repair, BEFORE the XLSX build.
+// taxonomy on the CSV in place, printing every repair, BEFORE the XLSX build. The same pass fills
+// the `Posted` column from each row's captured `Posted:` provenance line.
 const NORM_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['ok'],
   properties: { ok: { type: 'boolean' }, output: { type: 'string', description: 'repair/warning lines the script printed, or ""' }, message: { type: 'string' } },

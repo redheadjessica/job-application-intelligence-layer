@@ -458,6 +458,67 @@ H_LANE = "Lane"
 H_COMPRANGE = "Comp Range"
 H_COMPFIT = "Comp Fit"
 H_COMPANY = "Company"
+H_POSTED = "Posted"
+H_JOBFILE = "Job File"
+
+
+# --------------------------------------------------------------------------- #
+# Posted — the employer's own publication date, read back out of the capture
+#
+# Every capture written by prep carries a `Posted: YYYY-MM-DD` provenance line when its ATS
+# published one (the only other date in a capture is `Captured:`, our fetch date). This
+# column surfaces it in the rankings so a nine-month-old posting is visible at a glance.
+# Deliberately a STATIC ISO date, not an age/"days open" computation: a saved spreadsheet
+# with a computed age silently goes stale and starts lying; a date never does.
+#
+# Back-filled by reading each row's `Job File` capture — the same mechanism as the other
+# contract columns, so regenerating an OLD rankings CSV populates it too.
+# --------------------------------------------------------------------------- #
+_POSTED_LINE_RE = re.compile(r"^Posted:\s*(\d{4}-\d{2}-\d{2})", re.M)
+_CAPTURE_SUBDIR = ("3 - Source Material", "All Job Posts (full text)")
+
+
+def _resolve_capture_path(job_file, base_dir=None):
+    """Locate a capture from a rankings row's `Job File` value (usually a bare filename).
+    Tries it as given, relative to the rankings folder, in the batch's standard source
+    folder, then as a last resort a name search under the batch root."""
+    name = str(job_file or "").strip()
+    if not name:
+        return None
+    p = Path(name)
+    candidates = [p]
+    if base_dir:
+        b = Path(base_dir)
+        candidates += [b / name, b.parent / name, b.parent.joinpath(*_CAPTURE_SUBDIR) / p.name]
+    for c in candidates:
+        try:
+            if c.is_file():
+                return c
+        except OSError:
+            continue
+    if base_dir:
+        for root in (Path(base_dir), Path(base_dir).parent):
+            try:
+                hit = next((h for h in root.rglob(p.name) if h.is_file()), None)
+            except OSError:
+                hit = None
+            if hit:
+                return hit
+    return None
+
+
+def posted_date_from_capture(job_file, base_dir=None):
+    """The `Posted: YYYY-MM-DD` date from a capture, or "" when the file or line is absent
+    (a posting whose ATS published no date must stay blank, never a guess)."""
+    path = _resolve_capture_path(job_file, base_dir)
+    if not path:
+        return ""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    m = _POSTED_LINE_RE.search(text)
+    return m.group(1) if m else ""
 
 
 def load_config(path):
@@ -478,8 +539,19 @@ def normalize_rankings_csv(csv_path, cfg, out=print):
     if not rows:
         return 0
     headers = [h.strip() for h in rows[0]]
-    idx = {h: i for i, h in enumerate(headers)}
     changed = 0
+    # An OLDER CSV predates the Posted column — insert it (right after Comp Range, keeping
+    # the human-scannable block contiguous) so regenerating any batch back-fills the date.
+    if H_POSTED not in headers:
+        at = (headers.index(H_COMPRANGE) + 1) if H_COMPRANGE in headers else len(headers)
+        headers.insert(at, H_POSTED)
+        rows[0] = list(headers)
+        for row in rows[1:]:
+            while len(row) < len(headers) - 1:
+                row.append("")
+            row.insert(at, "")
+        changed += 1
+    idx = {h: i for i, h in enumerate(headers)}
 
     def fix(row, col, new, label, rownum):
         nonlocal changed
@@ -509,6 +581,13 @@ def normalize_rankings_csv(csv_path, cfg, out=print):
                     H_COMPFIT, n)
         if H_LANE in idx and idx[H_LANE] < len(row):
             fix(row, H_LANE, normalize_lane(row[idx[H_LANE]]), H_LANE, n)
+        # Posted is not model output — it is read back out of the capture's provenance line.
+        # Only ever FILLED IN, never overwritten (a date already in the sheet stays put).
+        if H_POSTED in idx and idx[H_POSTED] < len(row) and not row[idx[H_POSTED]].strip():
+            job_file = row[idx[H_JOBFILE]] if H_JOBFILE in idx and idx[H_JOBFILE] < len(row) else ""
+            posted = posted_date_from_capture(job_file, base_dir=Path(csv_path).parent)
+            if posted:
+                fix(row, H_POSTED, posted, H_POSTED, n)
     if changed:
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             csv.writer(f).writerows(rows)

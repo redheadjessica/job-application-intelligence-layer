@@ -344,6 +344,8 @@ def make_fetch_one(browser):
                     "compensation_raw": jobposting.get("compensation"),
                     "location_raw": jobposting.get("location"),
                     "apply_url": url,
+                    "posted_date": jobposting.get("posted_date"),
+                    "updated_date": jobposting.get("updated_date"),
                     # Structured only when the rendered page carried a JSON-LD JobPosting;
                     # otherwise a missing field is capture_failed, not not_posted.
                     "structured_source": bool(jobposting),

@@ -904,6 +904,17 @@ def build_output_text(url: str, title: str, company: str, body_text: str, *,
     lines.append(f"Company: {company}")
     lines.append(f"Role: {title}")
     lines.append(f"Source: {source} · Posting ID: {posting_id} · Captured: {captured} · Methods tried: {methods}")
+    # When the employer published a posting date, say so. `Captured:` above is OUR fetch date
+    # and was previously the only date in the file, so nothing downstream could tell a
+    # week-old posting from a nine-month-old one. Omitted entirely when unknown — never a
+    # fabricated or inferred date.
+    posted_date = meta.get("posted_date")
+    updated_date = meta.get("updated_date")
+    if posted_date:
+        posted_line = f"Posted: {posted_date}"
+        if updated_date and updated_date != posted_date:
+            posted_line += f" · Updated: {updated_date}"
+        lines.append(posted_line)
     lines.append("")
     lines.append("== NORMALIZED (for vetting) ==")
     lines.append(f"Employment Type: {meta.get('employment_type') or 'n/a'}")
@@ -949,6 +960,10 @@ def build_output_text(url: str, title: str, company: str, body_text: str, *,
     lines.append(f'Compensation (verbatim): "{comp_verbatim}"')
     lines.append(f'Locations/Addresses (verbatim): "{loc_verbatim}"')
     lines.append(f'Office cadence (verbatim): "{cadence_verbatim or ""}"')
+    # Present only when the Application URL above was replaced by a canonical ATS deep link
+    # because the employer's own apply URL was a listing/search page that merely redirects.
+    if meta.get("employer_apply_url"):
+        lines.append(f'Employer apply page (verbatim): {meta["employer_apply_url"]}')
     lines.append("")
     lines.append("--- JOB TEXT START ---")
     lines.append("")
@@ -1156,7 +1171,10 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
              # Completeness gate (comp + working-location before ranking). A missing
              # hard field never quarantines — the job stays usable and ranks, flagged.
              "field_status": None, "missing_fields": [], "methods_tried": [],
-             "has_compensation": None, "has_working_location": None}
+             "has_compensation": None, "has_working_location": None,
+             # Employer posting dates (plain YYYY-MM-DD, or None when the source has none) —
+             # the rankings `Posted` column reads these back out of the capture.
+             "posted_date": None, "updated_date": None}
         d.update(kw)
         return d
 
@@ -1291,7 +1309,10 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                                       title=title, char_count=len(body), notes="; ".join(note_bits),
                                       field_status=field_status, missing_fields=missing,
                                       methods_tried=methods_tried, has_compensation=has_comp,
-                                      has_working_location=has_loc, output_path=_rel(out, batch_root)))
+                                      has_working_location=has_loc,
+                                      posted_date=meta.get("posted_date"),
+                                      updated_date=meta.get("updated_date"),
+                                      output_path=_rel(out, batch_root)))
         else:  # THIN
             out = dirs["needs_review"] / fn
             out.write_text(thin_text(url, title, company, body, reason, ts, meta=meta,
@@ -1302,6 +1323,8 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                                       field_status=field_status, missing_fields=missing,
                                       methods_tried=methods_tried, has_compensation=has_comp,
                                       has_working_location=has_loc,
+                                      posted_date=meta.get("posted_date"),
+                                      updated_date=meta.get("updated_date"),
                                       quarantine_path=_rel(out, batch_root)))
 
     # Soft-flag possible same company/title duplicates among usable posts (keep both).

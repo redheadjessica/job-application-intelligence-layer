@@ -11,6 +11,51 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Posting dates captured (+ a `Posted` rankings column) and canonical apply-URL deep links
+
+Two findings from reviewing a real batch of captures, both decided by her.
+
+**Every ATS publishes a posting date and we discarded all of them.** The only date in a capture was
+`Captured:` — OUR fetch date — so nothing downstream could tell a week-old posting from a
+nine-month-old one, even though the dates were sitting in payloads we already parse.
+
+- `posted_date` / `updated_date` added to the fetcher result contract (documented in the shape
+  comment) and populated per ATS: Greenhouse `first_published` + `updated_at`, Ashby `publishedAt` +
+  `updatedAt`, Rippling `createdOn` + `updatedOn`, Workable `published`, Lever `createdAt` (epoch
+  MILLISECONDS — the one outlier), and JSON-LD `datePosted` / `dateModified` for generic career
+  pages. Workday's `postedOn` is a RELATIVE string ("Posted 30 Days Ago") and is rejected rather
+  than converted into a fake date; the CxS payload's real ISO `startDate` is used instead.
+- One normalizer, `normalize_posting_date()`, takes all of it to a plain `YYYY-MM-DD` (times and TZ
+  offsets stripped, not shifted) and returns None for anything relative, empty, or impossible.
+  **Never fabricate:** with no date, the provenance line is omitted entirely.
+- Captures gain a `Posted: YYYY-MM-DD` line (plus ` · Updated: <date>` when the ATS exposes a
+  distinct edit date); both are recorded in the manifest entry.
+- **New `Posted` column** in the rankings CSV/XLSX, placed immediately after `Comp Range` — inside
+  the human-scannable block and ahead of the editable `? [You …]` columns, so no existing column
+  changes meaning. It is not model output: the norm_contracts pass fills it by reading each row's
+  captured `Posted:` line, and `make_rankings_xlsx.py` re-runs the same back-fill on read, so an OLD
+  rankings CSV gets the column inserted and populated when regenerated. A value already in the sheet
+  is never overwritten. Deliberately a static ISO date, not an age or "days open" number — a
+  computed age baked into a saved spreadsheet silently goes stale and starts misleading you.
+
+**A job's apply URL was sometimes a job SEARCH page.** A Greenhouse `absolute_url` is whatever the
+employer configured; most are real deep links, but four in the reviewed batch pointed at listing or
+search pages that rely on `?gh_jid=` to redirect client-side. Saved as the Application URL, those
+open a search later, not the posting.
+
+- Detection is generic, not a host list: the job id is absent from the URL's PATH, present in its
+  QUERY, and the path's last segment is a listing-ish one (`jobs` / `search` / `all-jobs` / …).
+  When that matches, the Application URL becomes the canonical
+  `job-boards.greenhouse.io/<board>/jobs/<id>` deep link and the employer URL is preserved verbatim
+  on a new `Employer apply page (verbatim):` line in the archival block — nothing is lost.
+- An employer URL that IS a real deep link (the id in the path) is kept exactly as-is, and no other
+  ATS is affected.
+
+35 new tests, all against the saved real payloads (including the epoch-milliseconds conversion, the
+relative-string rejection, the four listing-page shapes, and the `Posted` column reaching the actual
+written spreadsheet cell from a legacy CSV). The golden capture fixture is regenerated for the one
+added `Posted:` line.
+
 ## 2026-07-29 — Captured-post identity + capture completeness: one normalizer at the prep choke point
 
 Fifth contract. Captured job files are supposed to be named `company-name__job-title.txt`, but the
