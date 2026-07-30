@@ -207,8 +207,16 @@ def _company_from_domain(url: str | None) -> str | None:
     if labels[idx] in _PSEUDO_TLDS and len(labels) >= 3:  # example.co.uk
         idx -= 1
     label = labels[idx]
-    if label in ATS_HOST_KEYWORDS or label in _BOARD_HOSTS or label in _DOMAIN_CHROME:
+    if label in _DOMAIN_CHROME:
         return None
+    if label in ATS_HOST_KEYWORDS or label in _BOARD_HOSTS:
+        # A big-company domain can be BOTH a job board and its own employer careers site
+        # (google.com/search/jobs vs google.com/about/careers/...). On an explicit `/careers`
+        # path the host does name the employer — without this, a careers-site posting whose
+        # title is also its company had no alternative name at all, so the ROLE stayed in the
+        # company slot and the filename doubled it (`<role>__<role>.txt`).
+        if not re.search(r"/careers(?:/|$)", urlparse(url or "").path, re.I):
+            return None
     return _prettify_slug(label)
 
 
@@ -263,15 +271,21 @@ def _is_branding_only(text: str) -> bool:
     return bool(_BRAND_ONLY_PREFIX_RE.match(s) or _CO_WRAPPER_SUFFIX_RE.search(s))
 
 
-def _title_is_invalid(title: str, company: str) -> bool:
-    """A captured title is invalid when it is missing, is site branding, or normalizes
-    to the same slug as the company (company-as-role)."""
+def _title_is_branding(title: str) -> bool:
+    """The title carries no role information at all: missing, or pure site branding.
+    This is the DEFINITE failure — worth a full page rescan to recover a real title."""
     s = str(title or "").strip()
-    if not s or s == "Unknown Title":
+    return (not s) or s == "Unknown Title" or _is_branding_only(s)
+
+
+def _title_is_invalid(title: str, company: str) -> bool:
+    """Branding, or the same slug as the company (company-as-role). A plain collision is
+    ambiguous — it can equally mean the COMPANY is wrong — so callers distinguish it from
+    `_title_is_branding` and never rewrite such a title from loose page text."""
+    if _title_is_branding(title):
         return True
-    if _is_branding_only(s):
-        return True
-    return bool(_identity_key(s)) and _identity_key(s) == _identity_key(company)
+    k = _identity_key(title)
+    return bool(k) and k == _identity_key(company)
 
 
 def _headings_from_html(html: str | None) -> list[str]:
@@ -319,6 +333,10 @@ def _first_content_heading(body: str | None, names: list[str]) -> str | None:
             continue
         if re.sub(r"[^a-z' ]+", "", ln.lower()).strip() in _SECTION_HEADERS:
             continue
+        # Run-together case ("linkCopy link", "emailEmail a friend") is icon/label markup
+        # collapsed by text extraction, never a real job title.
+        if re.search(r"[a-z][A-Z]", ln):
+            continue
         words = [w for w in re.split(r"[^A-Za-z0-9'&]+", ln) if w]
         if len(words) < 2 or all(w.lower() in nav for w in words):
             continue
@@ -329,18 +347,23 @@ def _first_content_heading(body: str | None, names: list[str]) -> str | None:
 
 
 def _recover_title(jsonld: dict, html: str | None, body: str | None,
-                   names: list[str]) -> str | None:
+                   names: list[str], *, scan_body: bool = True) -> str | None:
     """Recover a real job title for a capture whose scraped title was branding.
     In order: JSON-LD `title`, the page's first heading, the first non-navigation
     heading line of the extracted body text. Returns None rather than inventing one.
 
     `names` is every name this employer is known by here (the cleaned company plus any
     domain-derived form) — a heading made only of nav words plus one of those names
-    ("Working at Meta") is chrome, not a title."""
+    ("Working at Meta") is chrome, not a title.
+
+    `scan_body=False` restricts recovery to the two HIGH-CONFIDENCE structured sources.
+    Used when the title merely COLLIDES with the company: that can equally mean the company
+    is the wrong one, and a loose body line is not good enough evidence to overwrite a
+    title that may well be correct."""
     names = [n for n in names if str(n or "").strip()]
     candidates: list[str] = [str((jsonld or {}).get("title") or "")]
     candidates += _headings_from_html(html)
-    heading = _first_content_heading(body, names)
+    heading = _first_content_heading(body, names) if scan_body else None
     if heading:
         candidates.append(heading)
     for cand in candidates:
@@ -412,21 +435,29 @@ def normalize_capture_identity(company: str | None, title: str | None, url: str 
     # actually broken, so a good company name isn't thrown away to fix a bad title.
     names = [n for n in (clean_company, domain_co, wrapper_co) if n]
     if _title_is_invalid(clean_title, clean_company):
-        recovered = _recover_title(jsonld, html, body, names)
+        recovered = _recover_title(jsonld, html, body, names,
+                                   scan_body=_title_is_branding(clean_title))
         if recovered:
             clean_title = recovered
 
-    # NEVER role-as-company.
+    # NEVER role-as-company. A company that is merely a SUBSTRING of a longer title is not
+    # role-as-company: "Director, Product Management, ClassPass Consumer" legitimately names
+    # its employer, and swapping in a domain-derived parent-company name there replaced a
+    # correct, ATS-authoritative employer name with one the user wouldn't recognize. Require
+    # the company to account for most of the title before treating it as the role.
     ck, tk = _identity_key(clean_company), _identity_key(clean_title)
-    if ck and tk and (ck == tk or ck in tk or tk in ck):
+    substantial = bool(ck) and bool(tk) and min(len(ck), len(tk)) >= 0.5 * max(len(ck), len(tk))
+    if ck and tk and (ck == tk or (substantial and (ck in tk or tk in ck))):
         for alt in (wrapper_co, domain_co):
             if alt and _identity_key(alt) != tk:
                 clean_company = alt
                 break
 
-    # Still branding / still the company name: fail loudly rather than mint a filename out
-    # of site chrome. "Unknown Title" is what assess_completeness reads as capture_failed.
-    if _title_is_invalid(clean_title, clean_company):
+    # Still branding: fail loudly rather than mint a filename out of site chrome.
+    # "Unknown Title" is what assess_completeness reads as capture_failed. An UNRESOLVED
+    # collision is deliberately NOT failed here — the title is probably the real role and
+    # the company is the duplicated half, so keeping the role text loses less.
+    if _title_is_branding(clean_title):
         clean_title = ""
 
     return (clean_company or "Unknown", clean_title or "Unknown Title")

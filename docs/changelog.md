@@ -11,6 +11,32 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 (later) — Three captured-identity defects caught by dry-running the new normalizer over a real batch
+
+Before retro-applying the fixed identity normalizer to a real batch, I dry-ran it over all 51
+captures and diffed the filenames it would produce. That surfaced three defects — two of them
+long-standing, one introduced by the fix itself — which is a strong argument for always dry-running a
+rename pass over real data before acting on it:
+
+- **A company named INSIDE a longer title was being treated as role-as-company.** The
+  never-role-as-company guard fired on mere substring containment, so a title that legitimately names
+  its own employer ("Director, Product Management, <Employer> Consumer") caused the correct,
+  ATS-authoritative employer name to be swapped for a domain-derived *parent-company* name the user
+  would not recognize. Containment now only counts when the company accounts for most of the title.
+- **The new title recovery could overwrite a probably-correct title with page chrome.** When a
+  non-branding title merely COLLIDES with the company, that ambiguity can equally mean the *company* is
+  wrong — and one real capture would have taken "linkCopy link" out of the body as its role. Body-text
+  recovery is now reserved for titles that carry no role information at all (missing or pure branding);
+  a collision may only be corrected from a high-confidence structured source (JSON-LD / a heading), and
+  an unresolved collision keeps its role text rather than being failed loudly. Extraction glue with
+  run-together case ("linkCopy link", "emailEmail a friend") is rejected outright as a title candidate.
+- **A big employer's own careers site could yield no company name at all.** Hosts that double as job
+  boards were unconditionally refused as employer names, so a careers-site posting whose title also sat
+  in the company slot had no alternative available and the filename doubled the role
+  (`<role>__<role>.txt`). On an explicit `/careers` path the host does name the employer, so it is now
+  accepted there (a plain board path still isn't).
+
+
 ## 2026-07-29 (authoritative) — The output-contract spec supersedes every earlier location-color rule; three fidelity gaps fixed
 
 **Read this before trusting any older colour or format note in this file.** The 2026-07-29

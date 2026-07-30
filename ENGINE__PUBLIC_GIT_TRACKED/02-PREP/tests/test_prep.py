@@ -1666,7 +1666,6 @@ def test_branding_only_title_is_recovered_from_the_body_heading():
 
 @pytest.mark.parametrize("company,title", [
     ("Meta Careers", "Meta Careers"),      # the observed pair
-    ("Meta", "Meta"),                      # title == company exactly
     ("Meta", "Meta Careers"),              # branding suffix, nothing else
     ("Meta", "Careers at Meta"),           # branding prefix
     ("Meta", "Jobs — Meta"),               # branding with a dash separator
@@ -1677,6 +1676,56 @@ def test_invalid_titles_all_recover_to_the_real_role(company, title):
     co, ro = pc.normalize_capture_identity(company, title, url=META_URL,
                                            html=_meta_html(), body=_meta_body())
     assert (co, ro) == ("Meta", META_ROLE)
+
+
+def test_a_plain_collision_is_fixed_on_the_COMPANY_side_not_by_rewriting_the_title():
+    """When a non-branding title merely equals the company, the ambiguity is resolved by the
+    never-role-as-company guard — the title is NOT rewritten from loose body text. A real
+    capture proved why: the body's own chrome ("linkCopy link") would have become the role."""
+    body = "Product Manager, Workspace Ecosystem\n- linkCopy link\n- emailEmail a friend\n"
+    role = "Product Manager, Workspace Ecosystem"
+    co, ro = pc.normalize_capture_identity(role, role, url="https://careers.acme.com/x", body=body)
+    assert ro == role
+    assert co == "Acme"        # the COMPANY is what gets repaired
+    # High-confidence structured sources may still correct such a title.
+    co2, ro2 = pc.normalize_capture_identity(
+        role, role, url="https://careers.acme.com/x", body=body,
+        html="<h1>Staff PM, Workspace Ecosystem</h1>")
+    assert ro2 == "Staff PM, Workspace Ecosystem"
+
+
+def test_an_employer_careers_path_on_a_board_host_still_names_the_employer():
+    """A big-company domain can be both a job board and its own careers site. On an explicit
+    `/careers` path the host names the employer — without this, a careers-site posting whose
+    title also sat in the company slot had no alternative name and the filename doubled the
+    role (`<role>__<role>.txt`)."""
+    role = "Product Manager, Workspace Ecosystem"
+    url = "https://www.google.com/about/careers/applications/jobs/results/937194656-pm"
+    co, ro = pc.normalize_capture_identity(role, role, url=url)
+    assert (co, ro) == ("Google", role)
+    assert pc.base_filename(co, ro) == "google__product-manager-workspace-ecosystem.txt"
+    # A board host WITHOUT a careers path is still not an employer name.
+    assert pc._company_from_domain("https://www.linkedin.com/jobs/view/123") is None
+    assert pc._company_from_domain("https://www.google.com/search/jobs?q=pm") is None
+
+
+def test_an_unresolvable_collision_keeps_the_role_text_rather_than_destroying_it():
+    """No alternative company name exists (ATS host, no careers path): leave the pair as-is.
+    Only a BRANDING title is failed loudly — a probable-real role is never discarded."""
+    role = "Staff PM"
+    co, ro = pc.normalize_capture_identity(
+        role, role, url="https://job-boards.greenhouse.io/acme/jobs/123")
+    assert (co, ro) == (role, role)
+
+
+def test_a_company_named_inside_a_longer_title_is_not_role_as_company():
+    """`Director, Product Management, ClassPass Consumer` legitimately names its employer.
+    Treating that containment as role-as-company replaced an ATS-authoritative employer name
+    with a domain-derived parent-company name the user would not recognize."""
+    co, ro = pc.normalize_capture_identity(
+        "ClassPass", "Director, Product Management, ClassPass Consumer",
+        url="https://www.playlist.com/careers/opportunities/4627850006")
+    assert (co, ro) == ("ClassPass", "Director, Product Management, ClassPass Consumer")
 
 
 def test_jsonld_title_is_the_first_recovery_source():
