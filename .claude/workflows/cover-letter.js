@@ -152,7 +152,12 @@ Steps, in order:
 1. ${needsRevision
         ? `REVISE mode per your spec (surgeon, not editor): address every must-fix, apply considers only where you agree, touch ONLY cited lines. Write the result to <final-md>. Then run the preservation lint and fix until 0 errors: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py "<final-md>" --prev "${draft.draft_path}"`
         : `No revision needed (strong first draft). Copy the draft to <final-md> and run: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py "<final-md>" (must be 0 errors).`}
-2. Generate the deliverable: read signature_name from PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/config.json, hyphenate it (e.g. "Jordan Lee" -> "Jordan-Lee"), then run: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/make_cover_letter_docx.py "<final-md>" -o "<docx>"  (where <docx> is "${draft.job_folder}/<Hyphenated-Name>-CoverLetter - ${draft.company} - ${draft.role}.docx", plus the " - v2" suffix if versioning per the rule above).
+2. Generate the deliverable. DERIVE the filename — never compose it yourself (the candidate half was being improvised, producing two spellings of the same artifact type in one run). Read signature_name from PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/config.json and pass it through the shared canonicalizer, which owns both halves of the name:
+
+     .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py --cover-letter-filename \
+         --candidate-name "<signature_name>" --company "${draft.company}" --role "${draft.role}" --ext .docx
+
+   (Omit --candidate-name to fall back to candidate.name in jail.config.json.) Use its printed string verbatim as <docx-name>, then run: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/make_cover_letter_docx.py "<final-md>" -o "${draft.job_folder}/<docx-name>"  — inserting the " - v2" suffix before the extension if versioning per the rule above.
 3. Link QA: for each link, curl -sIL -o /dev/null -w "%{http_code}" --max-time 10 "<url>". 200/30x = pass; Medium/LinkedIn 403/999 bot-blocks = verify the URL character-for-character against PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/writing-links.md and mark "matches writing-links". Anything else = flag.
 4. Write the COMPACT review packet to <packet> ("${draft.job_folder}/application_coverletter_output - ${draft.company} - ${draft.role}.md", plus the " - v2" suffix if versioning) — target ~35 lines, do NOT include the letter text (reconcile reads _cl_work/final.md directly). Exactly these sections:
    # Cover Letter — ${draft.company} — ${draft.role}

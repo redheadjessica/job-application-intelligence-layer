@@ -137,7 +137,9 @@ Only read it when the candidate explicitly includes `[USE BIO]` in their request
 
 When `[USE BIO]` is absent, do not open this file.
 
-(Replace `{{CANDIDATE_NAME}}` placeholders in resume filenames with the candidate's actual name.)
+(Application artifact filenames are DERIVED, never composed by hand: run
+`norm_contracts.py --resume-filename` / `--cover-letter-filename`, which take the
+candidate's name from `candidate.name` in `jail.config.json`.)
 
 ---
 
@@ -791,12 +793,29 @@ After presenting the base recommendation, continue in the same run by preparing 
 
 Preferred format (Company before Role — same order as the job folder name), keeping the base file’s **original extension** (`.docx`, `.pdf`, `.pages`, `.md`, etc. — do not convert it):
 
-`{{CANDIDATE_NAME}}-Resume - [Company] - [Role].<original-extension>`
+`<Candidate Name>-Resume - [Company] - [Role].<original-extension>`
 
-- The `[Company] - [Role]` part must match the canonical `Company - Role` job folder name **verbatim** — same order (company first), same words. The ONLY correct approach: name the file `{{CANDIDATE_NAME}}-Resume - <job folder name>.<original-extension>`. Do not re-derive or re-abbreviate the name yourself — the folder name already came from the shared canonicalizer (`ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py --application-name`), which owns all abbreviation rules (`Product Manager` → `PM`, `Sr` → `Senior`, `Vice President` → `VP`, `Director` stays `Director`, never `Senior` → `Sr`).
-- **Keep the base file’s original extension** — whatever format the base is in (e.g. `.docx`, `.pdf`, `.pages`, `.md`). Do not hardcode `.pages` and do not convert the file to another format.
-- Keep the **full role title** as the canonical name renders it. Do NOT shorten it or drop qualifiers that carry meaning (keep specializations like "Consumer", "Payments", "Public Sector", "Lifecycle", etc.).
-- Example: folder `Acme - Senior PM, Lifecycle Marketing`, base in Word → `{{CANDIDATE_NAME}}-Resume - Acme - Senior PM, Lifecycle Marketing.docx` (NOT `{{CANDIDATE_NAME}}-Resume - Senior PM - Acme.docx`). If the base were a `.pages` file, the copy keeps `.pages`; if a `.pdf`, it keeps `.pdf`.
+- **Do not compose this name yourself.** Run the shared canonicalizer and use its printed string
+  verbatim as the filename — it owns BOTH halves (the candidate half and the `Company - Role` half),
+  and the candidate's name comes from `candidate.name` in `jail.config.json`, never from your own
+  guess at how they spell it:
+
+  ```
+  python ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py --resume-filename \
+      --company "<company>" --role "<role>" --ext "<original extension, e.g. .pages>"
+  ```
+
+  (Two agents in one run previously produced `<First> <Last>-Resume - …` and
+  `<First>-<Last>-Resume - …` for the same artifact type — the name was being improvised. It is
+  now derived. If the command errors because no candidate name is configured, report that rather
+  than inventing one.)
+- The `[Company] - [Role]` half matches the canonical job folder name **verbatim** — same order
+  (company first), same words. The canonicalizer owns all abbreviation rules (`Product Manager` →
+  `PM`, `Sr` → `Senior`, `Vice President` → `VP`, `Director` stays `Director`, never `Senior` → `Sr`).
+- The extension is preserved from the base file: a `.pages` base stays `.pages`, a `.pdf` stays `.pdf`.
+- Example: folder `Acme - Senior PM, Lifecycle Marketing`, base in Word → the command prints
+  `<Candidate Name>-Resume - Acme - Senior PM, Lifecycle Marketing.docx` (NOT
+  `…-Resume - Senior PM - Acme.docx`).
 
 If a matching base file cannot be found:
 - flag that clearly

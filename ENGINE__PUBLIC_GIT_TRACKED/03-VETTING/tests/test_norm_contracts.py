@@ -7,6 +7,7 @@ with openpyxl (spec: "test the actual written spreadsheet cell").
 """
 import csv
 import json
+from pathlib import Path
 
 import pytest
 from openpyxl import load_workbook
@@ -1247,3 +1248,133 @@ def test_update_rankings_row_writes_into_a_current_and_a_legacy_csv(tmp_path):
         cover_col = rows[0][m._col(rows[0], m.H_COVER_PREFIXES)]
         assert got[base_col] == "Acme — PM (6/25/26)"
         assert got[cover_col] == "Yes"
+
+
+# ===========================================================================
+# Application artifact FILENAMES (2026-07-30). `canonical_application_name` owned
+# the `Company - Role` half; the candidate half was improvised, so two agents in
+# ONE run produced two spellings of the same artifact type. It is now derived.
+# ===========================================================================
+_OBSERVED_DIVERGENCE = [
+    "Jordan Lee-Resume - Willow Health - Senior PM, Care Delivery.pages",
+    "Jordan-Lee-Resume - Willow Health - Senior PM, Care Delivery.pages",
+]
+
+
+def test_both_observed_filename_spellings_normalize_to_one_output():
+    """The exact defect: same artifact type, same run, two conventions."""
+    normalized = {norm_contracts.normalize_application_filename(n, "Jordan Lee")
+                  for n in _OBSERVED_DIVERGENCE}
+    assert len(normalized) == 1, normalized
+    assert normalized.pop() == \
+        "Jordan Lee-Resume - Willow Health - Senior PM, Care Delivery.pages"
+    # And the BUILDER produces that same string from its inputs.
+    assert norm_contracts.canonical_resume_filename(
+        "Jordan Lee", "Willow Health", "Sr PM, Care Delivery", ".pages") == \
+        "Jordan Lee-Resume - Willow Health - Senior PM, Care Delivery.pages"
+
+
+@pytest.mark.parametrize("ext", [".pages", ".docx", ".pdf", "docx", ""])
+def test_the_extension_is_preserved_verbatim(ext):
+    out = norm_contracts.canonical_resume_filename("Jordan Lee", "Acme", "Senior PM", ext)
+    expected_ext = ("." + ext.lstrip(".")) if ext else ""
+    assert out == f"Jordan Lee-Resume - Acme - Senior PM{expected_ext}"
+
+
+@pytest.mark.parametrize("name,expected_stem", [
+    ("Jordan Lee", "Jordan Lee-Resume"),            # two words: space kept
+    ("Jean-Luc Picard", "Jean-Luc Picard-Resume"),  # hyphenated surname stays hyphenated
+    ("Cher", "Cher-Resume"),                        # single word
+    ("  Jordan   Lee  ", "Jordan Lee-Resume"),      # whitespace collapsed
+    ("Jordan/Lee", "Jordan Lee-Resume"),            # path-hostile chars removed
+])
+def test_candidate_name_shapes(name, expected_stem):
+    out = norm_contracts.canonical_resume_filename(name, "Acme", "Senior PM", ".docx")
+    assert out == f"{expected_stem} - Acme - Senior PM.docx"
+
+
+def test_the_cover_letter_builder_matches_the_resume_one():
+    assert norm_contracts.canonical_cover_letter_filename(
+        "Jordan Lee", "Acme", "Sr PM, Growth", ".docx") == \
+        "Jordan Lee-Cover-Letter - Acme - Senior PM, Growth.docx"
+    # Only the artifact word differs between the two.
+    r = norm_contracts.canonical_resume_filename("Jordan Lee", "Acme", "Sr PM, Growth", ".docx")
+    c = norm_contracts.canonical_cover_letter_filename("Jordan Lee", "Acme", "Sr PM, Growth", ".docx")
+    assert r.replace("-Resume", "-Cover-Letter") == c
+    # The older `<Name>-CoverLetter` spelling normalizes into the canonical one, and still
+    # matches reconcile's space/hyphen-insensitive letter detector.
+    normalized = norm_contracts.normalize_application_filename(
+        "Jordan-Lee-CoverLetter - Acme - Senior PM, Growth.docx", "Jordan Lee")
+    assert normalized == "Jordan Lee-Cover-Letter - Acme - Senior PM, Growth.docx"
+    assert "coverletter" in normalized.lower().replace(" ", "").replace("-", "")
+
+
+def test_filename_normalization_is_idempotent():
+    canonical = norm_contracts.canonical_resume_filename(
+        "Jordan Lee", "Willow Health", "Sr PM, Care Delivery", ".pages")
+    once = norm_contracts.normalize_application_filename(canonical, "Jordan Lee")
+    assert once == canonical
+    assert norm_contracts.normalize_application_filename(once, "Jordan Lee") == canonical
+    # The builder is idempotent through the canonical role too.
+    assert norm_contracts.canonical_resume_filename(
+        "Jordan Lee", "Willow Health", "Senior PM, Care Delivery", ".pages") == canonical
+
+
+def test_a_non_artifact_filename_is_left_alone():
+    for name in ("prep-report.md", "grow-therapy__senior-pm.txt",
+                 "application_resume_output - Acme - Senior PM.md"):
+        assert norm_contracts.normalize_application_filename(name, "Jordan Lee") == name
+
+
+def test_the_candidate_name_comes_from_config_not_the_agent():
+    assert norm_contracts.candidate_name_from_config(
+        {"candidate": {"name": "Jordan Lee"}}) == "Jordan Lee"
+    assert norm_contracts.candidate_name_from_config({"candidate": {"name": None}}) == ""
+    assert norm_contracts.candidate_name_from_config({}) == ""
+    # The shipped template carries the key so /intake has somewhere to write it.
+    template = json.loads(Path("jail.config.template.json").read_text(encoding="utf-8"))
+    assert "candidate" in template and "name" in template["candidate"]
+
+
+def test_the_cli_prints_the_canonical_filenames_and_fails_loudly_without_a_name(tmp_path):
+    import subprocess
+    import sys as _sys
+    script = str(Path(norm_contracts.__file__))
+    cfg = tmp_path / "jail.config.json"
+    cfg.write_text(json.dumps({"candidate": {"name": "Jordan Lee"}}), encoding="utf-8")
+    out = subprocess.run(
+        [_sys.executable, script, "--resume-filename", "--config", str(cfg),
+         "--company", "Willow Health", "--role", "Sr PM, Care Delivery", "--ext", ".pages"],
+        capture_output=True, text=True, check=True).stdout.strip()
+    assert out == "Jordan Lee-Resume - Willow Health - Senior PM, Care Delivery.pages"
+    out_cl = subprocess.run(
+        [_sys.executable, script, "--cover-letter-filename", "--candidate-name", "Jordan Lee",
+         "--company", "Acme", "--role", "Senior PM", "--ext", ".docx"],
+        capture_output=True, text=True, check=True).stdout.strip()
+    assert out_cl == "Jordan Lee-Cover-Letter - Acme - Senior PM.docx"
+    # No configured name: a loud, actionable error rather than an invented name.
+    empty = tmp_path / "empty.json"
+    empty.write_text("{}", encoding="utf-8")
+    res = subprocess.run(
+        [_sys.executable, script, "--resume-filename", "--config", str(empty),
+         "--company", "Acme", "--role", "Senior PM", "--ext", ".docx"],
+        capture_output=True, text=True)
+    assert res.returncode != 0
+    assert "no candidate name available" in res.stderr
+    assert "never be improvised" in res.stderr
+
+
+def test_a_missing_rankings_folder_is_a_loud_warning_not_a_quiet_note(tmp_path):
+    """Routing decision (a): the writeback's silent no-op is the same failure class as a
+    manifest wipe. A batch with no rankings folder must SAY so."""
+    import subprocess
+    import sys as _sys
+    batch = tmp_path / "manual"
+    batch.mkdir()
+    res = subprocess.run(
+        [_sys.executable, str(Path(norm_contracts.__file__).parent / "update_rankings_row.py"),
+         "--batch", str(batch), "--job-file", "acme.txt", "--base", "Acme — PM (6/25/26)"],
+        capture_output=True, text=True, check=True)
+    assert "WARNING" in res.stdout
+    assert "were NOT updated" in res.stdout
+    assert "note:" not in res.stdout.lower().split("warning")[0]

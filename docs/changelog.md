@@ -62,6 +62,35 @@ Groundwork for a parallel refresh, where several workers touch the same durable 
   cover-letter workflows keep working against an unmigrated file instead of silently writing
   nothing. The cover-letter marker is now the literal `Yes` (was `Y`) per the column semantics.
 
+## 2026-07-30 — Canonical artifact filenames, and batch routing that fails loudly instead of silently
+
+- **The candidate half of an artifact filename is now DERIVED, not improvised.** Two agents in one
+  run produced `<First> <Last>-Resume - …` and `<First>-<Last>-Resume - …` for the same artifact
+  type, because `canonical_application_name()` owned only the `Company - Role` half. New
+  `canonical_resume_filename()` / `canonical_cover_letter_filename()` (plus a
+  `normalize_application_filename()` repair for existing files) own the whole name, with the
+  candidate's name read from `candidate.name` in `jail.config.json` — a new config key, so no agent
+  has to guess how a person spells their own name. Chosen shape:
+  `<Candidate Name>-Resume - <Company - Role>.<ext>` / `<Candidate Name>-Cover-Letter - …`, keeping
+  the person's own spacing and hyphenation and preserving the base file's extension verbatim. New
+  CLI flags `--resume-filename` / `--cover-letter-filename` mirror `--application-name`; the tailor
+  spec, the job-applier agent, and the cover-letter workflow now all call them instead of composing
+  names in a prompt. With no configured name the CLI fails loudly rather than inventing one.
+- **Batch routing: both fixes, because the silent half is the dangerous half.** A real batch named
+  `MM-DD-YY - <label>` fell through to `manual/`, so tailored folders landed outside the batch AND
+  the rankings writeback found no rankings file and wrote nothing — while the workflow reported
+  success. (a) The writeback is now LOUD: `update_rankings_row.py` reports a missing
+  `1 - Rankings/` folder as a WARNING (it was a quiet `note:`), the Record phase is told to report
+  those verbatim, and `tailor-jobs.js` returns a `warnings` array naming every job that could not be
+  matched to a batch, surfaced at the top of the run note. (b) The batch test now accepts
+  `MM-DD-YY - <label>` when the PATH proves it is a batch (the job file sits under that folder's
+  `3 - Source Material/`), which is what actually distinguishes a batch from a review folder — the
+  `… Review` suffix stays excluded as a second guard. Both were implemented: (b) fixes the routing,
+  (a) makes the next unforeseen misroute visible instead of silent, and root `CLAUDE.md` is updated
+  to match.
+
+Suite: 520 → 537 green.
+
 ## 2026-07-30 — LinkedIn-shaped block fusion, fixed in the one shared converter
 
 The 55-capture validation left a single failure: a LinkedIn-sourced body read

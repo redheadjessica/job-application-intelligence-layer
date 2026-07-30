@@ -209,7 +209,13 @@ def main(argv):
 
     rankings = Path(a.batch) / "1 - Rankings"
     if not rankings.is_dir():
-        print(f"note: no '1 - Rankings/' in {a.batch} — nothing to update.")
+        # LOUD, not a quiet note: this is the silent-no-op path. A tailor run whose batch
+        # folder could not be resolved (e.g. it fell through to "manual/") lands here, and
+        # the workflow used to report success while nothing was written anywhere.
+        print(f"WARNING: no '1 - Rankings/' folder in {a.batch} — the Tailored?/Cover Letter "
+              f"columns were NOT updated. The batch may be misrouted (check that the job file "
+              f"lives under the batch's '3 - Source Material/'), or this job was tailored "
+              f"outside any batch.")
         return 0
 
     base = terse_base(a.base) if a.base else None

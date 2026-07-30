@@ -20,7 +20,7 @@ cover-letter {job: "...foo.txt", out: "path/to/an/existing/Company - Role folder
 Output lands in the job's `Company - Role` folder (created in the batch's `2 - Tailored Resumes/`
 if needed, or wherever `out` points):
 
-- **`<Your-Name>-CoverLetter - Company - Role.docx`** — the deliverable. Open it, select all,
+- **`<Your Name>-Cover-Letter - Company - Role.docx`** — the deliverable. Open it, select all,
   copy, and paste into your own letter template with a formatting-preserving paste (in Pages:
   regular **Paste**, never "Paste and Match Style" — it strips the inline links). Styling per
   `formatting-spec.md` + `config.json`.

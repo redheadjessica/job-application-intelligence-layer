@@ -50,19 +50,38 @@ const picks = raw.map((j) => (typeof j === 'string' ? { abs_path: j } : j))
 // Consolidated review home: __READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/. Derive <batch> from each job file's
 // parent folder (e.g. __READY_TO_REVIEW__PRIVATE_GITIGNORED/06-02-26/foo.txt -> 06-02-26) so hand-picked jobs land alongside
 // their batch. Falls back to "manual" if the path has no recognizable parent.
-// A job batch is ONLY a date-shaped folder (MM-DD-YY). Non-batch review folders under
-// __READY_TO_REVIEW__PRIVATE_GITIGNORED (e.g. "06-02-26 - Intake Review", "06-02-26 - Source Update Review")
-// must never be treated as a batch.
+// A job batch is a date-shaped folder: exactly `MM-DD-YY`, or `MM-DD-YY - <label>` when the path
+// gives STRUCTURAL evidence that it really is a batch (the job file sits under that folder's
+// "3 - Source Material/"). Review folders — "06-02-26 - Intake Review", "… - Source Update Review",
+// "… - Formatting Review" — are still excluded: they never contain source material, and the
+// "… Review" suffix is rejected outright as a second guard.
+//
+// Why this loosened (2026-07-30): a real batch named "07-30-26 - Unified 55-Job Tracker" fell
+// through to "manual/", so tailored folders landed outside the batch AND the rankings writeback
+// found no rankings file and wrote nothing — while the workflow still reported success. The strict
+// name test was excluding review folders by NAME when the thing that actually distinguishes them
+// is STRUCTURE, which the path already carries.
+const DATE_PREFIX_RE = /^\d{2}-\d{2}-\d{2}(?:\s+-\s+.+)?$/
+const REVIEW_SUFFIX_RE = /\breview\s*$/i
 const isBatchName = (s) => /^\d{2}-\d{2}-\d{2}$/.test(s)
+const isDatedBatchName = (s) => DATE_PREFIX_RE.test(String(s || '')) && !REVIEW_SUFFIX_RE.test(String(s || ''))
+const SOURCE_DIR = '3 - Source Material'
 function batchOf(p) {
   const parts = String(p || '').replace(/\/+$/, '').split('/')
-  // Job files live under __READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/.../foo.txt — the batch is the segment
-  // right after "__READY_TO_REVIEW__PRIVATE_GITIGNORED", but only if it is date-shaped.
   const idx = parts.indexOf('__READY_TO_REVIEW__PRIVATE_GITIGNORED')
-  if (idx >= 0 && parts.length > idx + 1 && isBatchName(parts[idx + 1])) return parts[idx + 1]
-  // Fallback: the immediate parent folder, only if it is itself date-shaped; else "manual".
+  if (idx >= 0 && parts.length > idx + 1) {
+    const candidate = parts[idx + 1]
+    // Exactly date-shaped: always a batch (unchanged behavior).
+    if (isBatchName(candidate)) return candidate
+    // Date-prefixed with a label: a batch when the path proves it holds source material.
+    if (isDatedBatchName(candidate) && parts[idx + 2] === SOURCE_DIR) return candidate
+  }
   const parent = parts.length >= 2 ? parts[parts.length - 2] : ''
-  return isBatchName(parent) ? parent : 'manual'
+  if (isBatchName(parent)) return parent
+  // A job file directly inside a labelled batch folder still resolves to it.
+  const grand = parts.length >= 3 ? parts[parts.length - 3] : ''
+  if (parts[parts.length - 2] === SOURCE_DIR && isDatedBatchName(grand)) return grand
+  return 'manual'
 }
 
 const CONFIRM_SCHEMA = {
@@ -136,6 +155,20 @@ re-derive, don't ratify the old draft.`,
 const jobFileOf = (p) => String(p || '').split('/').pop()
 const urlOf = (t) => { const m = /https?:\/\/\S+/.exec(String(t || '')); return m ? m[0] : null }
 
+// A job whose batch could not be resolved has nowhere for the writeback to land. That used to
+// be invisible: the workflow reported success while the Tailored?/Cover Letter columns silently
+// stayed empty. Same failure class as a manifest wipe — surface it in the RESULT.
+const misrouted = tailored.filter((t) => batchOf(t.abs_path) === 'manual')
+const warnings = misrouted.length
+  ? [`${misrouted.length} tailored job(s) could not be matched to a batch folder, so their `
+    + `"Tailored? (Base Resume)" / "Cover Letter Drafted?" cells were NOT updated: `
+    + misrouted.map((t) => jobFileOf(t.abs_path)).join(', ')
+    + `. Their drafts are in __READY_TO_REVIEW__PRIVATE_GITIGNORED/manual/2 - Tailored Resumes/. `
+    + `A batch folder must be named MM-DD-YY (optionally "MM-DD-YY - <label>") and the job file `
+    + `must live under its "3 - Source Material/".`]
+  : []
+
+let recordSummary = null
 if (tailored.length) {
   phase('Record')
   const cmds = tailored.filter((t) => t.recommended_base).map((t) => {
@@ -151,7 +184,7 @@ if (tailored.length) {
     ].filter(Boolean).join(' ')
   })
   if (cmds.length) {
-    await agent(
+    recordSummary = await agent(
       `Record each tailored job's chosen resume base back into its batch rankings.
 
 Run these EXACT shell commands from the project root, in order, and report each one's output verbatim:
@@ -160,7 +193,8 @@ ${cmds.join('\n')}
 
 Each prints either "Updated ..." (success) or a line starting with "WARNING: no rankings row matched".
 Do NOT treat a WARNING as fatal and do NOT retry or "fix" it — just report it. Return a short summary:
-how many updated, and the full text of any WARNING lines.`,
+how many updated, and the full text of any WARNING lines (both "no rankings row matched" and
+"no '1 - Rankings/' folder" are WARNINGs that must be reported verbatim, never summarized away).`,
       { phase: 'Record', model: 'haiku', label: 'record bases in rankings' }
     )
   }
@@ -189,5 +223,9 @@ const table = [
 return {
   tailored,
   table,
-  note: `Prepared ${tailored.length} resume draft(s) in __READY_TO_REVIEW__PRIVATE_GITIGNORED/. Open each job folder's "application_resume_output - [Company] - [Role].md", starting with the "Questions for the candidate" section. Each job's chosen base was also written back into its batch's "Base Resume Used" column where a rankings file exists for it. Copy/paste table for your tracker is in the "table" field (no Cover Letter column — tailor-jobs never generates letters; run the cover-letter workflow separately if you want one, which adds its own paste table for that column).`,
+  // Loud, never silent: a writeback that found no home is reported in the result itself,
+  // not left for the user to discover as empty tracker cells weeks later.
+  warnings,
+  record_summary: recordSummary,
+  note: `${warnings.length ? '⚠️ ' + warnings.join(' ') + '\n\n' : ''}Prepared ${tailored.length} resume draft(s) in __READY_TO_REVIEW__PRIVATE_GITIGNORED/. Open each job folder's "application_resume_output - [Company] - [Role].md", starting with the "Questions for the candidate" section. Each job's chosen base was also written back into its batch's "Tailored? (Base Resume)" column where a rankings file exists for it. Copy/paste table for your tracker is in the "table" field (no Cover Letter column — tailor-jobs never generates letters; run the cover-letter workflow separately if you want one, which adds its own paste table for that column).`,
 }

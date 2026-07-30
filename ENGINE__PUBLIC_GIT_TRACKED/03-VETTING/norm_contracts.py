@@ -524,6 +524,103 @@ def canonical_application_name(company, role):
 
 
 # --------------------------------------------------------------------------- #
+# Application ARTIFACT FILENAMES — the candidate-name half of the contract
+#
+# `canonical_application_name()` above owns the `Company - Role` half, and every agent
+# already calls it. The candidate-name PREFIX had no such owner, so two agents in one run
+# produced two spellings of the same artifact type:
+#     "<First> <Last>-Resume - Acme - Senior PM, Care Delivery.pages"
+#     "<First>-<Last>-Resume - Willow Health - Senior PM, Member Growth.pages"
+# The name is now DERIVED, not improvised: one builder, one spelling, sourced from
+# `candidate.name` in jail.config.json rather than from whatever the agent inferred.
+#
+# Chosen shape (matches the long-documented spec template and the demo fixtures):
+#     <Candidate Name>-Resume - <Company - Role>.<ext>
+#     <Candidate Name>-Cover-Letter - <Company - Role>.<ext>
+# The candidate's own name keeps its own spacing and punctuation — a hyphenated surname
+# stays hyphenated, a two-word name keeps its space. Only the ARTIFACT word is joined
+# with a hyphen.
+# --------------------------------------------------------------------------- #
+RESUME_ARTIFACT = "Resume"
+COVER_LETTER_ARTIFACT = "Cover-Letter"
+_ARTIFACT_ALIASES = {
+    "resume": RESUME_ARTIFACT, "cv": RESUME_ARTIFACT,
+    "coverletter": COVER_LETTER_ARTIFACT, "cover letter": COVER_LETTER_ARTIFACT,
+    "cover-letter": COVER_LETTER_ARTIFACT, "coverletters": COVER_LETTER_ARTIFACT,
+}
+
+
+def canonical_candidate_name(name):
+    """The candidate's name as it appears in an artifact filename: whitespace collapsed
+    and path-hostile characters removed, but spacing and hyphenation left exactly as the
+    person writes their own name."""
+    s = re.sub(r"\s+", " ", str(name or "").strip())
+    s = re.sub(r"[/\\:]+", " ", s)
+    return re.sub(r"\s+", " ", s).strip(" ,-")
+
+
+def canonical_application_filename(candidate_name, company, role, ext="",
+                                   artifact=RESUME_ARTIFACT):
+    """`<Candidate Name>-<Artifact> - <Company - Role><.ext>` — the ONE spelling.
+    The extension is preserved verbatim (a `.pages` base stays `.pages`); pass it with
+    or without the leading dot."""
+    who = canonical_candidate_name(candidate_name)
+    stem = f"{who}-{artifact}" if who else artifact
+    suffix = str(ext or "").strip()
+    if suffix and not suffix.startswith("."):
+        suffix = "." + suffix
+    return f"{stem} - {canonical_application_name(company, role)}{suffix}"
+
+
+def canonical_resume_filename(candidate_name, company, role, ext=""):
+    return canonical_application_filename(candidate_name, company, role, ext,
+                                          artifact=RESUME_ARTIFACT)
+
+
+def canonical_cover_letter_filename(candidate_name, company, role, ext=""):
+    return canonical_application_filename(candidate_name, company, role, ext,
+                                          artifact=COVER_LETTER_ARTIFACT)
+
+
+# `<anything>-Resume - <rest>` / `<anything> Cover Letter - <rest>`: the candidate half is
+# whatever precedes the artifact word, however the agent spelled it.
+_ARTIFACT_SPLIT_RE = re.compile(
+    r"^(?P<who>.*?)[\s\-_]*(?P<artifact>cover[\s\-_]*letter|resume|cv)\s+-\s+(?P<rest>.+)$",
+    re.I)
+
+
+def normalize_application_filename(filename, candidate_name=None):
+    """Repair an existing artifact filename to the canonical spelling, keeping its
+    `Company - Role` half and its extension verbatim. Returns the input unchanged when it
+    doesn't look like an application artifact — this only ever re-spells the candidate and
+    artifact halves, never the job identity."""
+    name = str(filename or "").strip()
+    stem, dot, ext = name.rpartition(".")
+    if not dot or len(ext) > 5 or " " in ext:
+        stem, ext = name, ""
+    m = _ARTIFACT_SPLIT_RE.match(stem)
+    if not m:
+        return name
+    artifact = _ARTIFACT_ALIASES.get(
+        re.sub(r"[\s\-_]+", "-", m.group("artifact").strip().lower()),
+        _ARTIFACT_ALIASES.get(re.sub(r"[\s\-_]+", "", m.group("artifact").strip().lower()),
+                              RESUME_ARTIFACT))
+    who = candidate_name if candidate_name is not None else m.group("who").replace("-", " ")
+    who = canonical_candidate_name(who)
+    stem_out = f"{who}-{artifact}" if who else artifact
+    return f"{stem_out} - {m.group('rest').strip()}" + (f".{ext}" if ext else "")
+
+
+def candidate_name_from_config(cfg):
+    """The candidate's name from jail.config.json (`candidate.name`), or "" when unset —
+    the single source, so no agent has to guess how the person spells it."""
+    candidate = (cfg or {}).get("candidate")
+    if isinstance(candidate, dict):
+        return canonical_candidate_name(candidate.get("name"))
+    return canonical_candidate_name(candidate if isinstance(candidate, str) else "")
+
+
+# --------------------------------------------------------------------------- #
 # Status — the tracker's lifecycle vocabulary.
 # --------------------------------------------------------------------------- #
 # The 12 dropdown values, verbatim. This is the ONE definition; make_rankings_xlsx imports it for
@@ -1000,6 +1097,17 @@ def main(argv):
                              "requires --company and --role")
     parser.add_argument("--application-role", action="store_true",
                         help="print just the canonical role; requires --role")
+    parser.add_argument("--resume-filename", action="store_true",
+                        help="print the canonical tailored-resume filename; requires "
+                             "--company, --role and --ext (candidate name from "
+                             "jail.config.json unless --candidate-name is given)")
+    parser.add_argument("--cover-letter-filename", action="store_true",
+                        help="print the canonical cover-letter filename; same inputs as "
+                             "--resume-filename")
+    parser.add_argument("--candidate-name", default=None,
+                        help="override the candidate name (default: candidate.name in "
+                             "jail.config.json)")
+    parser.add_argument("--ext", default="", help="file extension to preserve, e.g. .pages")
     parser.add_argument("--company", default=None, help="company name for --application-name")
     parser.add_argument("--role", default=None, help="role/title for --application-name / --application-role")
     args = parser.parse_args(argv[1:])
@@ -1012,6 +1120,22 @@ def main(argv):
         if not args.role:
             parser.error("--application-role requires --role")
         print(canonical_application_role(args.role))
+        return 0
+    if args.resume_filename or args.cover_letter_filename:
+        if not args.company or not args.role:
+            parser.error("--resume-filename/--cover-letter-filename require both "
+                         "--company and --role")
+        who = args.candidate_name
+        if who is None:
+            who = candidate_name_from_config(load_config(args.config or "jail.config.json"))
+        if not who:
+            parser.error(
+                "no candidate name available: set `candidate.name` in jail.config.json "
+                "(run /intake, or add it) or pass --candidate-name. The filename's "
+                "candidate half must never be improvised.")
+        builder = (canonical_resume_filename if args.resume_filename
+                   else canonical_cover_letter_filename)
+        print(builder(who, args.company, args.role, args.ext))
         return 0
     if args.normalize_rankings_csv:
         cfg = load_config(args.config)
