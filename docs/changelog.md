@@ -62,6 +62,41 @@ Groundwork for a parallel refresh, where several workers touch the same durable 
   cover-letter workflows keep working against an unmigrated file instead of silently writing
   nothing. The cover-letter marker is now the literal `Yes` (was `Y`) per the column semantics.
 
+## 2026-07-30 — Canary pass 3: the two prep CLIs had diverged, and an enrichment shipped in only one
+
+The employer-declared-name lookup was correct and unit-tested, and the live capture still said
+`Helpscout` — because the check lived in `prep_job_urls.py`'s own `fetch_one` while the batch flow
+runs `prep_job_urls_playwright.py`, which has a SEPARATE `fetch_one` that never got it. Tests passed
+against a function the real pipeline never called. Fixing the class, not the instance:
+
+- **The enrichment moved onto the shared path.** `prep_common.enrich_employer_identity()` runs inside
+  `process_urls`, at the identity choke point every route already funnels through (ATS, requests,
+  playwright, JSON-LD, embedded-Greenhouse recovery), and the gate + the network step moved to
+  `ats_fetchers` beside the other fetchers. Order: HTML/JSON-LD already in hand is free; only when
+  nothing is in hand AND the gate fires (non-ATS host + a run-together name matching the domain
+  label) does it make AT MOST ONE extra GET — which the ATS-API route needs, since it downloads no
+  employer HTML at all. Exception-safe: an identity nicety can never fail a capture, whoever supplied
+  the fetcher. The duplicate in the requests CLI is gone, with a comment saying why it must not
+  come back.
+- **A behavioral divergence guard.** The same synthetic fixture now runs through BOTH CLIs'
+  `fetch_one` and their company / role / filename must match exactly, plus a structural companion
+  asserting neither CLI module re-declares the enrichment helpers. A future identity or metadata
+  enrichment added to one path only now fails the suite.
+- **A network-exposure guard, which immediately paid for itself.** Moving the lookup onto the shared
+  path meant synthetic fixtures whose URLs merely LOOK like employer domains started making live
+  requests from the test suite — the run time jumped to 66s before this was caught. The autouse
+  fixture now stubs the network step to a recording no-op, so the suite cannot make a live employer
+  request, and tests that care about when it fires read the recorded calls. (It also surfaced that
+  embedded-Greenhouse recovery upgrades a scraped company mid-run, which is what makes the gate
+  legitimately fire on some fixtures.)
+- **Audit of other cross-CLI divergences: none found.** The two `fetch_one` implementations otherwise
+  differ only in fetch mechanism (requests+bs4 vs a rendered page) — same meta keys, same
+  question-render behavior, same JSON-LD identity handling — and every shared enrichment
+  (identity normalization, completeness, embedded-Greenhouse recovery, the capture registry,
+  best-verified merge) already lives in `prep_common.process_urls`.
+
+Suite: 495 → 500 green.
+
 ## 2026-07-30 — Canary pass 2: the page-<title> company source, sentence-case values, remote-first locations
 
 - **The company name was hiding in a signal we discarded.** A careers page with no

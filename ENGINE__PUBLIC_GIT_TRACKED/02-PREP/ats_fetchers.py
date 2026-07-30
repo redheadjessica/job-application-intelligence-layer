@@ -2315,6 +2315,40 @@ def employer_declared_name(html_text: Optional[str] = None,
     return company_from_page_title(src)
 
 
+def should_check_employer_name(url: str, company) -> bool:
+    """True when the posting is on the employer's OWN domain and the fetched company name
+    looks like a board-token guess (a single run-together word matching the domain label,
+    e.g. "Helpscout" for helpscout.com) — the one case where the employer page's own
+    declared name is worth a look. Never fires for ATS-hosted URLs or for a name that is
+    already properly spaced.
+
+    Lives here, beside the fetchers, so BOTH prep CLIs reach it through the shared
+    identity enrichment in prep_common.process_urls rather than each wiring their own."""
+    host = urlparse(url or "").netloc.lower().replace("www.", "")
+    labels = [l for l in host.split(".") if l]
+    if len(labels) < 2 or any(l in ATS_HOST_KEYWORDS for l in labels):
+        return False
+    name = str(company or "").strip()
+    if not name or " " in name:
+        return False
+    key = re.sub(r"[^a-z0-9]+", "", name.lower())
+    return any(key == re.sub(r"[^a-z0-9]+", "", l) for l in labels)
+
+
+def fetch_employer_declared_name(url: str, timeout: int = 15) -> Optional[str]:
+    """ONE best-effort GET of the job URL, returning the employer's own declared name
+    (JSON-LD hiringOrganization -> og:site_name -> the <title> branding wrapper) or None.
+    Never raises: an identity nicety must not fail a capture."""
+    try:
+        resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=timeout)
+        if resp.status_code >= 400:
+            return None
+        return employer_declared_name(resp.text)
+    except Exception as exc:
+        print(f"  ! employer-name lookup failed for {url}: {type(exc).__name__}: {exc}")
+        return None
+
+
 def _prettify_slug(slug: str) -> str:
     s = re.sub(r"[-_]+", " ", slug).strip()
     # Title-case but keep existing capitalization for already-cased words.

@@ -28,6 +28,8 @@ from ats_fetchers import (
     ATS_HOST_KEYWORDS,
     MENTIONED_NO_DETAILS,
     employer_declared_name,
+    fetch_employer_declared_name,
+    should_check_employer_name,
     UUID_RE,
     _EQUITY_SPECIFICS_RE,
     _gh_board_tokens_from_domain,
@@ -430,6 +432,43 @@ def _strip_trailing_company_echo(title: str, company: str) -> str:
     if m and m.start() > 0:
         return title[:m.start()].strip(" \t|·:,-–—")
     return title
+
+
+# The network step of the identity enrichment, as a module attribute so it is a single
+# patchable seam: the test suite stubs it out (see tests/conftest.py) and can therefore
+# never make a live request, and a caller can inject its own fetcher.
+EMPLOYER_NAME_FETCHER = fetch_employer_declared_name
+
+
+def enrich_employer_identity(url: str, company, meta: dict, *, fetcher=None) -> str | None:
+    """The employer's own declared name for this capture, or None.
+
+    THE SHARED enrichment: it lives here, on the path BOTH prep CLIs traverse
+    (`process_urls`), because it previously lived in the requests CLI's own `fetch_one`
+    and the playwright CLI — the entry point the batch flow actually runs — never called
+    it. Unit tests passed against the function while the real pipeline skipped it. Any
+    future identity/metadata enrichment belongs here for the same reason.
+
+    Order: HTML/JSON-LD already in hand (free — the requests and playwright generic routes
+    both carry `raw_html`), then AT MOST ONE extra GET, and only when the gate fires
+    (non-ATS host + a run-together name matching the domain label). The ATS-API routes
+    download no employer HTML at all, which is exactly why the fetch has to be available
+    here rather than assumed."""
+    meta = meta or {}
+    existing = meta.get("employer_declared_name")
+    if existing:
+        return existing
+    declared = employer_declared_name(meta.get("raw_html"), meta.get("jsonld_identity"))
+    if declared:
+        return declared
+    if not should_check_employer_name(url, company):
+        return None
+    try:
+        return (fetcher or EMPLOYER_NAME_FETCHER)(url)
+    except Exception as exc:
+        # An identity nicety must never fail a capture, whoever supplied the fetcher.
+        print(f"  ! employer-name lookup failed for {url}: {type(exc).__name__}: {exc}")
+        return None
 
 
 def _is_employer_domain(url: str | None) -> bool:
@@ -2768,7 +2807,7 @@ def _remove_if_exists(rel_path: str, batch: Path) -> None:
 # --------------------------------------------------------------------------- #
 def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                   fetch_fallback=None, fallback_label: str | None = None,
-                  registry_path=None) -> dict:
+                  registry_path=None, employer_name_fetcher=None) -> dict:
     """fetch_one(url) -> dict: {ok: bool, title, company, body, method, error}.
     Manifest-aware: a plain re-run skips already-usable URLs and retries
     thin/failed ones (set force=True to refetch everything).
@@ -3021,10 +3060,15 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
         # THE choke point for captured identity: whichever fetch path won above, its
         # (company, title) pair is canonicalized here — once — before the filename, the
         # header, and the manifest entry are derived from it. Idempotent per URL.
+        # Identity enrichment BOTH CLIs get, because it happens here and not in either
+        # fetch_one (see enrich_employer_identity).
+        declared = enrich_employer_identity(url, company, meta,
+                                            fetcher=employer_name_fetcher)
+        if declared:
+            meta["employer_declared_name"] = declared
         company, title = normalize_capture_identity(
             company, title, url=url, jsonld=meta.get("jsonld_identity"),
-            html=meta.get("raw_html"), body=body,
-            declared_name=meta.get("employer_declared_name"))
+            html=meta.get("raw_html"), body=body, declared_name=declared)
         meta["company"], meta["title"] = company, title
         # The title status was assessed against the RAW scraped title; re-derive it from
         # the canonical one so a branding-only title that could not be recovered shows up

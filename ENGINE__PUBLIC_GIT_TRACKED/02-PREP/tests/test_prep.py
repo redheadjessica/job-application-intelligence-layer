@@ -3500,17 +3500,20 @@ def test_without_an_employer_signal_the_board_token_fallback_still_applies():
 
 
 def test_the_employer_name_lookup_only_fires_for_a_token_shaped_guess():
-    pju = pytest.importorskip("prep_job_urls")
+    """The gate lives in ats_fetchers (shared), NOT in either CLI's fetch_one."""
     # Fires: employer domain + single run-together word matching the domain label.
-    assert pju._should_check_employer_name(
+    assert af.should_check_employer_name(
         "https://www.helpscout.com/company/careers/?ashby_jid=abc", "Helpscout") is True
     # Does not fire: already multi-word, an ATS host, or a name unrelated to the domain.
-    assert pju._should_check_employer_name(
+    assert af.should_check_employer_name(
         "https://www.helpscout.com/careers", "Help Scout") is False
-    assert pju._should_check_employer_name(
+    assert af.should_check_employer_name(
         "https://jobs.ashbyhq.com/helpscout/abc", "Helpscout") is False
-    assert pju._should_check_employer_name(
+    assert af.should_check_employer_name(
         "https://www.example.com/careers", "Acme") is False
+    # Neither CLI may keep its own copy — that divergence is what shipped the bug.
+    pju = pytest.importorskip("prep_job_urls")
+    assert not hasattr(pju, "_should_check_employer_name")
 
 
 # ---- Defect 6: the Remote-/-Hybrid office-naming convention ----
@@ -3666,3 +3669,165 @@ def test_maven_shaped_location_reads_remote_first_end_to_end():
     assert "Working Location(s): Remote (US) or IRL SF" in out
     assert "Conflicting employer information" not in out
     assert "Location Preference: Strong preference for those based in SF." in out
+
+
+# ===========================================================================
+# CLI DIVERGENCE (2026-07-30): the two prep CLIs have separately-evolved
+# `fetch_one` implementations, and an identity enrichment that landed in only
+# one of them shipped a mis-spelled company while its unit tests passed. The
+# enrichment now lives on the shared path; these tests keep it that way.
+# ===========================================================================
+_ASHBY_EMPLOYER_DOMAIN_URL = "https://www.helpscout.com/company/careers/?ashby_jid=abc"
+
+
+def _ashby_on_employer_domain_result():
+    """A synthetic Ashby posting-API result served from the EMPLOYER's own domain: the
+    company is only a board-token guess and no employer HTML is in hand (the API route
+    downloads none), which is exactly the shape that needs the shared lookup."""
+    return {
+        "title": _HELPSCOUT_ROLE, "company": "Helpscout",
+        "text": _SYNTH_BODY, "source": "ashby-posting-api (custom-domain jid)",
+        "apply_url": "https://jobs.ashbyhq.com/helpscout/abc/application",
+        "posting_id": "abc", "working_location": "Remote, US",
+        "compensation": "$172K – $248K", "employment_type": "FullTime",
+        "structured_source": True, "questions": [],
+    }
+
+
+def _fake_employer_name_fetcher(calls):
+    def fetch(url, **_kw):
+        calls.append(url)
+        return af.employer_declared_name(_HELPSCOUT_TITLE_HTML)
+    return fetch
+
+
+def test_both_prep_clis_produce_identical_identity_for_one_fixture(monkeypatch):
+    """BEHAVIORAL divergence guard: the SAME fixture through BOTH CLIs' `fetch_one`
+    must yield the same company / role / filename. This fails if a future identity or
+    metadata enrichment lands in one path only."""
+    pju = pytest.importorskip("prep_job_urls")
+    pjp = pytest.importorskip("prep_job_urls_playwright")
+    ats_res = _ashby_on_employer_domain_result()
+    monkeypatch.setattr(pju, "fetch_via_ats", lambda u, **k: dict(ats_res))
+    monkeypatch.setattr(pjp, "fetch_via_ats", lambda u, **k: dict(ats_res))
+
+    class DummyBrowser:  # the ATS branch never touches it when questions are present
+        pass
+
+    results = {
+        "requests": pju.fetch_one(_ASHBY_EMPLOYER_DOMAIN_URL,
+                                  question_renderer=lambda *a, **k: []),
+        "playwright": pjp.make_fetch_one(DummyBrowser())(_ASHBY_EMPLOYER_DOMAIN_URL),
+    }
+    identities = {}
+    for name, res in results.items():
+        assert res["ok"] is True, name
+        # Neither fetch_one resolves identity itself — process_urls does, from the same
+        # inputs. Assert the INPUTS match, then the resolved identity.
+        meta = res["meta"]
+        declared = pc.enrich_employer_identity(
+            _ASHBY_EMPLOYER_DOMAIN_URL, res["company"], meta,
+            fetcher=_fake_employer_name_fetcher([]))
+        co, ro = pc.normalize_capture_identity(
+            res["company"], res["title"], url=_ASHBY_EMPLOYER_DOMAIN_URL,
+            jsonld=meta.get("jsonld_identity"), html=meta.get("raw_html"),
+            body=res["body"], declared_name=declared)
+        identities[name] = (co, ro, pc.base_filename(co, ro))
+    assert identities["requests"] == identities["playwright"]
+    assert identities["requests"] == (
+        "Help Scout", _HELPSCOUT_ROLE,
+        "help-scout__lead-principal-product-manager-resolve.txt")
+
+
+def test_neither_cli_fetch_one_carries_its_own_identity_enrichment():
+    """Structural companion to the behavioral test above: the enrichment helpers must be
+    reachable from the SHARED modules, and absent from both CLI modules."""
+    pju = pytest.importorskip("prep_job_urls")
+    pjp = pytest.importorskip("prep_job_urls_playwright")
+    assert callable(pc.enrich_employer_identity)
+    assert callable(af.should_check_employer_name)
+    assert callable(af.fetch_employer_declared_name)
+    for mod in (pju, pjp):
+        for attr in ("_should_check_employer_name", "employer_declared_name",
+                     "enrich_employer_identity"):
+            assert not hasattr(mod, attr), f"{mod.__name__} re-declared {attr}"
+
+
+def test_process_urls_resolves_the_employer_name_for_an_ats_only_capture(tmp_path):
+    """END-TO-END through the shared path, with NO employer HTML in meta (the Ashby API
+    route downloads none): the single best-effort lookup supplies the declared name."""
+    src = _batch_source(tmp_path)
+    ats_res = _ashby_on_employer_domain_result()
+    calls: list = []
+
+    def fetch(u):
+        meta = dict(ats_res)
+        meta["method"] = "ats"
+        return {"ok": True, "title": ats_res["title"], "company": ats_res["company"],
+                "body": ats_res["text"], "method": "ats", "error": None,
+                "meta": meta, "questions": []}
+
+    manifest = pc.process_urls([_ASHBY_EMPLOYER_DOMAIN_URL], src, fetch,
+                               registry_path=tmp_path / "reg.json",
+                               employer_name_fetcher=_fake_employer_name_fetcher(calls))
+    entry = manifest["entries"][0]
+    assert entry["company"] == "Help Scout"
+    assert entry["title"] == _HELPSCOUT_ROLE
+    assert Path(entry["output_path"]).name == \
+        "help-scout__lead-principal-product-manager-resolve.txt"
+    written = (src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
+    assert "Company: Help Scout" in written
+    assert f"Role: {_HELPSCOUT_ROLE}" in written
+    assert calls == [_ASHBY_EMPLOYER_DOMAIN_URL], "exactly ONE extra request"
+
+
+def test_the_shared_lookup_makes_at_most_one_request_and_never_for_ats_hosts(tmp_path):
+    calls: list = []
+    # Already-spaced name: no request.
+    assert pc.enrich_employer_identity(
+        "https://www.helpscout.com/careers", "Help Scout", {},
+        fetcher=_fake_employer_name_fetcher(calls)) is None
+    # ATS-hosted URL: no request (the host names the platform, not the employer).
+    assert pc.enrich_employer_identity(
+        "https://jobs.ashbyhq.com/helpscout/abc", "Helpscout", {},
+        fetcher=_fake_employer_name_fetcher(calls)) is None
+    assert calls == []
+    # HTML already in hand: resolved for FREE, still no request.
+    assert pc.enrich_employer_identity(
+        _ASHBY_EMPLOYER_DOMAIN_URL, "Helpscout",
+        {"raw_html": _HELPSCOUT_TITLE_HTML},
+        fetcher=_fake_employer_name_fetcher(calls)) == "Help Scout"
+    assert calls == []
+    # Nothing in hand + gate fires: exactly one request.
+    assert pc.enrich_employer_identity(
+        _ASHBY_EMPLOYER_DOMAIN_URL, "Helpscout", {},
+        fetcher=_fake_employer_name_fetcher(calls)) == "Help Scout"
+    assert len(calls) == 1
+    # A pre-resolved name short-circuits entirely.
+    assert pc.enrich_employer_identity(
+        _ASHBY_EMPLOYER_DOMAIN_URL, "Helpscout",
+        {"employer_declared_name": "Help Scout"},
+        fetcher=_fake_employer_name_fetcher(calls)) == "Help Scout"
+    assert len(calls) == 1
+
+
+def test_a_failing_employer_name_lookup_never_fails_the_capture(tmp_path):
+    src = _batch_source(tmp_path)
+    ats_res = _ashby_on_employer_domain_result()
+
+    def fetch(u):
+        meta = dict(ats_res)
+        meta["method"] = "ats"
+        return {"ok": True, "title": ats_res["title"], "company": ats_res["company"],
+                "body": ats_res["text"], "method": "ats", "error": None,
+                "meta": meta, "questions": []}
+
+    def boom(url, **_kw):
+        raise RuntimeError("network down")
+
+    manifest = pc.process_urls([_ASHBY_EMPLOYER_DOMAIN_URL], src, fetch,
+                               registry_path=tmp_path / "reg.json",
+                               employer_name_fetcher=boom)
+    entry = manifest["entries"][0]
+    assert entry["status"] == pc.USABLE
+    assert entry["company"] == "Helpscout"   # honest token fallback, capture intact

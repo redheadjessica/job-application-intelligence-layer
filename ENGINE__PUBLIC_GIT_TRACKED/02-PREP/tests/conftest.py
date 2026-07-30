@@ -15,10 +15,24 @@ if str(PREP_DIR) not in sys.path:
 @pytest.fixture(autouse=True)
 def _isolated_capture_registry(tmp_path, monkeypatch):
     """No test may ever read or write the user's REAL capture-history registry
-    (it lives under the gitignored PRIVATE root). Every test gets its own."""
+    (it lives under the gitignored PRIVATE root). Every test gets its own.
+
+    Also stubs the employer-name lookup's network step to a recording no-op: it runs
+    inside `process_urls`, so without this a synthetic fixture whose URL looks like an
+    employer domain makes a LIVE request from the test suite (it did — the run jumped
+    to 66s once the enrichment moved onto the shared path). Tests that exercise the
+    lookup inject their own fetcher; tests that care about WHEN it fires request this
+    fixture by name to read the recorded calls."""
     import prep_common
     monkeypatch.setattr(prep_common, "DEFAULT_REGISTRY_PATH",
                         tmp_path / "_registry" / "capture-history-registry.json")
+    calls: list = []
+
+    def _no_network(url, **_kw):
+        calls.append(url)
+        return None
+    monkeypatch.setattr(prep_common, "EMPLOYER_NAME_FETCHER", _no_network)
+    return calls
 
 
 @pytest.fixture

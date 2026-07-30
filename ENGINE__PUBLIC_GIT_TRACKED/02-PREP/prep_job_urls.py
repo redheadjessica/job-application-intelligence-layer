@@ -21,29 +21,11 @@ from bs4 import BeautifulSoup, Comment
 
 import prep_common
 from ats_fetchers import (
-    ATS_HOST_KEYWORDS,
     ats_company_from_url,
     detect_apply_ats,
-    employer_declared_name,
     extract_jsonld_jobposting,
     fetch_via_ats,
 )
-
-
-def _should_check_employer_name(url: str, company) -> bool:
-    """True when the posting is on the employer's OWN domain and the ATS-provided company
-    name looks like a board-token guess (a single run-together word that matches the
-    domain label, e.g. "Helpscout" for helpscout.com) — the one case where the employer
-    page's own declared name is worth one extra request."""
-    host = urlparse(url or "").netloc.lower().replace("www.", "")
-    labels = [l for l in host.split(".") if l]
-    if len(labels) < 2 or any(l in ATS_HOST_KEYWORDS for l in labels):
-        return False
-    name = str(company or "").strip()
-    if not name or " " in name:
-        return False   # a multi-word name is already properly spelled
-    key = re.sub(r"[^a-z0-9]+", "", name.lower())
-    return any(key == re.sub(r"[^a-z0-9]+", "", l) for l in labels)
 
 HEADERS = {
     "User-Agent": (
@@ -163,22 +145,11 @@ def fetch_one(url: str, question_renderer=None, ashby_question_renderer=None) ->
                 if rendered:
                     questions = rendered
                     meta["questions"] = rendered
-            # A posting on the EMPLOYER's own domain whose company name could only be
-            # guessed from the board token (a single run-together word, e.g. "helpscout"
-            # -> "Helpscout") gets one cheap best-effort look at the employer page for
-            # its DECLARED name (JSON-LD hiringOrganization / og:site_name), which is how
-            # the company actually spells itself ("Help Scout"). Never fails the fetch;
-            # skipped entirely for ATS-hosted URLs and for names that need no repair.
-            if _should_check_employer_name(url, ats.get("company")):
-                try:
-                    page = fetch_html(url)
-                    declared = employer_declared_name(page)
-                except Exception as exc:
-                    print(f"  ! employer-name lookup failed for {url}: "
-                          f"{type(exc).__name__}: {exc}")
-                    declared = None
-                if declared:
-                    meta["employer_declared_name"] = declared
+            # NOTE: the employer-declared-name enrichment deliberately does NOT live
+            # here. It runs in prep_common.process_urls (enrich_employer_identity) so the
+            # playwright CLI — which has its own fetch_one — gets it too. Adding identity
+            # or metadata enrichment to one fetch_one only is the bug class that shipped a
+            # "Helpscout" capture while its unit tests passed.
             return {"ok": True, "title": ats["title"], "company": ats["company"],
                     "body": ats["text"], "method": "ats", "error": None,
                     "meta": meta, "questions": questions}
