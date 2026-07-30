@@ -11,6 +11,28 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — B8: one true end-to-end test through the real wiring
+
+`03-VETTING/tests/test_e2e_pipeline.py` drives the ACTUAL pipeline, not reimplementations: stubbed
+fetch (network fully stubbed, with this file's own no-network/isolated-registry autouse fixture) →
+the real ATS fixture parsers → canonical identity → registry → the real `process_urls` (capture
+writer + QA gate) → question filtering → scoring rows synthesized through the same 27-column
+contract (pinned against `resolve_contract_headers`, the scorer being the one genuinely-LLM stage) →
+the REAL `norm_contracts.py --normalize-rankings-csv` CLI via subprocess, exactly as vet-jobs runs
+it → the REAL `make_rankings_xlsx.build`. Five source shapes: Greenhouse, Ashby (+ rendered
+apply-form questions), Lever (through the real `_fetch_lever` over a faked requests layer),
+employer-hosted Ashby (declared-name enrichment fires exactly once), and a rendered generic page.
+
+Final-artifact assertions: capture section order + QA-gate pass per file; canonical filenames incl.
+the declared-name repair; ORIGINAL/LATEST after a forced partial re-fetch (which also proves the
+other four manifest entries survive); kept-vs-excluded questions in the written capture; the
+mechanical comp envelope overriding the scorer's single band; `Job Posted Date` back-filled from the
+captures; Job File linkage to real files; the exact 27-column schema in both artifacts; CSV↔XLSX
+cell-by-cell equality; and the Working Location fill hexes (including learning the spec back the
+hard way: an open-ended `2+ days` is orange, not yellow). The critical property holds by
+construction — a disconnected live-path component fails this test even when its helper-level unit
+tests pass. Suite: 658 → 659 green.
+
 ## 2026-07-30 — B10: presentation comp labels clean up; geography survives
 
 The four live shapes that were hand-fixed now normalize mechanically: a GEO-prefixed presentation
