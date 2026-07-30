@@ -130,7 +130,8 @@
 
 ## Priority Lanes
 <!-- intake: 2–5 named lanes, most-wanted first. The scorer's Lane Fit maps each job to the closest lane (or "Outside lanes");
-     the matched lane's priority drives the spreadsheet's Lane stoplight coloring (p1 green / p2+ amber / Outside red) AND
+     the matched lane's priority drives the spreadsheet's **Lane Fit** stoplight coloring (p1 green / p2+ amber / Outside
+     red — the `Lane` column itself is NOT priority-colored) AND
      these are the shared lane taxonomy — the id/name/priority of each lane is mirrored in jail.config.json. (Note: "Lane" in
      the spreadsheet is the job's own category; "Lane Fit" is this candidate-relative mapping.) Derive candidates from the
      user's domains + reaching-for roles; confirm order.

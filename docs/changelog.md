@@ -11,6 +11,63 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 (authoritative) — The output-contract spec supersedes every earlier location-color rule; three fidelity gaps fixed
+
+**Read this before trusting any older colour or format note in this file.** The 2026-07-29
+output-contract specification is now the authoritative source for Working Location text + colours,
+Comp Range, Comp Fit, Lane, tailored-application names, and captured-job filenames. It **supersedes**:
+
+- the **2026-07-14 (later still)** location-colour rule (home-metro **1–2** days → yellow, **3+** →
+  orange). Under the current contract an acceptable home-metro office at **exactly 1, 2, or 3 days is
+  YELLOW**; only *more than* 3 days, an open-ended minimum (`3+`, "at least 3"), or an unknown cadence
+  is orange. That entry also claimed the shared engine already coloured location correctly — it did not.
+- the earlier **2026-07-29** "day-count coloring ported" entry, which described the interim palette and
+  said `Unknown` renders **grey**. Grey is no longer permitted anywhere in these two columns: the only
+  values are green `42FF35`, yellow `FDFF43`, orange `FA9C31`, red `F82C1F`, with black text, and
+  `Unknown` is **orange**. The old palette (`A9D08E` / `FFE699` / `F4B183` / `D9D9D9` / `F4A6A6`) is
+  retired for Working Location and Location Fit, and a regression test asserts none of it can reappear.
+- any note implying `location.arrangements` drives a colour. It does not; it is a *scoring* signal only.
+  Home-metro membership comes from `home_metro` + `home_metro_aliases`, never `city_priority`.
+
+**Why the whole contract layer exists:** these formats used to be enforced by prompt instructions, and
+prompts are insufficient — a real batch produced a location value with the mandatory `IRL ` prefix
+missing. Every contract now has ONE normalizer in `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py`,
+applied after model output and before anything is written, tested at the **final artifact** (the actual
+spreadsheet cell, the actual filename).
+
+**Three fidelity gaps found in real captures and fixed (with permanent regression fixtures):**
+
+1. **Never company-as-role.** A JS-rendered careers site whose title/og:title/h1 are all site branding
+   produced `Company: <X> Careers` / `Role: <X> Careers` and a branding filename. Cleaning the company
+   was never enough — a title that slugs to the company, or is pure careers-site branding, is now
+   invalid and gets **recovered** from JSON-LD `title` → the page's first heading → the first
+   non-navigation heading line of the extracted body text (rejecting nav vocabulary, the employer's own
+   name, and JD section headers like "About the role"). If nothing is recoverable the title is a
+   **capture failure** (`field_status: title: capture_failed`) surfaced on the capture's Completeness
+   line, in the manifest notes, and in a dedicated loud block in the prep report — never an invented or
+   branding filename. Recovery runs *before* the older never-role-as-company swap, so a good company
+   name is no longer discarded to repair a bad title.
+2. **Day ranges were being collapsed.** `2-3 days` normalized to `3 days`, `4-5 days` to `5 days`.
+   Silently rewriting a cadence the employer stated is information loss on a field the candidate reads —
+   the same fidelity rule that keeps `3 days` distinct from `3+ days`. Ranges are now preserved verbatim
+   in the display text and **coloured by the range's maximum** (`2-3` yellow, `4-5` orange).
+3. **Multi-city and trailing detail dropped in the `Remote or IRL …` form.** `Remote or IRL A/B -
+   unknown days (employer detail)` lost the second office *and* the entire parenthetical. `unknown days`
+   now strips as cadence (it had been swallowing the city in front of it), and a trailing parenthetical
+   is preserved unless it merely restates the cadence.
+
+Also fixed in passing: HTML comment text could leak into captured job body text via BeautifulSoup's
+`get_text()` on both the requests and generic extraction paths. Comments are markup, not job content —
+now stripped before extraction.
+
+Docs corrected in the same pass (they contradicted shipped behaviour): `03-VETTING/CLAUDE.md` (the
+"never hardcode remote is green" line — this column now hardcodes it deliberately, in exactly one
+place; the slash-form Lane examples, which are not valid Lane values; and the false claim that the
+`Lane` cell is priority-coloured — that is **Lane Fit**), `docs/v2-end-to-end-workflow.md`,
+`docs/testing-and-caveats.md`, and `02-candidate-profile.template.md`. Tests: 328 green
+(295 → 328; no golden fixture needed regeneration).
+
+
 ## 2026-07-29 — Posting dates captured (+ a `Posted` rankings column) and canonical apply-URL deep links
 
 Two findings from reviewing a real batch of captures, both decided by her.
