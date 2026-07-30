@@ -1799,11 +1799,18 @@ def _expand_dollar_amounts(text: str) -> str:
 _RANGE_SEP_RE = re.compile(r"(\$[\d,]+(?:\.\d+)?)\s*(?:-|–|—|to|through)\s*(\$?[\d,]+(?:\.\d+)?)")
 _ANNUAL_MARKER_RE = re.compile(r"(?i)\b(annually|annual|per year|a year)\b|/y(?:ea)?r\b")
 _NON_ANNUAL_RE = re.compile(r"(?i)\bhour(ly)?\b|/hour|/hr\b|\bmonth(ly)?\b|/month|\bweek(ly)?\b")
-# Generic comp labels an ATS prepends to a band ("Pay Range: USD 232,000–282,000") —
-# stripped. Geo/level labels (Zone A, US Tier 1, city names) are MEANINGFUL and survive.
+# Generic comp labels an ATS prepends to a band ("Pay Range: USD 232,000–282,000",
+# "Annual Base Salary Range:: …" with repeated punctuation) — stripped. Geo/level
+# labels (Zone A, US Tier 1, city names) are MEANINGFUL and survive.
 _GENERIC_COMP_LABEL_RE = re.compile(
-    r"(?i)^(?:pay(?:\s+range)?|salary(?:\s+range)?|base\s+pay(?:\s+range)?|"
-    r"base\s+salary(?:\s+range)?|compensation(?:\s+range)?|pay\s+rate)\s*:\s*")
+    r"(?i)^(?:annual\s+)?(?:pay(?:\s+range)?|salary(?:\s+range)?|base\s+pay(?:\s+range)?|"
+    r"base\s+salary(?:\s+range)?|compensation(?:\s+range)?|pay\s+rate)\s*:+\s*")
+# A GEO-prefixed presentation label ("New York Pay Range:") keeps its geography and
+# drops the label noise -> "New York:". Requires the "range"-style noise wording, so a
+# meaningful bare label ("Zone A:", "US Tier 1:") is never rewritten.
+_GEO_COMP_LABEL_RE = re.compile(
+    r"^(?P<geo>[A-Z][\w .,'/&-]*?)\s+(?i:(?:annual\s+)?(?:base\s+)?"
+    r"(?:salary|pay|comp(?:ensation)?)\s+range)\s*:+\s*")
 _LEADING_CODE_RE = re.compile(r"(?i)^(?:USD|US\$)\s*")
 _COMMA_AMOUNT_RE = re.compile(r"(?<![\d$.,])(\d{1,3}(?:,\d{3})+(?:\.\d+)?)")
 
@@ -1813,6 +1820,8 @@ def _normalize_salary_band(seg: str) -> str:
     code folded into `$…–$… USD` shape (`Pay Range: USD 232,000–282,000` ->
     `$232,000–$282,000 USD`), dollar signs on both endpoints, spaceless en dash."""
     seg = _GENERIC_COMP_LABEL_RE.sub("", str(seg or "").strip()).strip()
+    # A geo-prefixed presentation label keeps its geography, drops the label noise.
+    seg = _GEO_COMP_LABEL_RE.sub(lambda m: f"{m.group('geo').strip()}: ", seg)
     if _LEADING_CODE_RE.match(seg):
         seg = _LEADING_CODE_RE.sub("", seg).strip()
         if "$" not in seg:

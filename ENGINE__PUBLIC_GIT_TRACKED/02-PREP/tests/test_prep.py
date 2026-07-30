@@ -4502,3 +4502,52 @@ def test_the_betterup_office_question_still_supplies_its_metros():
     parsed = af.parse_office_cadence(office)
     assert parsed["metros"] == ["San Francisco Bay Area", "New York City",
                                 "Austin, TX", "Washington, D.C."]
+
+
+# ===========================================================================
+# B10 — comp-label cleanup. The four live shapes that were hand-fixed:
+# geo-prefixed presentation labels ("New York Pay Range:"), repeated-punctuation
+# generic labels ("Annual Base Salary Range::"), and raw ATS label fragments.
+# ===========================================================================
+@pytest.mark.parametrize("raw,expected", [
+    # Geo kept, label noise dropped.
+    ("New York Pay Range: $160,000 - $230,000", "New York: $160-230K"),
+    ("Los Angeles Base Salary Range: $140,000 - $190,000", "Los Angeles: $140-190K"),
+    ("San Francisco Annual Base Salary Range: $170,000 - $210,000",
+     "San Francisco: $170-210K Annually"),
+    # Repeated punctuation + generic label -> stripped ("Annual" in the employer's own
+    # label honestly earns the Annually suffix).
+    ("Annual Base Salary Range:: $150,000 - $180,000", "$150-180K Annually"),
+    # Raw ATS fragments (already covered; re-pinned beside the new shapes).
+    ("Pay Range: USD 232,000–282,000", "$232-282K"),
+    ("Salary Range:: $120,000 - $150,000", "$120-150K"),
+])
+def test_presentation_labels_clean_up(raw, expected):
+    assert pc._base_salary_bands(raw, {"compensation_prose_all": []}, {}) == [expected]
+
+
+def test_meaningful_geo_and_level_labels_are_never_rewritten():
+    """Only labels carrying the range-noise wording are touched: a bare geo/level
+    label is meaningful and survives verbatim."""
+    for raw, expected in [
+        ("Zone A: SF Bay Area / NYC $236K – $296K", "Zone A: SF Bay Area / NYC $236-296K"),
+        ("US Tier 1: $174,000 - $290,000", "US Tier 1: $174-290K"),
+    ]:
+        assert pc._base_salary_bands(raw, {"compensation_prose_all": []}, {}) == [expected]
+
+
+def test_geo_labels_render_in_multi_band_bullets(tmp_path):
+    """End-to-end through the writer: a two-geo posting with presentation labels
+    renders clean geo-labeled bullets."""
+    out = pc.build_output_text(
+        "http://x", "PM", "Acme", _SYNTH_BODY,
+        meta={"title": "PM", "structured_source": True,
+              "compensation": "New York Pay Range: $160,000 - $230,000 · "
+                              "Los Angeles Base Salary Range: $140,000 - $190,000",
+              "working_location": "NYC; LA"},
+        field_status={"compensation": pc.FOUND, "working_location": pc.FOUND,
+                      "description": pc.FOUND, "conflicts": []},
+        methods_tried=["ats"])
+    assert "\n- New York: $160-230K\n" in out
+    assert "\n- Los Angeles: $140-190K\n" in out
+    assert "Pay Range" not in out.split("COMPENSATION")[1].split("APPLICATION")[0]

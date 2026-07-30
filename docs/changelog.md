@@ -11,6 +11,17 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — B10: presentation comp labels clean up; geography survives
+
+The four live shapes that were hand-fixed now normalize mechanically: a GEO-prefixed presentation
+label keeps its geography and drops the noise (`New York Pay Range: $160,000 - $230,000` →
+`New York: $160-230K`); a generic label with repeated punctuation strips fully
+(`Annual Base Salary Range:: …` → the clean band — and the employer's own "Annual" wording honestly
+earns the `Annually` suffix per the existing never-inferred rule); raw ATS fragments stay stripped.
+The rewrite requires the range-noise wording, so meaningful bare geo/level labels (`Zone A:`,
+`US Tier 1:`) are never touched (pinned), and the multi-band bullet rendering carries the cleaned
+geo labels end-to-end. Suite: 650 → 658 green.
+
 ## 2026-07-30 — B11: Application Question Drafts, with a derived skeleton the agent cannot re-word
 
 The tailoring step now appends `## Application Question Drafts` to the tailored-resume output. The
