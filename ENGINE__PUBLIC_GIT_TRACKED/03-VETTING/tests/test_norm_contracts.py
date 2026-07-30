@@ -1378,3 +1378,139 @@ def test_a_missing_rankings_folder_is_a_loud_warning_not_a_quiet_note(tmp_path):
     assert "WARNING" in res.stdout
     assert "were NOT updated" in res.stdout
     assert "note:" not in res.stdout.lower().split("warning")[0]
+
+
+# ===========================================================================
+# B2 — row-integrity validation at the rankings writer. The live defect: one
+# malformed row lost Lane Fit + Job File and had a Comp-Fit-shaped value
+# ('Below floor') duplicated into Data Completeness, and nothing noticed until
+# a human cross-audit.
+# ===========================================================================
+def _malformed_thesis_row():
+    """The exact live shape, synthetically: lane_fit and job_file lost,
+    'Below floor' sitting in Data Completeness."""
+    row = make_row(company="ThesisCo", comp="120-170", comp_fit="Below floor",
+                   posted="2026-06-13")
+    row[HEADERS.index("Lane Fit")] = ""
+    row[HEADERS.index("Job File")] = ""
+    row[HEADERS.index("Data Completeness")] = "Below floor"
+    return row
+
+
+def test_the_malformed_row_shape_is_caught_and_partially_repaired(tmp_path, capsys):
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir(parents=True)
+    csv_path = rankings / "b-rankings.csv"
+    write_csv(csv_path, [_malformed_thesis_row(), make_row(company="FineCo",
+                                                           posted="2026-06-13")])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG)
+    out = capsys.readouterr().out
+    # Data Completeness IS re-derivable from the row's own comp/location -> repaired.
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    got = by_name(rows[0], rows[1])
+    assert got["Data Completeness"] == "✓ complete"
+    assert "Comp-Fit-shaped value re-derived" in out
+    # Lane Fit and Job File are NOT re-derivable -> loud ERRORs naming the row.
+    errors = norm_contracts.normalize_rankings_csv.last_integrity_errors
+    assert any("Lane Fit is blank" in e and "ThesisCo" in e for e in errors)
+    assert any("Job File" in e and "ThesisCo" in e for e in errors)
+    assert "ERROR" in out and "row 2 (ThesisCo)" in out
+    # The healthy row raised nothing.
+    assert not any("FineCo" in e for e in errors)
+    # Values were never invented.
+    assert got["Lane Fit"] == "" and got["Job File"] == ""
+
+
+def test_a_clean_csv_validates_with_no_errors(tmp_path):
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir(parents=True)
+    csv_path = rankings / "b-rankings.csv"
+    write_csv(csv_path, [make_row(company="Acme", posted="2026-06-13")])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    assert norm_contracts.normalize_rankings_csv.last_integrity_errors == []
+
+
+def test_out_of_domain_status_and_comp_fit_are_errors(tmp_path):
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir(parents=True)
+    csv_path = rankings / "b-rankings.csv"
+    row = make_row(company="Acme", posted="2026-06-13")
+    row[HEADERS.index("Comp Fit")] = "Sounds great"
+    write_csv(csv_path, [row])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    errors = norm_contracts.normalize_rankings_csv.last_integrity_errors
+    # Comp Fit is re-derived from Comp Range upstream, so the bad value is GONE
+    # before validation — the derived label wins (that IS the trustworthy repair).
+    assert errors == []
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    assert by_name(rows[0], rows[1])["Comp Fit"] in norm_contracts.COMP_FIT_VALUES
+    # A status outside the vocabulary IS an error (normalize_status leaves it as
+    # written by design, and validation names it).
+    row2 = make_row(company="OddCo", status="Ghosted after 3 rounds", posted="2026-06-13")
+    write_csv(csv_path, [row2])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    errors = norm_contracts.normalize_rankings_csv.last_integrity_errors
+    assert any("outside the tracker vocabulary" in e and "OddCo" in e for e in errors)
+
+
+def test_a_misaligned_row_fails_before_any_by_name_check(tmp_path):
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir(parents=True)
+    csv_path = rankings / "b-rankings.csv"
+    # Write a row with 3 extra cells so nothing aligns.
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(HEADERS)
+        w.writerow(make_row(company="ShiftCo", posted="2026-06-13") + ["x", "y", "z"])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    errors = norm_contracts.normalize_rankings_csv.last_integrity_errors
+    assert any("not aligned" in e for e in errors)
+
+
+def test_needs_refetch_rows_are_legitimately_sparse(tmp_path):
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir(parents=True)
+    csv_path = rankings / "b-rankings.csv"
+    row = make_row(company="RefetchCo", status=norm_contracts.NEEDS_REFETCH_STATUS,
+                   posted="2026-06-13")
+    row[HEADERS.index("Lane Fit")] = ""
+    row[HEADERS.index("Comp Fit")] = ""
+    row[HEADERS.index("Data Completeness")] = ""
+    write_csv(csv_path, [row])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    errors = norm_contracts.normalize_rankings_csv.last_integrity_errors
+    assert not any("Lane Fit" in e for e in errors)
+
+
+def test_the_cli_exits_nonzero_on_integrity_errors(tmp_path):
+    import subprocess
+    import sys as _sys
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir(parents=True)
+    csv_path = rankings / "b-rankings.csv"
+    write_csv(csv_path, [_malformed_thesis_row()])
+    res = subprocess.run(
+        [_sys.executable, str(Path(norm_contracts.__file__)),
+         "--normalize-rankings-csv", str(csv_path)],
+        capture_output=True, text=True)
+    assert res.returncode == 2
+    assert "ERROR" in res.stdout and "ThesisCo" in res.stdout
+    # A clean CSV exits zero.
+    write_csv(csv_path, [make_row(company="Acme", posted="2026-06-13")])
+    res2 = subprocess.run(
+        [_sys.executable, str(Path(norm_contracts.__file__)),
+         "--normalize-rankings-csv", str(csv_path)],
+        capture_output=True, text=True)
+    assert res2.returncode == 0
+
+
+def test_completeness_vocabulary_recognizer():
+    for ok in ("✓ complete", "⚠ comp not verified", "⚠ location unknown",
+               "⚠ comp+location not verified", "comp not posted",
+               "location not posted", "⚠ comp not verified; location not posted",
+               "✓ complete · ⚠ comp conflicting"):
+        assert norm_contracts.is_valid_completeness(ok), ok
+    for bad in ("Below floor", "Meets/above target", "great", ""):
+        assert not norm_contracts.is_valid_completeness(bad), bad

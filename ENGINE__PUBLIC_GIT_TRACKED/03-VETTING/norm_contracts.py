@@ -951,6 +951,109 @@ def practicality_notes_insert_at(headers):
     return len(headers)
 
 
+# --------------------------------------------------------------------------- #
+# Row-integrity validation (B2) — runs after normalization, before anything
+# downstream trusts the rows. The live defect: one malformed row lost its Lane
+# Fit and Job File and had a Comp-Fit-shaped value ('Below floor') sitting in
+# Data Completeness — and nothing noticed until a human cross-audit.
+#
+# Repair ONLY from a trustworthy structured source (Data Completeness can be
+# re-derived from the row's own comp/location; Comp Fit is already re-derived
+# from the normalized Comp Range upstream). Anything unrepairable FAILS LOUDLY
+# naming the row. Values are never invented.
+# --------------------------------------------------------------------------- #
+COMP_FIT_VALUES = {"Below floor", "Near target", "Meets/above target", "Above floor",
+                   "Unknown", "No comp prefs"}
+NEEDS_REFETCH_STATUS = "⚠️ NEEDS RE-FETCH — content not verified"
+_COMPLETENESS_PART_RE = re.compile(
+    r"^(?:✓ complete|⚠ comp\+location not verified|⚠ comp not verified"
+    r"|⚠ location unknown|⚠ comp conflicting"
+    r"|comp not posted|location not posted|comp not posted \+ location not posted"
+    r"|location not posted \+ comp not posted)$")
+
+
+def is_valid_completeness(value) -> bool:
+    """True when a Data Completeness cell is inside its vocabulary (`; `/` · `-joined
+    parts of the known labels)."""
+    v = str(value or "").strip()
+    if not v:
+        return False
+    parts = [p.strip() for p in re.split(r"\s*[;·]\s*", v) if p.strip()]
+    return all(_COMPLETENESS_PART_RE.match(p) for p in parts)
+
+
+def validate_rankings_rows(rows, csv_path=None, fix=None, out=print):
+    """Integrity errors for a normalized rankings table (row 0 = headers).
+    Repairs what a trustworthy source allows (via `fix(row, col, value, label, n)`
+    when given); returns the list of unrepairable error strings, each naming its
+    row. The caller decides whether errors are fatal (the CLI exits nonzero)."""
+    errors: list[str] = []
+    if not rows:
+        return errors
+    headers = [str(h).strip() for h in rows[0]]
+    idx = {h: i for i, h in enumerate(headers)}
+
+    def cell(row, col):
+        i = idx.get(col)
+        return row[i].strip() if i is not None and i < len(row) else ""
+
+    status_col = _status_column(headers) or "Status? [You Change]"
+    for n, row in enumerate(rows[1:], start=2):
+        if not any(str(c).strip() for c in row):
+            continue
+        company = cell(row, H_COMPANY) or "?"
+
+        def err(msg):
+            errors.append(f"row {n} ({company}): {msg}")
+
+        # Row shape: every cell under its own header, none spilled past the schema.
+        if len(row) != len(headers):
+            err(f"row length {len(row)} != header length {len(headers)} — cells are "
+                f"not aligned with their columns")
+            continue  # nothing below can be trusted by name
+
+        status = cell(row, status_col)
+        needs_refetch = status == NEEDS_REFETCH_STATUS
+        if status and not needs_refetch and status not in STATUS_VALUES:
+            err(f"Status {status!r} is outside the tracker vocabulary")
+
+        # Required identity cells. A NEEDS RE-FETCH row is legitimately sparse
+        # (it was never scored), so only the identity columns are demanded there.
+        for col in (H_COMPANY, H_TITLE, H_JOBFILE):
+            if not cell(row, col):
+                err(f"required cell blank: {col} (cannot be re-derived here — "
+                    f"re-run the vet step or fill it from the batch's captures)")
+        if not needs_refetch:
+            if cell(row, H_LANE) and not cell(row, H_LANEFIT):
+                err(f"Lane is set ({cell(row, H_LANE)!r}) but Lane Fit is blank — "
+                    f"Lane Fit is model output and cannot be invented here")
+            cf = cell(row, H_COMPFIT)
+            if cf and cf not in COMP_FIT_VALUES:
+                err(f"Comp Fit {cf!r} is outside its label domain")
+            dc = cell(row, H_DATACOMPLETE)
+            if dc and not is_valid_completeness(dc):
+                # The exact live shape: a Comp-Fit-shaped value duplicated into
+                # Data Completeness. Re-derivable from the row's own comp/location
+                # — a TRUSTWORTHY repair, so repair rather than fail.
+                if fix is not None and dc in COMP_FIT_VALUES:
+                    fix(row, H_DATACOMPLETE,
+                        fallback_completeness(cell(row, H_COMPRANGE), cell(row, H_WORKLOC)),
+                        f"{H_DATACOMPLETE} (Comp-Fit-shaped value re-derived)", n)
+                else:
+                    err(f"Data Completeness {dc!r} is outside its vocabulary")
+        # Job File must resolve to a capture when the batch layout is present.
+        # A copy of the CSV elsewhere (no captures beside it) is only a notice.
+        jf = cell(row, H_JOBFILE)
+        if jf and csv_path is not None:
+            if _resolve_capture_path(jf, base_dir=Path(csv_path).parent) is None:
+                out(f"[norm_contracts] notice row {n} ({company}): Job File {jf!r} does "
+                    f"not resolve to a capture from {Path(csv_path).parent} — fine for a "
+                    f"detached copy, a problem inside a real batch.")
+    for e in errors:
+        out(f"[norm_contracts] ERROR {e}")
+    return errors
+
+
 def load_config(path):
     if not path:
         return {}
@@ -1018,6 +1121,17 @@ def normalize_rankings_csv(csv_path, cfg, out=print, score_labels=None):
     if not rows:
         return 0
     changed = 0
+    # Misalignment must be caught BEFORE migration: the header-name join drops any
+    # trailing cell that has no header, so a row wider than the schema would lose
+    # data silently. Report it loudly instead (the row still migrates by name).
+    pre_migration_errors = []
+    n_headers = len(rows[0])
+    for n, row in enumerate(rows[1:], start=2):
+        if len(row) > n_headers and any(str(c).strip() for c in row[n_headers:]):
+            pre_migration_errors.append(
+                f"row {n}: {len(row)} cells but the header row has {n_headers} — cells are "
+                f"not aligned with their columns (trailing data has no header and would be "
+                f"dropped; fix the row before trusting this file)")
     if migrate_rankings_headers(rows, score_labels=score_labels, out=out):
         changed += 1
     headers = [h.strip() for h in rows[0]]
@@ -1075,10 +1189,21 @@ def normalize_rankings_csv(csv_path, cfg, out=print, score_labels=None):
                       or UNKNOWN_POSTED_DATE)
             if posted:
                 fix(row, H_POSTED, posted, H_POSTED, n)
+    # Row-integrity validation (B2), after every repair above: trustworthy repairs
+    # are applied through the same `fix` (so they count + print), anything
+    # unrepairable is reported loudly and surfaces in the CLI exit code.
+    integrity_errors = pre_migration_errors + validate_rankings_rows(
+        rows, csv_path=csv_path,
+        fix=lambda row, col, new, label, n: fix(row, col, new, label, n), out=out)
+    for e in pre_migration_errors:
+        out(f"[norm_contracts] ERROR {e}")
     if changed:
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             csv.writer(f).writerows(rows)
-    out(f"[norm_contracts] {csv_path}: {changed} cell(s) repaired.")
+    out(f"[norm_contracts] {csv_path}: {changed} cell(s) repaired."
+        + (f" {len(integrity_errors)} row-integrity ERROR(s) — fix the rows or re-run "
+           f"the vet step; these cannot be repaired mechanically." if integrity_errors else ""))
+    normalize_rankings_csv.last_integrity_errors = integrity_errors
     return changed
 
 
@@ -1147,6 +1272,8 @@ def main(argv):
             except Exception:
                 print("[norm_contracts] --score-labels is not valid JSON; using engine defaults.")
         normalize_rankings_csv(args.normalize_rankings_csv, cfg, score_labels=labels)
+        if getattr(normalize_rankings_csv, "last_integrity_errors", None):
+            return 2   # loud: the workflow that shelled out sees a failing pass
         return 0
     parser.print_help()
     return 1

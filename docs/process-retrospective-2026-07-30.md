@@ -126,7 +126,7 @@ Proposed order, scope, and acceptance criteria. All generic engine work; synthet
 | # | Item | Scope | Acceptance |
 |---|---|---|---|
 | B1 | **SHIPPED 2026-07-30** — `qa_captures.py` acceptance gate, auto-run after every prep run | ~2h | Gate flags every defect class from the live QA passes (sections, filename, required fields, fused text, question leaks, legacy markers); wired into both prep exit paths; per-file verdicts printed |
-| B2 | Row-integrity validation at the rankings writer | ~1h | A row missing Job File / Lane Fit, or with out-of-domain Comp Fit / Data Completeness / Status, is repaired from source or fails loudly; the malformed-row shape from the 55-job run is a fixture |
+| B2 | **SHIPPED 2026-07-30** — Row-integrity validation at the rankings writer | ~1h | A row missing Job File / Lane Fit, or with out-of-domain Comp Fit / Data Completeness / Status, is repaired from source or fails loudly; the malformed-row shape from the 55-job run is a fixture |
 | B3 | CSV/XLSX divergence prevention | ~1h | One writer path emits both; a regression test diffs every cell, not just headers (the posted-date divergence case is the fixture) |
 | B4 | Single prep CLI (`--engine playwright\|requests\|auto`) | ~half day | Second CLI deleted; divergence guard test retained; all prep tests green through the one entry point |
 | B5 | Canonical ATS identity resolution + registry alias table | ~3h | The raw-URL vs `ats:board:id` duplicate class (found live once) cannot recur: every registry write canonicalizes; backfill folds aliases; a merge test uses the real duplicate shape |

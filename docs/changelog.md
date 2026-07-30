@@ -11,6 +11,27 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — B2: row-integrity validation at the rankings writer
+
+The live defect: one malformed row lost its Lane Fit and Job File and had a Comp-Fit-shaped value
+('Below floor') duplicated into Data Completeness — and nothing noticed until a human cross-audit.
+`validate_rankings_rows()` now runs at the end of every `normalize_rankings_csv` pass (which protects
+both the fresh-write path — vet-jobs shells out to it right after scoring — and every regeneration):
+
+- Repair ONLY from a trustworthy source: a Comp-Fit-shaped or otherwise out-of-vocabulary Data
+  Completeness cell is re-derived from the row's own comp/location via the shared
+  `fallback_completeness` (and Comp Fit was already re-derived from the normalized Comp Range
+  upstream). Values are never invented — a blank Lane Fit or Job File cannot be re-derived here, so
+  it FAILS LOUDLY naming the row, and the CLI exits nonzero (2) so the calling workflow sees it.
+- Checks: required identity cells (Company / title+link / Job File) non-blank; Lane Fit present when
+  Lane is set; Status inside the tracker vocabulary (the NEEDS RE-FETCH sentinel row is legitimately
+  sparse and exempted); Comp Fit and Data Completeness inside their label domains; Job File resolves
+  to a capture when the batch layout is present (a detached CSV copy gets a notice, not an error);
+  and row/schema alignment — checked BEFORE migration, because the header-name join would otherwise
+  silently drop trailing cells that have no header.
+
+The exact live malformed-row shape is the regression fixture. Suite: 574 → 581 green.
+
 ## 2026-07-30 — B1: qa_captures.py, the permanent capture acceptance gate
 
 Every capture that is about to join a batch as USABLE now passes through a contract gate, wired into
