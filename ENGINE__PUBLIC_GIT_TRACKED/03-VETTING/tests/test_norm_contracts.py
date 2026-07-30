@@ -1613,3 +1613,132 @@ def test_regenerating_the_xlsx_writes_repairs_back_to_a_legacy_csv(tmp_path):
     make_rankings_xlsx.build(str(csv_path), str(rankings / "old-rankings.xlsx"),
                              config_path=str(cfg_path))
     assert csv_path.read_text(encoding="utf-8") == stable
+
+
+# ===========================================================================
+# B12 — mechanical comp envelope. The scorer's "applicable band" judgment is
+# ADVISORY; the tracker's Comp Range is computed as min(applicable lows)-
+# max(applicable highs) across the capture's own listed base-salary bands
+# (standing rule: with no candidate-side basis to exclude a listed US band,
+# include it — the scorer chose the home-metro band twice and was overridden
+# by hand both times). Endpoints may come from different geographic bands.
+# ===========================================================================
+@pytest.mark.parametrize("comp_text,expected", [
+    # BetterUp-shaped two-zone bullets.
+    ("Zone A: $200-250K · Zone B: $180-225K", "180-250"),
+    # Headspace-shaped two-band with a decimal low.
+    ("$122.4-170K · $156.4-190K", "122-190"),
+    # Flex-shaped two-tier.
+    ("Tier 1: $216-270K · Tier 2: $183.6-229.5K", "183-270"),
+    # ClassDojo-shaped two-region.
+    ("US: $215-250K · Other: $183-212.5K", "183-250"),
+    # Full-dollar legacy shapes.
+    ("USD 182,000-227,000", "182-227"),
+    # A single band envelopes to itself.
+    ("$172-248K", "172-248"),
+    # Hourly figures never join the annual envelope.
+    ("$200-250K · $27-44/hour", "200-250"),
+    # Nothing parseable -> empty (the model's value stands).
+    ("Employer did not mention compensation.", ""),
+    ("", ""),
+])
+def test_comp_envelope_math(comp_text, expected):
+    assert norm_contracts.comp_envelope(comp_text) == expected
+
+
+def _write_comp_capture(batch_root, company, base_salary_block):
+    """A capture whose COMPENSATION section carries the given Base Salary content."""
+    src = batch_root / "3 - Source Material" / "All Job Posts (full text)"
+    src.mkdir(parents=True, exist_ok=True)
+    text = CAPTURE_TEMPLATE.format(company=company, posted="Job Posted At: June 13, 2026")
+    text = text.replace(
+        "--- JOB TEXT START ---",
+        "COMPENSATION\n============\n" + base_salary_block +
+        "\n\nAdditional Compensation: Employer did not mention additional compensation."
+        "\n\nBenefits: Mentioned, but details not provided.\n\n--- JOB TEXT START ---")
+    path = src / f"{company.lower()}.txt"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize("block,scorer_value,expected", [
+    # Bulleted multi-band: the scorer picked ONE band; the envelope overrides.
+    ("Base Salary:\n- Zone A: $200-250K\n- Zone B: $180-225K", "200-250", "180-250"),
+    # Inline decimal band.
+    ("Base Salary: $122.4-170K", "122-170", "122-170"),
+    # The scorer excluded a listed band entirely — the standing-rule case.
+    ("Base Salary:\n- NYC: $216-270K\n- Elsewhere: $183.6-229.5K", "216-270", "183-270"),
+])
+def test_the_envelope_overrides_the_scorers_band_choice(tmp_path, block, scorer_value, expected):
+    _write_comp_capture(tmp_path, "Acme", block)
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    csv_path = rankings / "b-rankings.csv"
+    write_csv(csv_path, [make_row(company="Acme", comp=scorer_value, posted="2026-06-13")])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    got = by_name(rows[0], rows[1])
+    assert got["Comp Range"] == expected
+    # Comp Fit is re-derived from the FINAL (envelope) range — chain intact.
+    assert got["Comp Fit"] == norm_contracts.comp_fit_label(expected, CFG)
+
+
+def test_a_source_conflict_yields_the_outer_envelope_plus_a_loud_flag(tmp_path):
+    """Headway-shaped: conflicting sources -> the envelope of BOTH readings, plus
+    `⚠ comp conflicting` in Data Completeness — never a silent pick."""
+    _write_comp_capture(
+        tmp_path, "Headwayco",
+        "Base Salary: Conflicting employer information: $262.2-331.5K vs $212-265K.")
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    csv_path = rankings / "b-rankings.csv"
+    write_csv(csv_path, [make_row(company="Headwayco", comp="262-332", posted="2026-06-13")])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    got = by_name(rows[0], rows[1])
+    assert got["Comp Range"] == "212-332"
+    assert "⚠ comp conflicting" in got["Data Completeness"]
+    assert got["Data Completeness"].startswith("✓ complete")   # appended, not replaced
+    # The flag stays inside the completeness vocabulary and is idempotent.
+    assert norm_contracts.is_valid_completeness(got["Data Completeness"])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows2 = list(csv.reader(f))
+    assert by_name(rows2[0], rows2[1])["Data Completeness"].count("⚠ comp conflicting") == 1
+
+
+def test_without_a_capture_or_bands_the_model_value_stands(tmp_path):
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir(parents=True)
+    csv_path = rankings / "b-rankings.csv"
+    write_csv(csv_path, [make_row(company="Nocapture", comp="190-210", posted="2026-06-13")])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    assert by_name(rows[0], rows[1])["Comp Range"] == "190-210"
+
+
+def test_the_envelope_reaches_the_workbook_identically(tmp_path):
+    """B3 + B12 together: the workbook renders the same mechanical envelope the
+    CSV holds, cell-identical."""
+    _write_comp_capture(tmp_path, "Acme",
+                        "Base Salary:\n- Zone A: $200-250K\n- Zone B: $180-225K")
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    cfg_path = tmp_path / "jail.config.json"
+    cfg_path.write_text(json.dumps(CFG), encoding="utf-8")
+    csv_path = rankings / "b-rankings.csv"
+    write_csv(csv_path, [make_row(company="Acme", comp="200-250", posted="2026-06-13")])
+    make_rankings_xlsx.build(str(csv_path), str(rankings / "b-rankings.xlsx"),
+                             config_path=str(cfg_path))
+    _assert_every_cell_identical(csv_path, rankings / "b-rankings.xlsx", "envelope")
+    headers, rows = _csv_cells(csv_path)
+    assert dict(zip(headers, rows[0]))["Comp Range"] == "180-250"
+
+
+def test_a_comp_conflict_is_attention_worthy_in_the_workbook():
+    assert make_rankings_xlsx.completeness_category("✓ complete · ⚠ comp conflicting") == "attention"
+    assert make_rankings_xlsx.completeness_category("✓ complete") == "complete"
+    assert make_rankings_xlsx.completeness_category("⚠ comp not verified") == "attention"

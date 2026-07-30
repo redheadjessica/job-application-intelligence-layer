@@ -235,6 +235,10 @@ def completeness_category(value):
     v = (value or "").strip().lower()
     if not v:
         return None
+    # A comp-source CONFLICT is attention-worthy even when the capture is otherwise
+    # complete ("✓ complete · ⚠ comp conflicting") — checked before "complete".
+    if "conflicting" in v:
+        return "attention"
     if "complete" in v:
         return "complete"
     if "not verified" in v or "unknown" in v:

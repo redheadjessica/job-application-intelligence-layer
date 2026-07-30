@@ -11,6 +11,27 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — B12: the Comp Range is computed, the scorer's band choice is advisory
+
+Twice in live use the scorer picked the home-metro base-salary band and had to be overridden by
+hand; Jessica's standing rule is now enforced mechanically: with no candidate-side basis to exclude
+a listed US band, include it. The normalize pass parses the capture's OWN Base Salary content
+(inline value, bulleted bands, or a legacy `Compensation:` line), computes
+min(applicable lows)-max(applicable highs) — endpoints may come from different geographic bands,
+hourly/monthly figures never join the annual envelope — and overrides the model's comp_range with
+it. A genuine source conflict (the capture's `Conflicting employer information: A vs B` shape)
+yields the outer envelope of BOTH readings plus a loud `⚠ comp conflicting` appended to Data
+Completeness (inside its vocabulary, idempotent, and categorized as attention-worthy in both the
+workbook and the vet-run summary even when the row is otherwise complete) — never a silent pick.
+With no capture or no parseable band, the model's value stands: nothing better exists to derive
+from.
+
+Chain verified: Comp Fit is re-derived from the FINAL (envelope) range in the same pass, so label
+and range stay consistent; the code documents the boundary that prose notes and FINAL/practicality
+scores are scorer-owned — a rescore is a human-triggered act, never a normalization side effect.
+Fixtures: the five live band shapes (two-zone, decimal-low two-band, two-tier, two-region, and the
+conflicting-sources case), plus envelope-reaches-the-workbook cell-parity. Suite: 584 → 600 green.
+
 ## 2026-07-30 — B3: the CSV and the workbook can no longer diverge
 
 The live class: the workbook showed a back-filled posted date the CSV lacked, because the XLSX build
@@ -26,7 +47,7 @@ Regression tests compare EVERY corresponding cell (not counts or headers) betwee
 and the built workbook on (a) a fresh current-contract write and (b) the legacy posted-date
 divergence shape, and pin that regenerating a legacy CSV's workbook repairs the CSV in place —
 migrated headers, normalized Working Location, back-filled posted date — with a second build a
-byte-stable no-op. Suite: 581 → 586 green.
+byte-stable no-op. Suite: 581 → 584 green. (An earlier revision of this entry misstated 586.)
 
 ## 2026-07-30 — B2: row-integrity validation at the rankings writer
 

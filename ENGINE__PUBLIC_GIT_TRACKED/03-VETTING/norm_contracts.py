@@ -952,6 +952,118 @@ def practicality_notes_insert_at(headers):
 
 
 # --------------------------------------------------------------------------- #
+# Mechanical comp envelope (B12) — the tracker's Comp Range is COMPUTED, the
+# scorer's band choice is ADVISORY.
+#
+# Standing rule (Jessica, decided after overriding the scorer by hand twice): with
+# no candidate-side basis to exclude a listed US band, include it. The displayed
+# Comp Range is therefore min(applicable lows)-max(applicable highs) across the
+# capture's OWN listed base-salary bands — endpoints may come from different
+# geographic bands. A genuine source conflict (the capture's `Conflicting
+# employer information: A vs B` shape) yields the outer envelope of BOTH readings
+# plus `⚠ comp conflicting` in Data Completeness — never a silent pick.
+#
+# Downstream chain: Comp Fit is re-derived from the final Comp Range in the same
+# pass (midpoint rule), so label and range stay consistent. The prose notes
+# columns and FINAL/practicality SCORES are scorer-owned and are NOT recomputed
+# here — a rescore is a human-triggered act, not a normalization side effect.
+# --------------------------------------------------------------------------- #
+_BAND_RANGE_RE = re.compile(
+    r"\$?\s?(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*[-–—]\s*\$?\s?(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*([Kk])?")
+_BAND_SINGLE_RE = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*([Kk])?")
+_NON_ANNUAL_BAND_RE = re.compile(r"(?i)/hour|/hr\b|hourly|/month|monthly|/week|weekly")
+_ABSENCE_PREFIX_RE = re.compile(r"(?i)^(employer did not mention|could not verify|not posted)")
+_CONFLICT_PREFIX_RE = re.compile(r"(?i)^conflicting employer information")
+
+
+def _amount_thousands(raw, has_k):
+    try:
+        v = float(str(raw).replace(",", ""))
+    except ValueError:
+        return None
+    if has_k or v < 1000:
+        return v          # already in thousands ($172-248K shapes, K shared or explicit)
+    return v / 1000.0     # full-dollar amounts (USD 182,000-227,000 shapes)
+
+
+def base_salary_text_from_capture(text):
+    """(comp_text, conflicting) — the capture's own Base Salary content: the inline
+    value, the joined bullet list, or the legacy `Compensation:` line. Empty when
+    the capture honestly reports an absence."""
+    head = _capture_head(str(text or ""))
+    m = re.search(r"^Base Salary:[ \t]*(.+)$", head, re.M)
+    if m:
+        val = m.group(1).strip()
+        if _CONFLICT_PREFIX_RE.match(val):
+            return val, True
+        if _ABSENCE_PREFIX_RE.match(val):
+            return "", False
+        return val, False
+    m = re.search(r"^Base Salary:[ \t]*\n((?:[ \t]*-\s+.*\n?)+)", head, re.M)
+    if m:
+        bullets = [ln.strip().lstrip("- ").strip()
+                   for ln in m.group(1).splitlines() if ln.strip()]
+        return " · ".join(bullets), False
+    m = re.search(r"^Compensation:[ \t]*(.+)$", head, re.M)   # legacy captures
+    if m:
+        val = re.sub(r"\s*\[[a-z _]+\]\s*$", "", m.group(1)).strip()
+        if _ABSENCE_PREFIX_RE.match(val) or val.lower() in ("n/a", "unknown", ""):
+            return "", False
+        return val, False
+    return "", False
+
+
+def comp_envelope(comp_text):
+    """`lo-hi` in whole thousands across EVERY annual band in the text (floor the
+    min, ceil the max — endpoints may come from different bands), or ""."""
+    text = str(comp_text or "")
+    lows, highs = [], []
+    for segment in re.split(r"\s*[·;]\s*|\bvs\b", text):
+        if _NON_ANNUAL_BAND_RE.search(segment):
+            continue   # an hourly/monthly figure is never part of the annual envelope
+        matched = False
+        for m in _BAND_RANGE_RE.finditer(segment):
+            lo = _amount_thousands(m.group(1), bool(m.group(3)))
+            hi = _amount_thousands(m.group(2), bool(m.group(3)))
+            if lo is None or hi is None or lo > hi or not (10 <= lo <= 2000):
+                continue
+            lows.append(lo)
+            highs.append(hi)
+            matched = True
+        if not matched:
+            sm = _BAND_SINGLE_RE.search(segment)
+            if sm:
+                v = _amount_thousands(sm.group(1), bool(sm.group(2)))
+                if v is not None and 10 <= v <= 2000:
+                    lows.append(v)
+                    highs.append(v)
+    if not lows:
+        return ""
+    import math
+    return f"{int(math.floor(min(lows)))}-{int(math.ceil(max(highs)))}"
+
+
+def comp_envelope_from_capture(job_file, base_dir=None):
+    """(envelope, conflicting) computed mechanically from a row's capture. Empty
+    envelope when the capture is absent or lists no annual band — the model's
+    value then stands (there is nothing better to derive from)."""
+    path = _resolve_capture_path(job_file, base_dir)
+    if not path:
+        return "", False
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "", False
+    comp_text, conflicting = base_salary_text_from_capture(text)
+    if not comp_text:
+        return "", False
+    return comp_envelope(comp_text), conflicting
+
+
+COMP_CONFLICT_FLAG = "⚠ comp conflicting"
+
+
+# --------------------------------------------------------------------------- #
 # Row-integrity validation (B2) — runs after normalization, before anything
 # downstream trusts the rows. The live defect: one malformed row lost its Lane
 # Fit and Job File and had a Comp-Fit-shaped value ('Below floor') sitting in
@@ -1158,7 +1270,23 @@ def normalize_rankings_csv(csv_path, cfg, out=print, score_labels=None):
         if H_COMPRANGE in idx and idx[H_COMPRANGE] < len(row):
             fix(row, H_COMPRANGE, normalize_comp_range(row[idx[H_COMPRANGE]]),
                 H_COMPRANGE, n)
-            # Re-derive Comp Fit from the NORMALIZED comp range — this pass is the
+            # B12: the MECHANICAL envelope from the capture's own listed bands
+            # overrides the model's band choice (which is advisory). A source
+            # conflict yields the outer envelope of both readings + a loud flag
+            # in Data Completeness — never a silent pick.
+            job_file = row[idx[H_JOBFILE]] if H_JOBFILE in idx and idx[H_JOBFILE] < len(row) else ""
+            envelope, comp_conflicting = comp_envelope_from_capture(
+                job_file, base_dir=Path(csv_path).parent)
+            if envelope:
+                fix(row, H_COMPRANGE, envelope,
+                    f"{H_COMPRANGE} (mechanical envelope of the capture's bands)", n)
+            if comp_conflicting and H_DATACOMPLETE in idx and idx[H_DATACOMPLETE] < len(row):
+                dc = row[idx[H_DATACOMPLETE]].strip()
+                if COMP_CONFLICT_FLAG not in dc:
+                    fix(row, H_DATACOMPLETE,
+                        (f"{dc} · {COMP_CONFLICT_FLAG}" if dc else COMP_CONFLICT_FLAG),
+                        f"{H_DATACOMPLETE} (comp sources conflict)", n)
+            # Re-derive Comp Fit from the FINAL comp range — this pass is the
             # single implementation of the midpoint rule; the JS label is a fallback.
             if H_COMPFIT in idx and idx[H_COMPFIT] < len(row):
                 fix(row, H_COMPFIT, comp_fit_label(row[idx[H_COMPRANGE]], cfg),

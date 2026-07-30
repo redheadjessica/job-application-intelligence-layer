@@ -361,6 +361,9 @@ function fallbackCompleteness(compRange, location) {
 function completenessCategory(v) {
   const s = (v || '').toLowerCase()
   if (!s) return null
+  // A comp-source conflict is attention-worthy even when otherwise complete —
+  // checked before 'complete'. Mirrors make_rankings_xlsx.completeness_category.
+  if (s.includes('conflicting')) return 'attention'
   if (s.includes('complete')) return 'complete'
   if (s.includes('not verified') || s.includes('unknown')) return 'attention'
   if (s.includes('not posted')) return 'benign'
