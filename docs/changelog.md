@@ -11,6 +11,26 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — Phase A (cont.): CSV/XLSX parity proof, honest Instructions tab, renamed downstream writes
+
+- **Parity proven, not assumed.** A parametrized regression builds all three input shapes — a
+  current CSV, the real legacy 27-column shape (WITH `Location Fit`, WITHOUT `Data Completeness`),
+  and a CSV missing several columns — and asserts the migrated CSV header row, the built XLSX header
+  row, and each other are byte-identical to the 27-column contract, with every value still under its
+  own header. A second normalize pass over a migrated CSV reports zero changes, so the XLSX build's
+  own insert paths are provably no-ops for migrated files while still covering hand-made ones.
+- **Instructions tab tells the truth about ownership.** The column enumeration is now GENERATED from
+  the real header row, and it states the rule explicitly: a column is yours only when its header
+  carries `[You Fill In]` / `[You Change]` / `[You Add]`; a bare `?` does not imply human-managed,
+  and `Tailored? (Base Resume)` / `Cover Letter Drafted?` are filled by the pipeline. The colour
+  legend now matches the real workbook (no `Location Fit`), and the date section describes
+  `Job Posted Date` incl. its `Unknown` state. A test asserts the tab's list agrees with the
+  headers, so adding a column without updating the tab fails the suite.
+- **`update_rankings_row.py` writes the renamed columns** (`Tailored? (Base Resume)`,
+  `Cover Letter Drafted?`) while still MATCHING the legacy names on read, so the tailoring and
+  cover-letter workflows keep working against an unmigrated file instead of silently writing
+  nothing. The cover-letter marker is now the literal `Yes` (was `Y`) per the column semantics.
+
 ## 2026-07-30 — Phase A: the 27-column rankings contract, locked and migrated at the writer
 
 - **The final 27-column contract** (order authoritative) now has ONE definition,

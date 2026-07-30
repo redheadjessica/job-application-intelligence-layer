@@ -378,12 +378,49 @@ def solid(hex_color):
     return PatternFill(start_color=hex_color, end_color=hex_color, fill_type="solid")
 
 
+# The human-managed columns. THE RULE (2026-07-30): a column is yours to fill in ONLY when its
+# header carries an explicit marker — `[You Fill In]`, `[You Change]`, or `[You Add]`. A bare `?`
+# in a header does NOT mean human-managed: `Tailored? (Base Resume)` and `Cover Letter Drafted?`
+# are written by the pipeline (update_rankings_row.py) as those steps complete.
+HUMAN_MARKERS = ("[You Fill In]", "[You Change]", "[You Add]")
+
+
+def human_managed_columns(headers):
+    return [h for h in headers if any(m in h for m in HUMAN_MARKERS)]
+
+
+def pipeline_filled_columns(headers):
+    """Columns whose header ends in `?` but which the PIPELINE fills — the exception the
+    Instructions tab has to state explicitly, or the `?` reads as an invitation."""
+    return [h for h in headers
+            if h in ("Tailored? (Base Resume)", "Cover Letter Drafted?")]
+
+
+def build_column_guide(headers):
+    """The Instructions tab's column enumeration, generated FROM the real header row so it can
+    never drift from the workbook (a test asserts the two agree)."""
+    yours = human_managed_columns(headers)
+    pipeline = pipeline_filled_columns(headers)
+    return [
+        ("Which columns are yours", True),
+        ("Only columns whose header carries an explicit marker are yours to manage: "
+         + ", ".join(yours) + ".", False),
+        ("A bare \"?\" in a header does NOT mean the column is yours. "
+         + ", ".join(pipeline)
+         + " are filled in by the pipeline as the tailoring and cover-letter steps complete — "
+           "leave them alone and they will populate themselves.", False),
+        ("Everything else is AI-scored or machine-derived and is re-derived on every "
+         "regeneration, so edits there are overwritten.", False),
+        ("", False),
+    ]
+
+
 INSTRUCTIONS = [
     ("This spreadsheet is two things at once", True),
     ("A ranking report (AI-scored) AND your living job-search tracker.", False),
     ("", False),
     ("Where to start", True),
-    ("Rows are ordered best-fit first by Final Score. Columns whose header ends in \"?\" are YOURS to fill in (Applied Date, Status, Have Intro, Your Notes, Decline/Down Date).", False),
+    ("Rows are ordered best-fit first by Final Score.", False),
     ("", False),
     ("Status", True),
     ("\"Status? [You Change]\" starts from the AI's Final Score:  >=80 Apply ASAP  ·  70-79 Apply If Time  ·  60-69 Backup Lane  ·  <60 Or Skip It.  Pick a new value from the dropdown as each application progresses.", False),
@@ -394,14 +431,14 @@ INSTRUCTIONS = [
     ("Below the jobs is a legend of section colors. If you like visual breaks between groups, copy a bar in above a group after sorting — optional.", False),
     ("Pasting jobs into your own tracker? Copy only the job rows, NOT the legend bars, so you don't end up with duplicate dividers.", False),
     ("", False),
-    ("Posted", True),
-    ("\"Posted\" is the EMPLOYER's publication date from the job posting itself (blank when their job board didn't publish one) — not the date this batch was fetched. It is a fixed date on purpose: an age or \"days open\" number baked into a saved sheet goes stale and starts misleading you.", False),
+    ("Job Posted Date", True),
+    ("\"Job Posted Date\" is the EMPLOYER's publication date from the job posting itself — not the date this batch was fetched. When no verified employer date exists it reads \"Unknown\" rather than sitting blank, and it is never guessed from a URL, job id, or search-result age. It is a fixed date on purpose: an age or \"days open\" number baked into a saved sheet goes stale and starts misleading you.", False),
     ("", False),
     ("Colors & the dropdown", True),
-    ("Status / Lane / Comp Fit cells are color-coded. Working Location + Location Fit share one fixed 4-color palette: green = remote genuinely available; yellow = acceptable home-metro office at exactly 1-3 days; orange = unknown location/cadence, >3 days, or open-ended minimums (\"3+ days\"); red = required in-person outside your home geography. In Google Sheets you can layer the native rounded \"chip\" dropdown on top if you prefer that look (that is a Sheets feature, not part of the file).", False),
+    ("Status, Lane, Lane Fit, Comp Fit, Comp Range and Data Completeness cells are color-coded. Working Location uses one fixed 4-color palette: green = remote genuinely available; yellow = acceptable home-metro office at exactly 1-3 days; orange = unknown location/cadence, >3 days, or open-ended minimums (\"3+ days\"); red = required in-person outside your home geography. In Google Sheets you can layer the native rounded \"chip\" dropdown on top if you prefer that look (that is a Sheets feature, not part of the file).", False),
     ("", False),
     ("AI detail columns", True),
-    ("The score block (below) and the notes/detail columns to the right of it are AI-generated.  \"Lane\" = what the job actually is;  \"Lane Fit\" = how that maps to your target lanes.", False),
+    ("The score block and the notes columns to its right are AI-generated.  \"Lane\" = what the job actually is;  \"Lane Fit\" = how that maps to your target lanes.  \"Comp + Lifestyle Fit Notes\" is the rationale/audit trail behind that score.", False),
     ("", False),
     ("CSV companion", True),
     ("A matching .csv has the same columns + job rows (no colors, dropdown, legend, or tabs).", False),
@@ -429,7 +466,7 @@ def build_score_section(meta):
 
 
 def build_instructions(ws, meta=None, archive_link=None, archive_warning=None,
-                       completeness_line=None, completeness_attention=False):
+                       completeness_line=None, completeness_attention=False, headers=None):
     meta = meta or DEFAULT_METADATA
     ws.column_dimensions["A"].width = 110
     t = ws.cell(1, 1, "How to use this tracker")
@@ -442,7 +479,8 @@ def build_instructions(ws, meta=None, archive_link=None, archive_warning=None,
         c.fill = solid("FCE4D6" if completeness_attention else "E2EFDA")
         c.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
         r += 2
-    for text, is_header in INSTRUCTIONS + build_score_section(meta):
+    guide = build_column_guide(headers) if headers else []
+    for text, is_header in INSTRUCTIONS + guide + build_score_section(meta):
         c = ws.cell(r, 1, text)
         c.font = Font(name=FONT, bold=is_header, size=11, color=("305496" if is_header else "000000"))
         c.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
@@ -533,7 +571,7 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
     compl_line, compl_attention = completeness_summary(records)
     build_instructions(wb.create_sheet("Instructions"), meta=meta, archive_link=archive_link,
                        archive_warning=archive_warning, completeness_line=compl_line,
-                       completeness_attention=compl_attention)   # second tab
+                       completeness_attention=compl_attention, headers=headers)   # second tab
 
     THIN = Side(style="thin", color="D9D9D9")
     BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)

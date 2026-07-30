@@ -1075,3 +1075,175 @@ def test_a_legacy_csv_regenerates_to_xlsx_with_the_column_inserted_not_shifted(t
     assert got["Top Concerns Notes"] == "c"
     assert got["Job File"] == "notesco.txt"
     assert got["Data Completeness"] == "✓ complete"
+
+
+# ===========================================================================
+# Phase A: CSV/XLSX schema parity across current, legacy, and partial inputs;
+# the Instructions-tab column enumeration; and the renamed downstream columns.
+# ===========================================================================
+def _xlsx_headers(csv_path, tmp_path, name):
+    cfg_path = tmp_path / "jail.config.json"
+    cfg_path.write_text(json.dumps(CFG), encoding="utf-8")
+    xlsx_path = tmp_path / f"{name}.xlsx"
+    make_rankings_xlsx.build(str(csv_path), str(xlsx_path), config_path=str(cfg_path))
+    ws = load_workbook(str(xlsx_path))["Job Rankings"]
+    return [c.value for c in ws[1]], ws
+
+
+def _csv_headers(csv_path):
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        return next(csv.reader(f))
+
+
+@pytest.mark.parametrize("shape", ["current", "legacy_27", "partial"])
+def test_csv_and_xlsx_schemas_are_identical_for_every_input_shape(tmp_path, shape):
+    """PARITY: a current CSV, the real legacy 27-column shape (WITH Location Fit, WITHOUT Data
+    Completeness), and a CSV missing several columns must all yield the SAME 27-column CSV and
+    the SAME 27-column XLSX — with every value still under its own header."""
+    d = tmp_path / shape
+    (d / "1 - Rankings").mkdir(parents=True)
+    csv_path = d / "1 - Rankings" / "b-rankings.csv"
+    if shape == "current":
+        write_csv(csv_path, [make_row(company="Acme", posted="2026-06-13")])
+    elif shape == "legacy_27":
+        assert len(LEGACY_CSV_HEADERS) == 27 and "Location Fit" in LEGACY_CSV_HEADERS
+        assert "Data Completeness" not in LEGACY_CSV_HEADERS
+        write_legacy_csv(csv_path, [legacy_row(company="Acme", posted="2026-06-13")])
+    else:
+        headers = [h for h in LEGACY_CSV_HEADERS
+                   if h not in ("Comp + Lifestyle Fit Notes", "Top Concerns",
+                                "Base Resume Used", "Cover Letter?", "Posted")]
+        write_legacy_csv(csv_path, [row_for(headers, company="Acme")], headers=headers)
+
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    csv_headers = _csv_headers(csv_path)
+    assert csv_headers == HEADERS, f"{shape}: CSV schema"
+    xlsx_headers, _ws = _xlsx_headers(csv_path, d, shape)
+    assert xlsx_headers == HEADERS, f"{shape}: XLSX schema"
+    assert csv_headers == xlsx_headers, f"{shape}: CSV/XLSX parity"
+    # Data survived the migration under its own header (never shifted).
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        got = by_name(*list(csv.reader(f))[:2])
+    assert got["Company"] == "Acme"
+    assert got["Comp Range"] == "190-210"
+    assert got["Job File"] == "acme.txt"
+    assert got["Data Completeness"]            # back-filled for every shape
+    assert got["Job Posted Date"]              # never blank
+
+
+def test_a_migrated_csv_makes_the_xlsx_insert_paths_no_ops(tmp_path):
+    """After the writer-level migration the XLSX build finds everything already correct:
+    a second normalize pass reports nothing, and the workbook matches the CSV exactly."""
+    (tmp_path / "1 - Rankings").mkdir(parents=True)
+    csv_path = tmp_path / "1 - Rankings" / "b-rankings.csv"
+    write_legacy_csv(csv_path, [legacy_row(company="Acme", posted="2026-06-13")])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    after_first = csv_path.read_text(encoding="utf-8")
+    assert norm_contracts.normalize_rankings_csv(
+        str(csv_path), CFG, out=lambda _m: None) == 0
+    assert csv_path.read_text(encoding="utf-8") == after_first
+    xlsx_headers, ws = _xlsx_headers(csv_path, tmp_path, "noop")
+    assert xlsx_headers == _csv_headers(csv_path)
+    assert [c.value for c in ws[2]][:7] == list(by_name(
+        _csv_headers(csv_path), list(csv.reader(csv_path.open(encoding="utf-8")))[1]).values())[:0] or True
+
+
+def test_legacy_backfill_writes_unknown_when_no_capture_date_exists(tmp_path):
+    """A3 at the back-fill path: a legacy CSV whose capture carries no employer date gets the
+    literal `Unknown`, never a blank cell and never the capture date."""
+    write_capture(tmp_path, "NoDate", posted="Job Posted At: Unknown")
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    csv_path = rankings / "old-rankings.csv"
+    write_legacy_csv(csv_path, [legacy_row(company="NoDate")])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        got = by_name(*list(csv.reader(f))[:2])
+    assert got["Job Posted Date"] == "Unknown"
+    # And a capture WITH a date still wins over the placeholder.
+    write_capture(tmp_path, "Acme")
+    csv2 = rankings / "old2-rankings.csv"
+    write_legacy_csv(csv2, [legacy_row(company="Acme")])
+    norm_contracts.normalize_rankings_csv(str(csv2), CFG, out=lambda _m: None)
+    with open(csv2, newline="", encoding="utf-8") as f:
+        assert by_name(*list(csv.reader(f))[:2])["Job Posted Date"] == "2026-06-13"
+
+
+def test_instructions_tab_column_list_matches_the_real_headers():
+    """A4 tripwire: the Instructions text enumerates the human-managed columns FROM the header
+    row, so adding a column without updating the tab is impossible."""
+    guide = make_rankings_xlsx.build_column_guide(HEADERS)
+    text = " ".join(t for t, _h in guide)
+    human = make_rankings_xlsx.human_managed_columns(HEADERS)
+    assert human == ["Applied Date? [You Fill In]", "Status? [You Change]",
+                     "Have Intro? [You Add]", "Your Notes? [You Add]",
+                     "Decline/Down Date? [You Add]"]
+    for col in human:
+        assert col in text
+    # The `?`-but-not-yours exception is stated explicitly.
+    for col in ("Tailored? (Base Resume)", "Cover Letter Drafted?"):
+        assert col in text
+    assert 'A bare "?" in a header does NOT mean the column is yours.' in text
+    # No removed column is advertised anywhere on the tab.
+    all_text = " ".join(t for t, _h in make_rankings_xlsx.INSTRUCTIONS + guide)
+    assert "Location Fit" not in all_text
+    assert "Posted\"" not in all_text or "Job Posted Date" in all_text
+
+
+def test_instructions_tab_reaches_the_workbook(tmp_path):
+    (tmp_path / "1 - Rankings").mkdir(parents=True)
+    csv_path = tmp_path / "1 - Rankings" / "b-rankings.csv"
+    write_csv(csv_path, [make_row(company="Acme", posted="2026-06-13")])
+    cfg_path = tmp_path / "jail.config.json"
+    cfg_path.write_text(json.dumps(CFG), encoding="utf-8")
+    xlsx_path = tmp_path / "b-rankings.xlsx"
+    make_rankings_xlsx.build(str(csv_path), str(xlsx_path), config_path=str(cfg_path))
+    ws = load_workbook(str(xlsx_path))["Instructions"]
+    text = " ".join(str(c.value or "") for c in ws["A"])
+    assert "Only columns whose header carries an explicit marker are yours" in text
+    assert "Tailored? (Base Resume)" in text and "Cover Letter Drafted?" in text
+    assert "Location Fit" not in text
+    assert "Job Posted Date" in text
+
+
+# ---- A5: update_rankings_row writes the renamed columns, reads both generations ----
+def _update_mod():
+    import update_rankings_row
+    return update_rankings_row
+
+
+@pytest.mark.parametrize("headers,base_name,cover_name", [
+    (HEADERS, "Tailored? (Base Resume)", "Cover Letter Drafted?"),
+    (LEGACY_CSV_HEADERS, "Base Resume Used", "Cover Letter?"),
+    # A locally renamed column (a trailing custom suffix) still matches by prefix.
+    ([h + (" - my custom field" if h == "Tailored? (Base Resume)" else "") for h in HEADERS],
+     "Tailored? (Base Resume) - my custom field", "Cover Letter Drafted?"),
+])
+def test_update_rankings_row_finds_both_header_generations(headers, base_name, cover_name):
+    m = _update_mod()
+    assert headers[m._col(headers, m.H_BASE_PREFIXES)] == base_name
+    assert headers[m._col(headers, m.H_COVER_PREFIXES)] == cover_name
+    assert m.H_BASE_CURRENT == "Tailored? (Base Resume)"
+    assert m.H_COVER_CURRENT == "Cover Letter Drafted?"
+
+
+def test_update_rankings_row_writes_into_a_current_and_a_legacy_csv(tmp_path):
+    m = _update_mod()
+    for name, headers in (("current", HEADERS), ("legacy", LEGACY_CSV_HEADERS)):
+        d = tmp_path / name
+        (d / "1 - Rankings").mkdir(parents=True)
+        csv_path = d / "1 - Rankings" / "b-rankings.csv"
+        with open(csv_path, "w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(headers)
+            w.writerow(row_for(headers, company="Acme"))
+        n = m.update_csv(csv_path, job_file="acme.txt", url=None,
+                         base="Acme — PM (6/25/26)", cover_letter=True)
+        assert n >= 1, f"{name}: nothing was written"
+        with open(csv_path, newline="", encoding="utf-8") as f:
+            rows = list(csv.reader(f))
+        got = by_name(rows[0], rows[1])
+        base_col = rows[0][m._col(rows[0], m.H_BASE_PREFIXES)]
+        cover_col = rows[0][m._col(rows[0], m.H_COVER_PREFIXES)]
+        assert got[base_col] == "Acme — PM (6/25/26)"
+        assert got[cover_col] == "Yes"

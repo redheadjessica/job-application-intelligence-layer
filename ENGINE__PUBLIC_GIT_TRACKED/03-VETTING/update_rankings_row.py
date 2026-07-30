@@ -35,10 +35,22 @@ except Exception:  # prep deps unavailable — fall back to exact string compare
     def normalize_url(u):
         return (u or "").strip().lower().rstrip("/")
 
-# Column headers are matched by PREFIX, not equality: users rename them locally (Jessica's reads
-# "Base Resume Used - Jess-Requested Custom Field"). Prefix-matching keeps that working.
-H_BASE_PREFIX = "base resume used"
-H_COVER_PREFIX = "cover letter"
+# Column headers are matched by PREFIX, not equality: users rename them locally (e.g. a trailing
+# "- <custom field>" suffix). Prefix-matching keeps that working.
+#
+# BOTH header generations are accepted on READ, so this keeps working against an older rankings
+# file that still says "Base Resume Used" / "Cover Letter?" while writing the CURRENT contract
+# names. Without the legacy fallback the tailor and cover-letter workflows would silently write
+# nothing into an unmigrated file — the exact failure this script exists to fix.
+H_BASE_PREFIXES = ("tailored? (base resume)", "tailored?", "base resume used")
+H_COVER_PREFIXES = ("cover letter drafted?", "cover letter")
+# The contract names this script writes when it has to CREATE the column.
+H_BASE_CURRENT = "Tailored? (Base Resume)"
+H_COVER_CURRENT = "Cover Letter Drafted?"
+# Semantics (contract, 2026-07-30): both columns stay BLANK until the step completes —
+# `Tailored? (Base Resume)` then holds the exact base-resume name, `Cover Letter Drafted?`
+# the literal `Yes` (not "Y": the header asks a question, so the answer reads as one).
+COVER_LETTER_YES = "Yes"
 H_JOBFILE = "job file"
 H_TITLE_PREFIX = "job post title"
 
@@ -87,10 +99,15 @@ def terse_base(s: str) -> str:
     return s.replace("Professional Services", "Prof. Services")
 
 
-def _col(headers, prefix):
-    for i, h in enumerate(headers):
-        if (h or "").strip().lower().startswith(prefix):
-            return i
+def _col(headers, prefixes):
+    """Index of the first header matching ANY accepted prefix (current contract name first,
+    then the legacy spelling), or None. `prefixes` may be a single string."""
+    if isinstance(prefixes, str):
+        prefixes = (prefixes,)
+    for prefix in prefixes:
+        for i, h in enumerate(headers):
+            if (h or "").strip().lower().startswith(prefix):
+                return i
     return None
 
 
@@ -112,7 +129,7 @@ def update_csv(path: Path, job_file, url, base, cover_letter) -> bool:
     if not rows:
         return False
     headers = rows[0]
-    ci_base, ci_cl = _col(headers, H_BASE_PREFIX), _col(headers, H_COVER_PREFIX)
+    ci_base, ci_cl = _col(headers, H_BASE_PREFIXES), _col(headers, H_COVER_PREFIXES)
     ci_jf, ci_title = _col(headers, H_JOBFILE), _col(headers, H_TITLE_PREFIX)
 
     if cover_letter and ci_cl is None:  # older batch predates the column — append it
@@ -133,7 +150,7 @@ def update_csv(path: Path, job_file, url, base, cover_letter) -> bool:
         if base and ci_base is not None:
             r[ci_base] = base
         if cover_letter and ci_cl is not None:
-            r[ci_cl] = "Y"
+            r[ci_cl] = COVER_LETTER_YES
     if hit:
         with path.open("w", newline="", encoding="utf-8") as f:
             csv.writer(f).writerows(rows)
@@ -148,7 +165,7 @@ def update_xlsx(path: Path, job_file, url, base, cover_letter) -> bool:
     wb = load_workbook(path)
     ws = wb.active
     headers = [ws.cell(1, c).value for c in range(1, ws.max_column + 1)]
-    ci_base, ci_cl = _col(headers, H_BASE_PREFIX), _col(headers, H_COVER_PREFIX)
+    ci_base, ci_cl = _col(headers, H_BASE_PREFIXES), _col(headers, H_COVER_PREFIXES)
     ci_jf, ci_title = _col(headers, H_JOBFILE), _col(headers, H_TITLE_PREFIX)
 
     if cover_letter and ci_cl is None:
@@ -170,7 +187,7 @@ def update_xlsx(path: Path, job_file, url, base, cover_letter) -> bool:
         if base and ci_base is not None:
             ws.cell(r, ci_base + 1, base)
         if cover_letter and ci_cl is not None:
-            ws.cell(r, ci_cl + 1, "Y")
+            ws.cell(r, ci_cl + 1, COVER_LETTER_YES)
     if hit:
         wb.save(path)
     return hit
