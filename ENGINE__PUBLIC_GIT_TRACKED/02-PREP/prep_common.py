@@ -256,6 +256,16 @@ _NAV_WORDS = {
 }
 
 
+# Generic ATS/careers PAGE titles that name the page, not the job. Matched exactly (after
+# lowercasing + punctuation strip) so a real title is never caught by them.
+_GENERIC_PAGE_TITLES = {
+    "job details", "job detail", "details", "job description", "job posting", "job post",
+    "job opening", "job openings", "position details", "position description",
+    "opportunity details", "open positions", "open roles", "current openings",
+    "job search", "search jobs", "apply now", "view job", "job", "jobs", "careers",
+}
+
+
 def _is_branding_only(text: str) -> bool:
     """True when a string is a careers-site branding label rather than a job title —
     "Meta Careers", "Careers at Acme", "Jobs — Acme", bare "Careers"/"Jobs".
@@ -264,7 +274,7 @@ def _is_branding_only(text: str) -> bool:
     s = re.sub(r"\s+", " ", str(text or "").strip())
     if not s:
         return True
-    if re.fullmatch(r"(?:careers?|jobs?)", s, re.I):
+    if re.sub(r"\s+", " ", re.sub(r"[^a-z ]+", " ", s.lower())).strip() in _GENERIC_PAGE_TITLES:
         return True
     if len(s.split(" ")) > 3:
         return False
@@ -324,9 +334,13 @@ def _first_content_heading(body: str | None, names: list[str]) -> str | None:
     navigation chrome or a JD section header. On the metacareers capture the body opens
     with "Skip to main content / Jobs / Teams / Career Programs / Working at Meta / Blog /
     Podcasts / Jobs" and then the real title, "Product Manager, Central Product"."""
-    nav = set(_NAV_WORDS)
+    # The employer's own name(s) count as nav vocabulary only IN COMBINATION with a real nav
+    # word ("Working at <Co>"). They can't stand alone as the test: when the company slot
+    # holds the ROLE text, its words would otherwise mask the real title line.
+    own = set()
     for name in names:
-        nav |= {w for w in re.split(r"[^a-z0-9]+", str(name or "").lower()) if w}
+        own |= {w for w in re.split(r"[^a-z0-9]+", str(name or "").lower()) if w}
+    nav = _NAV_WORDS | own
     for raw in str(body or "").splitlines()[:60]:
         ln = re.sub(r"\s+", " ", raw).strip(" \t|·:-–—")
         if not (6 <= len(ln) <= 120) or ln.endswith("."):  # a title is not a sentence
@@ -338,9 +352,16 @@ def _first_content_heading(body: str | None, names: list[str]) -> str | None:
         if re.search(r"[a-z][A-Z]", ln):
             continue
         words = [w for w in re.split(r"[^A-Za-z0-9'&]+", ln) if w]
-        if len(words) < 2 or all(w.lower() in nav for w in words):
+        low = [w.lower() for w in words]
+        if len(words) < 2:
             continue
-        if any(_title_is_invalid(ln, n) for n in names):
+        if all(w in nav for w in low) and any(w in _NAV_WORDS for w in low):
+            continue
+        # Branding lines are skipped, but a line that merely MATCHES the "company" is kept:
+        # when the title is branding, a company slot holding the same string as the body's
+        # first content line is evidence the ROLE text landed in the company field, and the
+        # role-as-company guard downstream is what repairs that.
+        if _title_is_branding(ln):
             continue
         return ln
     return None
@@ -372,7 +393,7 @@ def _recover_title(jsonld: dict, html: str | None, body: str | None,
             continue
         clean, _ = _strip_title_branding(c)
         clean = clean.strip()
-        if clean and not any(_title_is_invalid(clean, n) for n in names or [""]):
+        if clean and not _title_is_branding(clean):
             return clean
     return None
 

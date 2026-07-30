@@ -11,6 +11,25 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 (later still) — Two more identity defects, caught by actually re-fetching
+
+Re-fetching the renamed captures (rather than trusting the dry run) exposed two more cases the same
+live page can produce on a different visit:
+
+- **A page title that names the PAGE, not the job** — a careers site served `job details` as its title
+  with the real role sitting in the *company* slot. Generic page titles (`job details`, `job
+  description`, `open positions`, `apply now`, …) are now treated as branding, i.e. as carrying no role
+  information, so recovery runs instead of the page label becoming the role.
+- **The employer's own name could mask the real title line.** Employer-name words were treated as
+  navigation vocabulary outright, so when the company slot held the ROLE text, the body's matching title
+  line looked like pure chrome and was skipped (the scan then reached for a benefits bullet). Employer
+  names now only count as nav vocabulary *in combination with* a real nav word — which is all that case
+  ("Working at <Employer>") ever needed.
+
+Lesson worth keeping: for capture identity, a dry run over saved files is necessary but not sufficient —
+the same URL can serve different chrome on a different visit, so re-fetch before declaring it fixed.
+
+
 ## 2026-07-29 (later) — Three captured-identity defects caught by dry-running the new normalizer over a real batch
 
 Before retro-applying the fixed identity normalizer to a real batch, I dry-ran it over all 51

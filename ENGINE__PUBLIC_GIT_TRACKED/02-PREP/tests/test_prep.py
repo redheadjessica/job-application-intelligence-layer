@@ -1678,6 +1678,31 @@ def test_invalid_titles_all_recover_to_the_real_role(company, title):
     assert (co, ro) == ("Meta", META_ROLE)
 
 
+@pytest.mark.parametrize("scraped_title", [
+    "job details", "Job Details", "Job Description", "Open Positions", "Apply Now",
+])
+def test_generic_page_titles_are_branding_not_roles(scraped_title):
+    """An ATS page whose title names the PAGE ("job details") carries no role information,
+    so it must trigger recovery. Observed live: a careers site served
+    `Role: job details` with the real role sitting in the company slot."""
+    role = "Product Manager, Workspace Ecosystem"
+    body = f"{role}\n- linkCopy link\n- Health, dental, vision insurance\n"
+    url = "https://www.google.com/about/careers/applications/jobs/results/93719465-pm"
+    co, ro = pc.normalize_capture_identity(role, scraped_title, url=url, body=body)
+    assert (co, ro) == ("Google", role)
+    assert pc.base_filename(co, ro) == "google__product-manager-workspace-ecosystem.txt"
+
+
+def test_the_employer_name_alone_never_masks_the_title_line():
+    """The employer's words count as nav vocabulary only alongside a real nav word
+    ("Working at <Co>"). When the company slot holds the ROLE text, its words must not hide
+    the matching title line in the body."""
+    role = "Product Manager, Workspace Ecosystem"
+    assert pc._first_content_heading(f"{role}\nmore text here\n", [role]) == role
+    assert pc._first_content_heading("Working at Acme\nStaff PM, Growth\n",
+                                     ["Acme"]) == "Staff PM, Growth"
+
+
 def test_a_plain_collision_is_fixed_on_the_COMPANY_side_not_by_rewriting_the_title():
     """When a non-branding title merely equals the company, the ambiguity is resolved by the
     never-role-as-company guard — the title is NOT rewritten from loose body text. A real
