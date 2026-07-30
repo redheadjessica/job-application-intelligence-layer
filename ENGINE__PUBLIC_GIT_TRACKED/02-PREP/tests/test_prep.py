@@ -3141,3 +3141,189 @@ def test_single_br_mid_paragraph_is_a_line_break_not_a_new_block():
     # Inside a plain (non-nested) list item: continuation line, never a new bullet.
     text3 = af._html_to_text("<ul><li>Line one<br />line two</li><li>Item two</li></ul>")
     assert text3 == "- Line one\n  line two\n- Item two"
+
+
+# ===========================================================================
+# Phase A7: atomicity, advisory locking, and ISOLATED registry shards.
+# ===========================================================================
+def test_atomic_write_leaves_no_partial_file_and_no_tmp_litter(tmp_path):
+    target = tmp_path / "sub" / "registry.json"
+    pc.atomic_write_text(target, '{"a": 1}\n')
+    assert target.read_text(encoding="utf-8") == '{"a": 1}\n'
+    # A failing write must leave the ORIGINAL intact and no tmp files behind.
+    class Boom(Exception):
+        pass
+    try:
+        with pytest.raises(Boom):
+            original = pc.atomic_write_text
+
+            def failing(path, text):
+                original(path, text[: len(text) // 2])
+                raise Boom()
+            failing(target, '{"b": 2}\n')
+    finally:
+        pass
+    leftovers = [p.name for p in target.parent.iterdir() if p.name.endswith(".tmp")]
+    assert leftovers == []
+
+
+def test_file_lock_is_exclusive_and_times_out_with_a_clear_error(tmp_path):
+    target = tmp_path / "registry.json"
+    with pc.file_lock(target):
+        with pytest.raises(pc.LockTimeout) as e:
+            with pc.file_lock(target, timeout=0.1):
+                pass
+    assert "could not acquire the lock" in str(e.value)
+    assert "another prep worker" in str(e.value)
+    # Released afterwards — the next writer proceeds immediately.
+    with pc.file_lock(target, timeout=0.1):
+        pass
+
+
+def test_interleaved_lock_guarded_writers_lose_no_events(tmp_path):
+    """Two workers read-modify-write the same registry. Because each does so under ONE lock,
+    neither loses the other's events (the pre-fix shape — read, then write later — dropped
+    whichever worker wrote first)."""
+    import threading
+    reg_path = tmp_path / "registry.json"
+    pc.save_capture_registry(reg_path, {"schema_version": 1, "postings": {}})
+    barrier = threading.Barrier(2)
+
+    def worker(n):
+        barrier.wait()
+        for i in range(10):
+            def _apply(reg, n=n, i=i):
+                pc.record_capture_event(reg, "greenhouse:acme:1", {
+                    "fetched_at": f"2026-07-{10 + n:02d}T00:00:{i:02d}+00:00",
+                    "url": f"u{n}-{i}", "ok": True}, success=True)
+            pc.update_capture_registry(reg_path, _apply)
+
+    threads = [threading.Thread(target=worker, args=(n,)) for n in (0, 1)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    reg = pc.load_capture_registry(reg_path)
+    history = reg["postings"]["greenhouse:acme:1"]["history"]
+    assert len(history) == 20, "every event from both writers must survive"
+    assert len({h["url"] for h in history}) == 20
+    # Whichever worker won the race owns the original — and it is IMMUTABLE from then on
+    # (which worker got there first is a race; that the original never moves is not).
+    original = dict(reg["postings"]["greenhouse:acme:1"]["original_capture"])
+    pc.update_capture_registry(reg_path, lambda r: pc.record_capture_event(
+        r, "greenhouse:acme:1", _ev(28, "later"), success=True))
+    after = pc.load_capture_registry(reg_path)["postings"]["greenhouse:acme:1"]
+    assert after["original_capture"] == original
+    assert len(after["history"]) == 21
+
+
+def test_shard_mode_leaves_the_global_registry_byte_identical(tmp_path, monkeypatch):
+    """Her amendment #3: a staging/canary fetch must NOT touch the global registry."""
+    global_path = tmp_path / "global.json"
+    pc.save_capture_registry(global_path, {"schema_version": 1, "postings": {}})
+    before = global_path.read_bytes()
+    monkeypatch.setattr(pc, "DEFAULT_REGISTRY_PATH", global_path)
+    shard = tmp_path / "shard-canary.json"
+    src = _batch_source(tmp_path / "staging")
+    # (a) explicit registry_path
+    pc.process_urls(["https://boards.greenhouse.io/acme/jobs/123456"], src,
+                    _fetch_result(_SYNTH_BODY), registry_path=shard)
+    assert global_path.read_bytes() == before
+    assert "greenhouse:acme:123456" in pc.load_capture_registry(shard)["postings"]
+    # (b) the JAIL_CAPTURE_REGISTRY env switch
+    shard2 = tmp_path / "shard-env.json"
+    monkeypatch.setenv("JAIL_CAPTURE_REGISTRY", str(shard2))
+    src2 = _batch_source(tmp_path / "staging2")
+    pc.process_urls(["https://boards.greenhouse.io/acme/jobs/777777"], src2,
+                    _fetch_result(_SYNTH_BODY))
+    assert global_path.read_bytes() == before
+    assert "greenhouse:acme:777777" in pc.load_capture_registry(shard2)["postings"]
+    assert pc.resolve_registry_path() == shard2
+    assert pc.resolve_registry_path(shard) == shard   # explicit arg wins over the env
+
+
+def _ev(day, url="u", ok=True):
+    return {"fetched_at": f"2026-07-{day:02d}T12:00:00+00:00", "url": url, "ok": ok}
+
+
+def _shard_with(path, key, events, original=None, latest=None):
+    reg = {"schema_version": 1, "postings": {key: {"history": [dict(e) for e in events]}}}
+    posting = reg["postings"][key]
+    if original:
+        posting["original_capture"] = dict(original)
+        posting["original_source"] = "staging"
+    if latest:
+        posting["latest_capture"] = dict(latest)
+    pc.save_capture_registry(path, reg)
+    return path
+
+
+def test_merge_excludes_a_rejected_key_entirely(tmp_path):
+    """A rejected/defective staging capture must never reach the global registry — not its
+    events, and above all not as the permanent original."""
+    global_path = tmp_path / "global.json"
+    pc.save_capture_registry(global_path, {"schema_version": 1, "postings": {}})
+    shard = _shard_with(tmp_path / "s.json", "greenhouse:acme:1", [_ev(5)],
+                        original=_ev(5), latest=_ev(5))
+    bad = _shard_with(tmp_path / "s2.json", "greenhouse:acme:999", [_ev(5)],
+                      original=_ev(5), latest=_ev(5))
+    merged = pc.merge_registry_shards(global_path, [shard, bad],
+                                      accepted_keys={"greenhouse:acme:1"})
+    assert set(merged["postings"]) == {"greenhouse:acme:1"}
+    assert "greenhouse:acme:999" not in pc.load_capture_registry(global_path)["postings"]
+
+
+def test_merge_keeps_the_earlier_global_original_over_a_later_shard_event(tmp_path):
+    global_path = tmp_path / "global.json"
+    pc.save_capture_registry(global_path, {"schema_version": 1, "postings": {
+        "greenhouse:acme:1": {"history": [_ev(1, "old")],
+                              "original_capture": _ev(1, "old"),
+                              "original_source": "live",
+                              "latest_capture": _ev(1, "old")}}})
+    shard = _shard_with(tmp_path / "s.json", "greenhouse:acme:1", [_ev(9, "new")],
+                        original=_ev(9, "new"), latest=_ev(9, "new"))
+    merged = pc.merge_registry_shards(global_path, [shard], {"greenhouse:acme:1"})
+    posting = merged["postings"]["greenhouse:acme:1"]
+    assert posting["original_capture"]["url"] == "old"      # immutable, earliest wins
+    assert posting["latest_capture"]["url"] == "new"        # latest advances
+    assert [h["url"] for h in posting["history"]] == ["old", "new"]
+    # An EARLIER shard original does replace a later global one (earliest-known wins).
+    earlier = _shard_with(tmp_path / "s3.json", "greenhouse:acme:1", [_ev(1, "earliest")],
+                          original={"fetched_at": "2026-06-01T12:00:00+00:00",
+                                    "url": "earliest", "ok": True})
+    merged2 = pc.merge_registry_shards(global_path, [earlier], {"greenhouse:acme:1"})
+    assert merged2["postings"]["greenhouse:acme:1"]["original_capture"]["url"] == "earliest"
+
+
+def test_merge_never_advances_latest_on_a_failed_event_and_is_idempotent(tmp_path):
+    global_path = tmp_path / "global.json"
+    pc.save_capture_registry(global_path, {"schema_version": 1, "postings": {
+        "greenhouse:acme:1": {"history": [_ev(1, "ok1")],
+                              "original_capture": _ev(1, "ok1"),
+                              "latest_capture": _ev(1, "ok1")}}})
+    shard = _shard_with(tmp_path / "s.json", "greenhouse:acme:1", [_ev(9, "boom", ok=False)],
+                        latest=_ev(9, "boom", ok=False))
+    merged = pc.merge_registry_shards(global_path, [shard], {"greenhouse:acme:1"})
+    assert merged["postings"]["greenhouse:acme:1"]["latest_capture"]["url"] == "ok1"
+    assert any(h["url"] == "boom" for h in merged["postings"]["greenhouse:acme:1"]["history"])
+    # Idempotent: merging the same shard again changes nothing at all.
+    snapshot = global_path.read_text(encoding="utf-8")
+    pc.merge_registry_shards(global_path, [shard], {"greenhouse:acme:1"})
+    assert global_path.read_text(encoding="utf-8") == snapshot
+    pc.merge_registry_shards(global_path, [shard], {"greenhouse:acme:1"})
+    assert global_path.read_text(encoding="utf-8") == snapshot
+
+
+def test_manifest_writes_are_atomic_and_locked(tmp_path):
+    """A manifest write must be atomic too — a reader never sees a truncated JSON file."""
+    src = _batch_source(tmp_path)
+    manifest = pc.process_urls(["https://example.com/job/atomic"], src,
+                               _fetch_result(_SYNTH_BODY),
+                               registry_path=tmp_path / "reg.json")
+    mpath = tmp_path / "0 - Prep Report" / "prep-manifest.json"
+    assert json.loads(mpath.read_text(encoding="utf-8"))["entries"]
+    assert not [p for p in mpath.parent.iterdir() if p.name.endswith(".tmp")]
+    # The sidecar lock exists and is not holding the file open exclusively afterwards.
+    with pc.file_lock(mpath, timeout=1):
+        pass
+    assert manifest["counts"][pc.USABLE] == 1

@@ -11,6 +11,26 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — Phase A (cont.): atomic lock-guarded writes and isolated capture-registry shards
+
+Groundwork for a parallel refresh, where several workers touch the same durable records at once.
+
+- **Every registry and manifest write is atomic and lock-guarded**: a tmp file in the same
+  directory + `os.replace` (so a reader never sees a half-written file and a crash cannot truncate
+  the existing one), under an advisory `fcntl.flock` on a sidecar `.lock` with a 30s timeout and an
+  actionable `LockTimeout` message instead of an indefinite hang. `update_capture_registry()` does
+  the read-modify-write inside ONE lock, so two concurrent workers cannot lose each other's events —
+  pinned by an interleaved two-thread test asserting all 20 events survive.
+- **Registry isolation for staging/canary fetches.** A worker can be pointed at its own shard file
+  via `registry_path=` or the `JAIL_CAPTURE_REGISTRY` env var; the global registry is then left
+  byte-identical (asserted both ways). `process_urls` collects its events and flushes them once,
+  under the lock, at the end.
+- **`merge_registry_shards(global_path, shard_paths, accepted_keys)`** merges post-validation:
+  ONLY accepted posting identities are merged, so a rejected or defective staging capture can never
+  become the permanent original. History is unioned and deduped on (key, fetched_at, url), the
+  EARLIEST original wins and stays immutable, `latest_capture` advances only on a successful and
+  strictly newer event, and repeated merges are byte-for-byte idempotent.
+
 ## 2026-07-30 — Phase A (cont.): CSV/XLSX parity proof, honest Instructions tab, renamed downstream writes
 
 - **Parity proven, not assumed.** A parametrized regression builds all three input shapes — a

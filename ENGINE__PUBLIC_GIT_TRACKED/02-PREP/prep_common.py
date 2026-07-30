@@ -10,9 +10,14 @@ manifest logic lives here, not duplicated.
 """
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
+import os
 import re
+import tempfile
+import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from html import unescape as html_unescape
 from pathlib import Path
@@ -2227,6 +2232,69 @@ def canonical_capture_key(url: str, apply_url: str | None = None,
     return normalize_url(u)
 
 
+# --------------------------------------------------------------------------- #
+# Atomic + lock-guarded writes (REQUIRED for the parallel refresh)
+#
+# Two workers writing the same registry or manifest must never interleave a partial file or lose
+# each other's events. Every write goes to a tmp file in the SAME directory (so os.replace is a
+# same-filesystem atomic rename) under an advisory flock on a sidecar `.lock`, with a timeout and
+# a clear error rather than an indefinite hang.
+# --------------------------------------------------------------------------- #
+LOCK_TIMEOUT_SECONDS = 30
+
+
+class LockTimeout(RuntimeError):
+    """Raised when a sidecar lock cannot be acquired within the timeout."""
+
+
+@contextmanager
+def file_lock(path, timeout: float = LOCK_TIMEOUT_SECONDS):
+    """Advisory exclusive lock on `<path>.lock`, held for the duration of the block."""
+    lock_path = Path(str(path) + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + timeout
+    fh = open(lock_path, "a+")
+    try:
+        while True:
+            try:
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise LockTimeout(
+                        f"could not acquire the lock on {lock_path} within {timeout:g}s — another "
+                        f"prep worker is still writing it. Wait for that run to finish (or remove "
+                        f"the stale lock file if no prep process is running) and retry."
+                    )
+                time.sleep(0.05)
+        yield
+    finally:
+        try:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+        finally:
+            fh.close()
+
+
+def atomic_write_text(path, text: str) -> None:
+    """Write via a tmp file in the same directory + os.replace, so a reader never sees a
+    half-written file and a crash can't truncate the existing one."""
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(p.parent), prefix=p.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, p)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def load_capture_registry(path) -> dict:
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
@@ -2238,9 +2306,81 @@ def load_capture_registry(path) -> dict:
 
 
 def save_capture_registry(path, registry: dict) -> None:
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(registry, indent=2) + "\n", encoding="utf-8")
+    """Atomic, lock-guarded write of the registry."""
+    with file_lock(path):
+        atomic_write_text(path, json.dumps(registry, indent=2) + "\n")
+
+
+def update_capture_registry(path, mutate):
+    """Read-modify-write the registry under ONE lock, so two concurrent workers can't lose each
+    other's events (the read and the write must not be separated by another writer). `mutate`
+    receives the registry dict and mutates it in place; returns the written registry."""
+    with file_lock(path):
+        registry = load_capture_registry(path)
+        mutate(registry)
+        atomic_write_text(path, json.dumps(registry, indent=2) + "\n")
+        return registry
+
+
+def resolve_registry_path(registry_path=None):
+    """The registry file this process must write. Precedence: an explicit `registry_path`
+    argument, then the `JAIL_CAPTURE_REGISTRY` environment variable (the SHARD switch — a
+    staging/canary worker points it at its own file so the global registry is untouched), then
+    the global default."""
+    if registry_path:
+        return Path(registry_path)
+    env = os.environ.get("JAIL_CAPTURE_REGISTRY", "").strip()
+    if env:
+        return Path(env)
+    return DEFAULT_REGISTRY_PATH
+
+
+def merge_registry_shards(global_path, shard_paths, accepted_keys):
+    """Merge validated shard events into the global registry.
+
+    ONLY postings whose identity is in `accepted_keys` are merged — a staging capture that was
+    rejected or found defective must never become the permanent original, so post-validation the
+    caller passes exactly the keys it accepted. History is unioned and deduped on
+    (key, fetched_at, url); the EARLIEST original wins and stays immutable (an earlier original
+    already in the global file is never replaced by a later shard event); `latest_capture` only
+    ever advances, and only on a SUCCESSFUL event. Idempotent: merging the same shards again
+    changes nothing. Returns the written global registry.
+    """
+    accepted = set(accepted_keys or ())
+    shard_regs = [load_capture_registry(p) for p in (shard_paths or [])]
+
+    def _mutate(registry):
+        postings = registry.setdefault("postings", {})
+        for shard in shard_regs:
+            for key, sposting in (shard.get("postings") or {}).items():
+                if key not in accepted:
+                    continue
+                target = postings.setdefault(key, {})
+                history = target.setdefault("history", [])
+                seen = {(h.get("fetched_at"), h.get("url")) for h in history}
+                for ev in (sposting.get("history") or []):
+                    sig = (ev.get("fetched_at"), ev.get("url"))
+                    if sig in seen:
+                        continue
+                    seen.add(sig)
+                    history.append(dict(ev))
+                history.sort(key=lambda h: (h.get("fetched_at") or ""))
+                # Earliest successful event wins as the immutable original.
+                cand = sposting.get("original_capture")
+                cur = target.get("original_capture")
+                if cand and (not cur or (cand.get("fetched_at") or "") < (cur.get("fetched_at") or "")):
+                    target["original_capture"] = dict(cand)
+                    target["original_source"] = sposting.get("original_source") or "merged-shard"
+                elif cur:
+                    target.setdefault("original_source", target.get("original_source") or "live")
+                # Latest advances only on a successful, strictly newer event.
+                slatest = sposting.get("latest_capture")
+                if slatest and slatest.get("ok") is not False:
+                    cl = target.get("latest_capture")
+                    if not cl or (slatest.get("fetched_at") or "") > (cl.get("fetched_at") or ""):
+                        target["latest_capture"] = dict(slatest)
+
+    return update_capture_registry(global_path, _mutate)
 
 
 def record_capture_event(registry: dict, key: str, event: dict, *, success: bool,
@@ -2309,7 +2449,9 @@ def load_manifest(path: Path) -> dict | None:
 
 
 def save_manifest(path: Path, data: dict) -> None:
-    Path(path).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    """Atomic, lock-guarded: a concurrent worker never sees a half-written manifest."""
+    with file_lock(path):
+        atomic_write_text(path, json.dumps(data, indent=2) + "\n")
 
 
 def _counts(entries: list[dict]) -> dict:
@@ -2434,8 +2576,11 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
     # The durable cross-batch capture-history registry (gitignored). The batch
     # manifest below is a mirror; the registry is the source of truth for a
     # posting's Original/Latest capture identity.
-    reg_path = Path(registry_path) if registry_path else DEFAULT_REGISTRY_PATH
+    # Shard-aware: an explicit `registry_path`, else JAIL_CAPTURE_REGISTRY, else the global file.
+    # A staging/canary worker sets one of those and the global registry is never touched.
+    reg_path = resolve_registry_path(registry_path)
     registry = load_capture_registry(reg_path)
+    pending_events: list[tuple] = []   # (key, event, success) — flushed under ONE lock at the end
     registry_dirty = False
 
     # Rebuild the "taken filename -> owning normalized_url" map from prior entries.
@@ -2608,11 +2753,15 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                                         posting_id=res_meta.get("posting_id"))
         posting_prior = dict((registry.get("postings") or {}).get(cap_key) or {})
         prior_original = posting_prior.get("original_capture")
-        record_capture_event(registry, cap_key, {
+        cap_event = {
             "fetched_at": ts, "url": url, "normalized_url": norm,
             "batch": batch_root.name, "method": fetch_method,
             "source": fetch_source, "posting_id": res_meta.get("posting_id"),
-            "status": fetch_status, "ok": fetch_success}, success=fetch_success)
+            "status": fetch_status, "ok": fetch_success}
+        # Applied to the in-memory copy now (this run's own later reads see it) and replayed
+        # under a single lock at the end, so a concurrent worker's events are never lost.
+        record_capture_event(registry, cap_key, cap_event, success=fetch_success)
+        pending_events.append((cap_key, cap_event, fetch_success))
         registry_dirty = True
 
         # A LATEST CAPTURE DETAILS block appears when the registry (or the batch
@@ -2765,7 +2914,13 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
     manifest["counts"] = _counts(entries)
     manifest["fetched_at"] = ts
     if registry_dirty:
-        save_capture_registry(reg_path, registry)
+        def _apply(reg):
+            # Replayed onto a FRESH read inside the lock (so a concurrent worker's events
+            # survive), without dedupe: these events are this run's own and are new by
+            # definition — two real fetches landing in the same second are two events.
+            for key, event, ok in pending_events:
+                record_capture_event(reg, key, event, success=ok)
+        update_capture_registry(reg_path, _apply)
     save_manifest(mpath, manifest)
     write_report(dirs["report"] / "prep-report.md", manifest)
     _print_summary(manifest, dirs)
