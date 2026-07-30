@@ -57,11 +57,19 @@ def detect_company_from_url(url: str) -> str:
     return company.replace("-", " ").title()
 
 
+# A title segment carrying "careers"/"jobs" ANYWHERE is site branding, not an employer name.
+# This used to be an exact-set membership test ({"careers", "jobs", ...}), so "Careers at
+# Airbnb" sailed through as the company and produced `careers-at-airbnb__…txt`. A pattern
+# test rejects the whole family ("Careers at X", "X Careers", "Jobs at X", "View all jobs").
+# Anything that still slips through as the ROLE segment is repaired downstream by
+# prep_common.normalize_capture_identity (the never-role-as-company guard).
+_TITLE_SEGMENT_BRANDING_RE = re.compile(r"\b(careers?|jobs?)\b", re.I)
+
+
 def best_company_from_title(title: str, fallback: str) -> str:
-    parts = [p.strip() for p in re.split(r"\||•|-", title) if p.strip()]
-    bad = {"careers", "jobs", "job opportunity", "job"}
+    parts = [p.strip() for p in re.split(r"\||•|-", title or "") if p.strip()]
     for part in reversed(parts):
-        if part.lower() not in bad and len(part) <= 60:
+        if len(part) <= 60 and not _TITLE_SEGMENT_BRANDING_RE.search(part):
             return part
     return fallback
 
@@ -339,6 +347,13 @@ def make_fetch_one(browser):
                     # Structured only when the rendered page carried a JSON-LD JobPosting;
                     # otherwise a missing field is capture_failed, not not_posted.
                     "structured_source": bool(jobposting),
+                    # Structured identity when the rendered page published it — preferred
+                    # over the scraped page title/company by
+                    # prep_common.normalize_capture_identity.
+                    "jsonld_identity": ({"hiring_organization": jobposting.get("hiring_organization"),
+                                         "title": jobposting.get("title")}
+                                        if (jobposting.get("hiring_organization") or jobposting.get("title"))
+                                        else None),
                     "comp_expected": False,
                     "location_expected": bool(jobposting.get("location")),
                     # Rendered HTML kept transiently for embedded-Greenhouse recovery.

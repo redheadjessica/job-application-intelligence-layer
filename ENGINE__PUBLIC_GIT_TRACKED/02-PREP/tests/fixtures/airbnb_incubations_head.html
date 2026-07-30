@@ -1,0 +1,50 @@
+<!-- DURABLE REGRESSION FIXTURE (2026-07-29).
+
+     Shape of a real employer career page (careers.airbnb.com/positions/<gh id>) that produced
+     TWO different wrong captured filenames — `careers-at-airbnb__product-manager-incubations.txt`
+     (playwright route: "Careers at Airbnb" accepted as the company) and
+     `product-manager-incubations__product-manager-incubations.txt` (requests route: the
+     career-y segment was rejected, then the ROLE segment became the company).
+
+     The ONLY correct outputs from every route are:
+        filename  airbnb__product-manager-incubations.txt
+        Company:  Airbnb
+        Role:     Product Manager, Incubations
+
+     The body below also pins the capture-completeness regressions: BOTH employer offices must
+     survive (not just the first), benefits/equity must read as mentioned-without-details rather
+     than "Not posted", and the verbatim archive block must not come back blank. -->
+<html>
+<head>
+  <meta property="og:title" content="Product Manager, Incubations - Careers at Airbnb" />
+  <title>Product Manager, Incubations - Careers at Airbnb</title>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "JobPosting",
+    "title": "Product Manager, Incubations",
+    "hiringOrganization": {"@type": "Organization", "name": "Airbnb"},
+    "employmentType": "FULL_TIME",
+    "jobLocation": [
+      {"@type": "Place", "address": {"addressLocality": "San Francisco", "addressRegion": "CA"}},
+      {"@type": "Place", "address": {"addressLocality": "New York", "addressRegion": "NY"}}
+    ]
+  }
+  </script>
+</head>
+<body>
+<h1>Airbnb Careers</h1>
+<h2>Product Manager, Incubations</h2>
+<div id="job-description">
+<p>About the role</p>
+<p>Responsibilities include incubating new lines of business. You will work with design and
+engineering partners to take early concepts to market.</p>
+<p>This role can be based in San Francisco, CA or New York, NY, with in-person collaboration
+3 days per week.</p>
+<p>The base pay range for this position is $220,000 - $275,000 annually.</p>
+<p>Offers may also include an incentive bonus, and you may also be eligible for bonus, equity,
+benefits, and Employee Travel Credits.</p>
+<p>We are looking for experience shipping zero-to-one products.</p>
+</div>
+</body>
+</html>

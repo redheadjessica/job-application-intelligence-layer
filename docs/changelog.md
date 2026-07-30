@@ -11,6 +11,62 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Captured-post identity + capture completeness: one normalizer at the prep choke point
+
+Fifth contract. Captured job files are supposed to be named `company-name__job-title.txt`, but the
+company was never sanitized, so ONE employer career page produced two different wrong names on two
+different fetch routes: the playwright route's `best_company_from_title` used an EXACT-set reject
+list, so a `Careers at <Co>` segment passed through as the company (`careers-at-co__role.txt`),
+while the requests route's `detect_company` rejected the career-y segment and then fell through to
+the ROLE segment, naming the file `role__role.txt`. No wrapper strip existed anywhere in the repo,
+and the page's own structured employer name was read and discarded.
+
+- **`normalize_capture_identity(company, title, url, jsonld)`** in `prep_common.py`, invoked at the
+  ONE choke point in `process_urls` where the winning fetch result's title/company are read — so
+  every route (ATS API / requests / playwright / JSON-LD / embedded-ATS recovery) is normalized
+  identically, and it is idempotent per URL. It prefers structured JSON-LD identity, strips company
+  wrappers (`Careers at X`, `Jobs at X`, `X Careers`, `X Jobs`) and title site-branding suffixes
+  (`- Careers at <Co>`, `| <Co> Careers`, `— <Co> Careers`, trailing employer echo), and NEVER lets
+  the role become the company (falls back to the suffix- or domain-derived employer name, and only
+  when such an alternative actually exists — it never invents one).
+- `best_company_from_title` now rejects branding segments by PATTERN (`\b(careers?|jobs?)\b`)
+  instead of exact-set membership.
+- **JSON-LD identity threaded through**: `extract_jsonld_jobposting` now also returns
+  `hiring_organization` + `title`, carried as `meta["jsonld_identity"]` by both generic fetchers.
+  Its return-None criterion is deliberately unchanged so `structured_source` semantics don't shift.
+- **Latent bug found and fixed while wiring that up:** `extract_jsonld_jobposting`'s parameter was
+  named `html`, shadowing the stdlib `html` module it calls — `html.unescape(...)` raised on the
+  str, a bare `except Exception: continue` swallowed it, and the function returned None for EVERY
+  page. JSON-LD capture had silently never worked; generic HTML captures were therefore never
+  treated as a structured source. Parameter renamed; both callers pass positionally.
+
+Capture-completeness regressions in the same pass:
+
+- **All employer-listed offices preserved.** The prose location scan returned only the FIRST
+  `City, ST`, silently dropping the second office; it now collects every distinct one (deduped,
+  capped, `"; "`-joined).
+- **Third state `Mentioned (no details)`** for benefits/equity, distinct from `Not posted`: a
+  posting saying "you may also be eligible for bonus, equity, benefits" HAS told us these exist. The
+  same guard stops a comp DISCLAIMER sentence ("the range … does not include equity, bonus and
+  benefits") from being surfaced verbatim as the Equity value — a real mis-capture in the golden
+  fixture, which is deliberately regenerated in this commit for that one line.
+- **The verbatim archive block no longer renders empty quotes** when the employer did publish
+  comp/location wording: with no structured field, it falls back to the actual prose LINE the value
+  was mined from (including cadence when that line carries one).
+- **Deferred prep items from the comp phase, done here:** `ote`/`total comp` removed from the
+  BASE-salary keyword list (variable pay is not base pay and must not become the comp value), and
+  ALL matching prose ranges are collected instead of just the first (kept machine-readably in
+  `field_status`, so multi-zone prose can feed the applicable-bands envelope).
+- **`CONFLICTING` is finally reachable.** The status and `[CONFLICT]:` line existed but nothing ever
+  populated `compensation_sources` / `location_sources`, so real ATS-vs-prose disagreement was never
+  detected. Producers added with a deliberately conservative "materially disagree" bar: DISJOINT
+  envelopes for comp (identical or overlapping figures — the common case where a posting repeats its
+  range in prose — must not false-flag) and disjoint city sets for location. Both readings are
+  preserved machine-readably in the manifest entry, never silently picked.
+
+30 new tests, including a durable fixture reproducing the real career-page shape and asserting the
+one correct filename + `Company:`/`Role:` header from every route, through `process_urls` itself.
+
 ## 2026-07-29 — Tailored-application names: one canonicalizer replaces four inconsistent instruction sites
 
 Fourth contract into `norm_contracts.py`. Tailored job folders (and the resume-base / cover-letter

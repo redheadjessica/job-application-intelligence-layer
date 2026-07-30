@@ -263,11 +263,47 @@ def filter_questions(questions: list[dict]) -> list[dict]:
 _BENEFITS_HEADING_RE = re.compile(r"(?im)^[\s#>*_\-]*(benefits?|perks?( & benefits)?|what we offer)\b[:\s]*$")
 _EQUITY_RE = re.compile(r"(?i)([^.\n]*\b(equity|stock options?|RSUs?|restricted stock|ESPP)\b[^.\n]*)")
 
+# THIRD STATE — "Mentioned (no details)" (2026-07-29 spec).
+#
+# A posting that says "you may also be eligible for bonus, equity, benefits" HAS told us
+# equity/benefits exist; it just published no specifics. That is materially different from
+# "Not posted" (the employer said nothing at all), and reporting it as Not posted was a real
+# regression: the capture claimed the employer omitted equity when the employer had actually
+# mentioned it. The same guard also catches the inverse failure mode — a COMPENSATION
+# DISCLAIMER sentence ("the range … does not include equity, bonus and benefits") is a
+# mention of equity, NOT a description of an equity grant, so it must never be surfaced as
+# the Equity value verbatim.
+MENTIONED_NO_DETAILS = "Mentioned (no details)"
+
+# Sentence shapes that only MENTION the thing (disclaimer or bare eligibility), with no
+# specifics (no grant size, no percentage, no share count, no dollar value).
+_MENTION_ONLY_RE = re.compile(
+    r"(?i)\b(?:does\s+not\s+include|doesn'?t\s+include|not\s+include|excludes?|"
+    r"exclusive\s+of|in\s+addition\s+to|(?:may|might|could|can|will|are|is)\s+(?:also\s+)?be\s+"
+    r"eligible(?:\s+for)?|eligibility\s+for)\b")
+# Specifics that make a sentence a real description rather than a bare mention.
+_EQUITY_SPECIFICS_RE = re.compile(
+    r"(?i)(\$\s?\d|\d[\d,]*\s*(?:shares?|units?|options?|rsus?)\b|\b\d+(?:\.\d+)?\s*%|"
+    r"\bvest(?:s|ing|ed)?\b|\bstrike price\b|\bgrant (?:of|size|value)\b)")
+# An eligibility/mention sentence that names BENEFITS (used for the benefits third state
+# when no Benefits section exists to mine items from).
+_BENEFITS_MENTION_RE = re.compile(
+    r"(?i)[^.\n]*\b(?:benefits?|perks?)\b[^.\n]*")
+
+
+def _mention_only(sentence: str, specifics_re: "re.Pattern") -> bool:
+    """True when a matched sentence merely MENTIONS the thing (a comp disclaimer or a bare
+    eligibility clause) and carries none of the specifics that would make it a description."""
+    s = sentence or ""
+    return bool(_MENTION_ONLY_RE.search(s)) and not specifics_re.search(s)
+
 
 def mine_benefits_equity(text: str) -> tuple[Optional[str], Optional[str]]:
     """Best-effort summary of benefits + equity from the description prose. Reads
     a 'Benefits/Perks' section (first handful of bullet/line items) and any
-    equity/stock-option sentence. Returns (benefits|None, equity|None)."""
+    equity/stock-option sentence. Returns (benefits|None, equity|None), where either
+    may be the third state `Mentioned (no details)` — the employer referenced it
+    without publishing specifics (distinct from None, i.e. "Not posted")."""
     body = text or ""
     benefits = None
     m = _BENEFITS_HEADING_RE.search(body)
@@ -290,12 +326,24 @@ def mine_benefits_equity(text: str) -> tuple[Optional[str], Optional[str]]:
             benefits = "; ".join(items)
             if len(benefits) > 300:
                 benefits = benefits[:297].rstrip() + "…"
+    if not benefits:
+        # No Benefits section to mine — but an eligibility/mention sentence naming benefits
+        # still means the employer referenced them ("Mentioned", never "Not posted").
+        bm = _BENEFITS_MENTION_RE.search(body)
+        if bm and _MENTION_ONLY_RE.search(bm.group(0)):
+            benefits = MENTIONED_NO_DETAILS
     equity = None
     e = _EQUITY_RE.search(body)
     if e:
-        equity = e.group(1).strip()
-        if len(equity) > 200:
-            equity = equity[:197].rstrip() + "…"
+        sentence = e.group(1).strip()
+        # A comp disclaimer ("… does not include equity …") or a bare eligibility clause is a
+        # MENTION, not an equity description — never surface it as the Equity value verbatim.
+        if _mention_only(sentence, _EQUITY_SPECIFICS_RE):
+            equity = MENTIONED_NO_DETAILS
+        else:
+            equity = sentence
+            if len(equity) > 200:
+                equity = equity[:197].rstrip() + "…"
     return benefits, equity
 
 
@@ -1798,14 +1846,37 @@ _JSONLD_RE = re.compile(
 )
 
 
-def extract_jsonld_jobposting(html: str) -> Optional[dict]:
+def _jsonld_org_name(hiring_organization) -> Optional[str]:
+    """The employer name from schema.org `hiringOrganization` — a dict with `.name`, or a
+    bare string. This is the ONE clean structured identity source on a generic career page
+    (it used to be read and thrown away), so it is preferred over scraped page chrome."""
+    if isinstance(hiring_organization, dict):
+        name = hiring_organization.get("name") or hiring_organization.get("legalName")
+        return str(name).strip() or None if name else None
+    if isinstance(hiring_organization, str) and hiring_organization.strip():
+        return hiring_organization.strip()
+    return None
+
+
+def extract_jsonld_jobposting(html_text: str) -> Optional[dict]:
     """Scan <script type="application/ld+json"> blocks for a schema.org JobPosting and
-    return {"location": str|None, "employment_type": str|None, "compensation": str|None},
-    or None if no JobPosting block is found. Handles a bare object, an @graph array, or a
-    top-level JSON array of blocks."""
+    return {"location", "employment_type", "compensation", "hiring_organization", "title"}
+    (each str|None), or None if no JobPosting block is found. Handles a bare object, an
+    @graph array, or a top-level JSON array of blocks.
+
+    The RETURN-NONE criterion is deliberately unchanged (still keyed on location /
+    employment_type / compensation): callers set `structured_source: bool(jobposting)`, so
+    adding identity to the criterion would silently change which captures count as a
+    structured source. Identity simply rides along on the dicts we already return.
+
+    BUG FIX (2026-07-29): the parameter used to be named `html`, which SHADOWED the stdlib
+    `html` module this function calls — `html.unescape(...)` raised AttributeError on the
+    str, the bare `except Exception: continue` swallowed it, and the function therefore
+    returned None for EVERY page. JSON-LD capture has silently never worked. The parameter
+    is now `html_text` so the module reference resolves (both callers pass positionally)."""
     import json as _json
 
-    for raw in _JSONLD_RE.findall(html or ""):
+    for raw in _JSONLD_RE.findall(html_text or ""):
         try:
             data = _json.loads(html.unescape(raw.strip()))
         except Exception:
@@ -1827,7 +1898,13 @@ def extract_jsonld_jobposting(html: str) -> Optional[dict]:
                 employment_type = ", ".join(str(e) for e in employment_type)
             comp = _jsonld_compensation(node.get("baseSalary"))
             if location or employment_type or comp:
-                return {"location": location, "employment_type": employment_type, "compensation": comp}
+                return {
+                    "location": location,
+                    "employment_type": employment_type,
+                    "compensation": comp,
+                    "hiring_organization": _jsonld_org_name(node.get("hiringOrganization")),
+                    "title": (str(node.get("title")).strip() or None) if node.get("title") else None,
+                }
     return None
 
 

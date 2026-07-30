@@ -168,6 +168,13 @@ def fetch_one(url: str, question_renderer=None, ashby_question_renderer=None) ->
             # "could not verify" (capture_failed), NOT "not posted" — a render or the
             # real ATS API routinely surfaces fields a plain scrape drops.
             "structured_source": bool(jobposting),
+            # Structured identity, when the page published it. Preferred over scraped page
+            # chrome by prep_common.normalize_capture_identity (this is the clean employer
+            # name + real job title; the <title>/og:title carries site branding).
+            "jsonld_identity": ({"hiring_organization": jobposting.get("hiring_organization"),
+                                 "title": jobposting.get("title")}
+                                if (jobposting.get("hiring_organization") or jobposting.get("title"))
+                                else None),
             "comp_expected": False, "location_expected": bool(jobposting.get("location")),
             # Raw HTML kept transiently so the embedded-Greenhouse recovery can spot a
             # gh_jid / boards.greenhouse.io reference (not emitted or persisted).

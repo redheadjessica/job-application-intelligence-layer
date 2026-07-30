@@ -1184,3 +1184,272 @@ def test_routine_free_text_fields_are_dropped(label):
     but they are administrative: they say nothing about the job."""
     assert af.filter_questions(
         [{"label": label, "type": "textarea", "required": False, "options": []}]) == []
+
+
+# ===========================================================================
+# Captured-identity contract — `company-name__job-title.txt` (spec 2026-07-29)
+#
+# One normalizer (`normalize_capture_identity`) at ONE choke point in process_urls, so
+# every fetch route lands on the same filename + the same Company:/Role: header.
+# ===========================================================================
+AIRBNB_URL = "https://careers.airbnb.com/positions/8044715"
+AIRBNB_FILE = "airbnb__product-manager-incubations.txt"
+
+
+def _airbnb_html():
+    return (FIXTURES / "airbnb_incubations_head.html").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("company,title", [
+    # Company wrappers, every direction.
+    ("Careers at Airbnb", "Product Manager, Incubations"),
+    ("careers at airbnb", "Product Manager, Incubations"),
+    ("Jobs at Airbnb", "Product Manager, Incubations"),
+    ("Airbnb Careers", "Product Manager, Incubations"),
+    ("Airbnb Jobs", "Product Manager, Incubations"),
+    # Title site-branding suffixes, every separator.
+    ("Airbnb", "Product Manager, Incubations - Careers at Airbnb"),
+    ("Airbnb", "Product Manager, Incubations | Airbnb Careers"),
+    ("Airbnb", "Product Manager, Incubations — Airbnb Careers"),
+    ("Airbnb", "Product Manager, Incubations - Airbnb"),
+    # The two identities actually observed in the field.
+    ("Careers at Airbnb", "Product Manager, Incubations - Careers at Airbnb"),
+    ("Product Manager, Incubations", "Product Manager, Incubations - Careers at Airbnb"),
+    # Already clean — must pass through untouched (idempotence).
+    ("Airbnb", "Product Manager, Incubations"),
+])
+def test_capture_identity_matrix_yields_one_company_and_role(company, title):
+    co, ro = pc.normalize_capture_identity(company, title, url=AIRBNB_URL)
+    assert (co, ro) == ("Airbnb", "Product Manager, Incubations")
+    # Idempotent: normalizing the normalized pair changes nothing.
+    assert pc.normalize_capture_identity(co, ro, url=AIRBNB_URL) == (co, ro)
+    # And the FINAL artifact — the filename — is the one correct name.
+    assert pc.base_filename(co, ro) == AIRBNB_FILE
+    assert pc.unique_filename(co, ro, "n1", {}, AIRBNB_URL) == AIRBNB_FILE
+
+
+def test_capture_identity_requests_route():
+    """requests path: extract_title (og:title, branded) + detect_company."""
+    import prep_job_urls as pj
+    html = _airbnb_html()
+    title = pj.extract_title(html)
+    assert title == "Product Manager, Incubations - Careers at Airbnb"  # branded, as scraped
+    company = pj.detect_company(AIRBNB_URL, title)
+    co, ro = pc.normalize_capture_identity(company, title, url=AIRBNB_URL)
+    assert (co, ro) == ("Airbnb", "Product Manager, Incubations")
+    assert pc.base_filename(co, ro) == AIRBNB_FILE
+
+
+def test_capture_identity_playwright_route():
+    """playwright path: best_company_from_title over the branded page title."""
+    import prep_job_urls_playwright as pjp
+    title = "Product Manager, Incubations - Careers at Airbnb"
+    company = pjp.best_company_from_title(title, pjp.detect_company_from_url(AIRBNB_URL))
+    co, ro = pc.normalize_capture_identity(company, title, url=AIRBNB_URL)
+    assert (co, ro) == ("Airbnb", "Product Manager, Incubations")
+    assert pc.base_filename(co, ro) == AIRBNB_FILE
+
+
+def test_best_company_from_title_rejects_branding_segments_by_pattern():
+    """The old exact-set `bad` test let "Careers at Airbnb" through as the company —
+    that is what produced `careers-at-airbnb__…txt`. Reject by PATTERN instead."""
+    import prep_job_urls_playwright as pjp
+    for branded in ("Careers at Airbnb", "Airbnb Careers", "Jobs at Airbnb", "View all jobs"):
+        assert pjp.best_company_from_title(f"Some Role | {branded}", "Fallback") != branded
+
+
+def test_capture_identity_prefers_jsonld_over_scraped_chrome():
+    jsonld = af.extract_jsonld_jobposting(_airbnb_html())
+    assert jsonld["hiring_organization"] == "Airbnb"
+    assert jsonld["title"] == "Product Manager, Incubations"
+    identity = {"hiring_organization": jsonld["hiring_organization"], "title": jsonld["title"]}
+    # Even with BOTH scraped values wrong, structured identity wins.
+    co, ro = pc.normalize_capture_identity(
+        "Careers at Airbnb", "Product Manager, Incubations - Careers at Airbnb",
+        url=AIRBNB_URL, jsonld=identity)
+    assert (co, ro) == ("Airbnb", "Product Manager, Incubations")
+    assert pc.base_filename(co, ro) == AIRBNB_FILE
+
+
+def test_jsonld_identity_does_not_change_structured_source_semantics():
+    """`structured_source: bool(jobposting)` must behave exactly as before — the
+    return-None criterion stays keyed on location/employment_type/compensation only."""
+    identity_only = """<script type="application/ld+json">
+      {"@type": "JobPosting", "title": "PM", "hiringOrganization": {"name": "Acme"}}
+    </script>"""
+    assert af.extract_jsonld_jobposting(identity_only) is None
+
+
+def test_capture_identity_never_uses_the_role_as_the_company():
+    """No wrapper name available: fall back to the DOMAIN, never the role."""
+    co, ro = pc.normalize_capture_identity(
+        "Product Manager, Incubations", "Product Manager, Incubations",
+        url=AIRBNB_URL)
+    assert co == "Airbnb"
+    assert ro == "Product Manager, Incubations"
+    # An ATS host names the platform, not the employer — no domain fallback there, so a
+    # conservative normalizer keeps what it was given rather than inventing "Greenhouse".
+    co2, _ = pc.normalize_capture_identity(
+        "Staff PM", "Staff PM", url="https://job-boards.greenhouse.io/acme/jobs/123")
+    assert co2 == "Staff PM"
+
+
+def test_capture_identity_leaves_clean_ats_values_alone():
+    """ATS API routes already produce clean identities (this is the embedded-GH
+    recovery shape too) — normalization must be a no-op for them."""
+    for company, title in [("Bloomerang", "Senior Product Manager"),
+                           ("Betterup", "Principal Product Manager"),
+                           ("Feeld", "Chief Product Officer")]:
+        assert pc.normalize_capture_identity(
+            company, title, url="https://boards.greenhouse.io/x/jobs/1") == (company, title)
+
+
+def test_capture_identity_normalizes_at_the_choke_point(tmp_path):
+    """The FINAL artifact, through process_urls: the written file name and the
+    Company:/Role: header lines, for a fetch result carrying the bad identity."""
+    src = _batch_source(tmp_path)
+    body = af._html_to_text(_airbnb_html())
+
+    def fetch(u):
+        return {"ok": True, "title": "Product Manager, Incubations - Careers at Airbnb",
+                "company": "Careers at Airbnb", "body": body, "method": "requests",
+                "error": None,
+                "meta": {"title": "Product Manager, Incubations - Careers at Airbnb",
+                         "company": "Careers at Airbnb", "source": "requests/html",
+                         "structured_source": False, "working_location": None,
+                         "compensation": None},
+                "questions": []}
+
+    manifest = pc.process_urls([AIRBNB_URL], src, fetch)
+    entry = manifest["entries"][0]
+    assert entry["status"] == pc.USABLE
+    assert entry["company"] == "Airbnb"
+    assert entry["title"] == "Product Manager, Incubations"
+    assert Path(entry["output_path"]).name == AIRBNB_FILE
+    written = (src / AIRBNB_FILE).read_text(encoding="utf-8")
+    assert "Company: Airbnb" in written
+    assert "Role: Product Manager, Incubations" in written
+
+
+# ===========================================================================
+# Capture completeness — all offices, the third benefits/equity state, verbatim
+# source fields, base-only prose comp, and reachable CONFLICTING.
+# ===========================================================================
+def test_all_employer_listed_cities_are_preserved():
+    body = ("About the role\nThis role can be based in San Francisco, CA or New York, NY. "
+            + ("work " * 60))
+    assert pc._prose_city_states(body) == ["San Francisco, CA", "New York, NY"]
+    value = pc._prose_working_location(body)
+    assert "San Francisco, CA" in value and "New York, NY" in value
+
+
+def test_benefits_and_equity_mentioned_without_details_is_not_not_posted():
+    body = ("About the role\nResponsibilities include shipping product. You may also be "
+            "eligible for bonus, equity, benefits, and Employee Travel Credits.")
+    benefits, equity = af.mine_benefits_equity(body)
+    assert equity == af.MENTIONED_NO_DETAILS
+    assert benefits == af.MENTIONED_NO_DETAILS
+    out = pc.build_output_text("http://x", "PM", "Airbnb", body,
+                               meta={"title": "PM", "benefits": benefits, "equity": equity},
+                               field_status={"conflicts": []}, methods_tried=["requests"])
+    assert "Equity: Mentioned (no details)" in out
+    assert "Benefits: Mentioned (no details)" in out
+    assert "Equity: Not posted" not in out and "Benefits: Not posted" not in out
+
+
+def test_a_posting_that_says_nothing_still_reports_not_posted():
+    """The third state must not swallow the genuine "employer published nothing" case."""
+    benefits, equity = af.mine_benefits_equity(
+        "About the role\nResponsibilities include shipping product every quarter.")
+    assert benefits is None and equity is None
+    out = pc.build_output_text("http://x", "PM", "Acme", "Responsibilities...",
+                               meta={"title": "PM"}, field_status={"conflicts": []})
+    assert "Benefits: Not posted" in out and "Equity: Not posted" in out
+
+
+def test_comp_disclaimer_sentence_is_never_surfaced_as_the_equity_value():
+    """The BetterUp regression: a base-salary DISCLAIMER became the Equity value."""
+    _b, equity = af.mine_benefits_equity(
+        "The range below is representative of base salary only and does not include equity, "
+        "sales bonus plans (when applicable) and benefits")
+    assert equity == af.MENTIONED_NO_DETAILS
+    # A real equity description still comes through verbatim.
+    _b2, equity2 = af.mine_benefits_equity(
+        "This role includes an equity grant of 4,000 restricted stock units vesting over 4 years.")
+    assert "4,000 restricted stock units" in equity2
+
+
+def test_verbatim_source_fields_are_populated_from_prose_when_structured_is_absent():
+    body = af._html_to_text(_airbnb_html())
+    meta = {"title": "Product Manager, Incubations", "source": "requests/html",
+            "structured_source": False, "compensation": None, "compensation_raw": None,
+            "working_location": None, "location": None, "location_raw": None}
+    fs = pc.assess_completeness(meta, body, [])
+    assert fs["compensation"] == pc.FOUND and fs["working_location"] == pc.FOUND
+    assert "220,000" in fs["compensation_prose_verbatim"]
+    assert "San Francisco, CA" in fs["working_location_prose_verbatim"]
+    out = pc.build_output_text(AIRBNB_URL, "Product Manager, Incubations", "Airbnb", body,
+                               meta=meta, field_status=fs, methods_tried=["requests"])
+    assert 'Compensation (verbatim): ""' not in out
+    assert 'Locations/Addresses (verbatim): ""' not in out
+    # The prose line carries a cadence ("3 days per week"), so cadence isn't blank either.
+    assert 'Office cadence (verbatim): ""' not in out
+
+
+def test_ote_and_total_comp_no_longer_qualify_a_base_salary_range():
+    """A variable-pay figure is not base salary and must not become the comp value."""
+    for line in ("OTE for this role is 200,000-260,000.",
+                 "Total comp is 300,000-400,000 for this level."):
+        assert pc._prose_compensation(line) is None, line
+    # A base-salary keyword still qualifies the same shape.
+    assert pc._prose_compensation("Base salary range is 200,000-260,000.") is not None
+
+
+def test_all_prose_comp_bands_are_collected_not_just_the_first():
+    body = ("Compensation\nZone A base salary: $236,000 - $296,000 per year. "
+            "Zone B base salary: $213,000 - $266,000 per year.")
+    found = pc._prose_compensation_all(body)
+    assert len(found) == 2
+    assert "236,000" in found[0]["value"] and "213,000" in found[1]["value"]
+    fs = pc.assess_completeness(
+        {"title": "PM", "source": "requests/html", "structured_source": False,
+         "compensation": None, "working_location": "Remote"}, body, [])
+    assert len(fs["compensation_prose_all"]) == 2
+
+
+def test_conflicting_is_reachable_when_ats_and_prose_envelopes_are_disjoint():
+    body = ("About the role\nThe base salary range for this role is $110,000 - $130,000 "
+            "annually. " + ("value " * 60))
+    meta = {"title": "PM", "source": "greenhouse-boards-api", "structured_source": True,
+            "compensation": "USD 236,000–296,000", "working_location": "Remote"}
+    fs = pc.assess_completeness(meta, body, [])
+    assert fs["compensation"] == pc.CONFLICTING
+    # Both readings preserved machine-readably (rides into the manifest via field_status).
+    labels = [s for s, _ in fs["compensation_sources"]]
+    values = [v for _, v in fs["compensation_sources"]]
+    assert labels == ["greenhouse-boards-api", "description"]
+    assert "236,000" in values[0] and "110,000" in values[1]
+    out = pc.build_output_text("http://x", "PM", "Acme", body, meta=meta, field_status=fs)
+    assert "[CONFLICT]" in out
+
+
+def test_identical_figures_in_ats_and_prose_do_not_false_flag_a_conflict():
+    """Repeating the structured range in the prose is the COMMON case, not a conflict —
+    "materially disagree" means disjoint envelopes."""
+    body = ("About the role\nThe base salary range for this role is $213,000 - $296,000 "
+            "annually. " + ("value " * 60))
+    meta = {"title": "PM", "source": "ashby-posting-api", "structured_source": True,
+            "compensation": "Zone A: $236K – $296K · Zone B: $213K – $266K",
+            "working_location": "Remote"}
+    fs = pc.assess_completeness(meta, body, [])
+    assert fs["compensation"] == pc.FOUND
+    assert "compensation_sources" not in fs
+
+
+def test_location_conflict_only_when_city_sets_are_disjoint():
+    disjoint = ("About the role\nThis position is based in Denver, CO. " + ("x " * 60))
+    overlap = ("About the role\nThis position is based in Austin, TX. " + ("x " * 60))
+    base = {"title": "PM", "source": "greenhouse-boards-api", "structured_source": True,
+            "compensation": "USD 200,000", "working_location": "Austin, TX; New York, NY"}
+    assert pc.assess_completeness(dict(base), disjoint, [])["working_location"] == pc.CONFLICTING
+    assert pc.assess_completeness(dict(base), overlap, [])["working_location"] == pc.FOUND

@@ -22,6 +22,7 @@ from ats_fetchers import (
     UUID_RE,
     _greenhouse_ids,
     _linkedin_job_id,
+    _prettify_slug,
     parse_office_cadence,
     question_provides_employer_comp,
     question_provides_working_location,
@@ -100,6 +101,174 @@ def first_line(title: str) -> str:
 
 def base_filename(company: str, title: str) -> str:
     return f"{slugify(company)}__{slugify(first_line(title))}.txt"
+
+
+# --------------------------------------------------------------------------- #
+# Captured-identity normalization — `company-name__job-title.txt` (spec 2026-07-29)
+#
+# Every fetch path (ATS API / requests / playwright / JSON-LD / embedded-GH recovery)
+# funnels its (company, title) pair through `normalize_capture_identity` at the ONE choke
+# point in `process_urls`, so a posting gets the same filename and the same
+# `Company:`/`Role:` header regardless of which method won the race. That single
+# insertion point is what makes it idempotent per URL: re-normalizing an already-clean
+# identity is a no-op.
+#
+# The regression this fixes: careers.airbnb.com produced BOTH
+# `careers-at-airbnb__product-manager-incubations.txt` (playwright: `best_company_from_title`
+# accepted "Careers at Airbnb" as the company) AND
+# `product-manager-incubations__product-manager-incubations.txt` (requests: `detect_company`
+# rejected the career-y segment and fell through to the ROLE segment). The only correct name
+# is `airbnb__product-manager-incubations.txt`.
+# --------------------------------------------------------------------------- #
+
+# "Careers at X" / "Jobs at X" prefix and "X Careers" / "X Jobs" suffix wrappers.
+_CO_WRAPPER_PREFIX_RE = re.compile(r"^(?:careers?|jobs?)\s+at\s+", re.I)
+_CO_WRAPPER_SUFFIX_RE = re.compile(r"[\s|·]+(?:careers?|jobs?)$", re.I)
+# Any residual site-branding word means the value is chrome, not an employer name.
+_CAREERY_RE = re.compile(r"\b(careers?|jobs?)\b", re.I)
+# Separator between a real title and a trailing site-branding suffix.
+_BRAND_SEP = r"\s*[|\-–—·]\s*"
+# "<Role> - Careers at <Co>" / "<Role> — Jobs at <Co>"
+_TITLE_SUFFIX_AT_RE = re.compile(
+    rf"{_BRAND_SEP}(?:careers?|jobs?)\s+at\s+(?P<co>[^|\-–—·]+?)\s*$", re.I)
+# "<Role> | <Co> Careers" / "<Role> - <Co> Jobs"
+_TITLE_SUFFIX_CO_RE = re.compile(
+    rf"{_BRAND_SEP}(?P<co>[^|\-–—·]+?)\s+(?:careers?|jobs?)\s*$", re.I)
+# "<Role> | Careers" / "<Role> - Jobs" (branding with no employer name in it)
+_TITLE_SUFFIX_BARE_RE = re.compile(rf"{_BRAND_SEP}(?:careers?|jobs?)\s*$", re.I)
+# Job-board hosts that are never the employer (the ATS hosts are handled separately).
+_BOARD_HOSTS = {
+    "linkedin", "indeed", "glassdoor", "ziprecruiter", "wellfound", "angellist",
+    "builtin", "otta", "dice", "monster", "simplyhired", "google", "jobs",
+}
+# Domain labels that are site structure, never a company name.
+_DOMAIN_CHROME = {
+    "careers", "career", "jobs", "job", "www", "apply", "boards", "board", "work",
+    "hire", "hiring", "talent", "recruiting", "join", "my", "app", "web",
+}
+_PSEUDO_TLDS = {"co", "com", "org", "net", "gov", "edu", "ac"}
+
+
+def _clean_company_wrappers(name: str) -> str:
+    """Strip `Careers at X` / `Jobs at X` / `X Careers` / `X Jobs` wrappers (case-
+    insensitive, iteratively) and any stray separator punctuation left behind."""
+    s = re.sub(r"\s+", " ", str(name or "").strip())
+    for _ in range(4):
+        before = s
+        s = _CO_WRAPPER_PREFIX_RE.sub("", s)
+        s = _CO_WRAPPER_SUFFIX_RE.sub("", s)
+        s = s.strip(" \t|·:,-–—")
+        if s == before:
+            break
+    s = re.sub(r"\s+", " ", s).strip()
+    # A name we DERIVED by stripping a wrapper often comes out of lowercase page chrome
+    # ("careers at airbnb" -> "airbnb"); title-case it so the header and the filename agree
+    # with every other route. A company that arrived already cased is left alone.
+    if s and s != str(name or "").strip() and not any(ch.isupper() for ch in s):
+        s = _prettify_slug(s)
+    return s
+
+
+def _strip_title_branding(title: str) -> tuple[str, str | None]:
+    """Remove site-branding suffixes from a page/job title. Returns
+    (clean_title, employer_name_recovered_from_the_suffix_or_None) — the suffix often
+    NAMES the employer ("- Careers at Airbnb"), which is the best company signal a
+    scraped page offers."""
+    s = re.sub(r"\s+", " ", str(title or "").strip())
+    wrapper_co = None
+    for _ in range(3):
+        before = s
+        for rx in (_TITLE_SUFFIX_AT_RE, _TITLE_SUFFIX_CO_RE):
+            m = rx.search(s)
+            if m and m.start() > 0:
+                co = _clean_company_wrappers(m.group("co"))
+                if co and not _CAREERY_RE.search(co):
+                    wrapper_co = wrapper_co or co
+                s = s[:m.start()].strip(" \t|·:,-–—")
+                break
+        else:
+            m = _TITLE_SUFFIX_BARE_RE.search(s)
+            if m and m.start() > 0:
+                s = s[:m.start()].strip(" \t|·:,-–—")
+        if s == before:
+            break
+    return re.sub(r"\s+", " ", s).strip(), wrapper_co
+
+
+def _company_from_domain(url: str | None) -> str | None:
+    """Employer name derived from the URL host (`careers.airbnb.com` -> `Airbnb`). Returns
+    None for ATS hosts and job boards, whose host names the platform, not the employer."""
+    host = urlparse(url or "").netloc.lower().replace("www.", "")
+    labels = [p for p in host.split(".") if p]
+    if len(labels) < 2:
+        return None
+    idx = len(labels) - 2
+    if labels[idx] in _PSEUDO_TLDS and len(labels) >= 3:  # example.co.uk
+        idx -= 1
+    label = labels[idx]
+    if label in ATS_HOST_KEYWORDS or label in _BOARD_HOSTS or label in _DOMAIN_CHROME:
+        return None
+    return _prettify_slug(label)
+
+
+def _identity_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def _strip_trailing_company_echo(title: str, company: str) -> str:
+    """Drop a trailing ` - <Company>` / ` | <Company>` echo from a title."""
+    if not company or not title:
+        return title
+    m = re.search(rf"{_BRAND_SEP}{re.escape(company)}\s*$", title, re.I)
+    if m and m.start() > 0:
+        return title[:m.start()].strip(" \t|·:,-–—")
+    return title
+
+
+def normalize_capture_identity(company: str | None, title: str | None, url: str | None = None,
+                               jsonld: dict | None = None) -> tuple[str, str]:
+    """Canonical (company, title) for a captured job post — the single normalizer behind
+    the `company-name__job-title.txt` filename and the `Company:`/`Role:` header lines.
+
+    Order of operations:
+      1. Prefer structured JSON-LD identity (`hiringOrganization.name` / `title`).
+      2. Strip site-branding suffixes from the title, remembering any employer name the
+         suffix carried ("- Careers at Airbnb" -> Airbnb).
+      3. Strip `Careers at X` / `X Jobs` wrappers from the company.
+      4. If the company is empty or still career-y, use the suffix-derived name, else a
+         domain-derived one.
+      5. NEVER role-as-company: if the cleaned company equals (or contains / is contained
+         by) the cleaned title, replace it with the suffix- or domain-derived name — but
+         only when such an alternative actually exists (conservative: never invent one).
+
+    Idempotent: an already-clean pair passes through unchanged.
+    """
+    jsonld = jsonld if isinstance(jsonld, dict) else {}
+    raw_company = str(company or "").strip()
+    raw_title = str(title or "").strip()
+    j_co = str(jsonld.get("hiring_organization") or "").strip()
+    j_title = str(jsonld.get("title") or "").strip()
+    if j_co:
+        raw_company = j_co
+    if j_title:
+        raw_title = j_title
+
+    clean_title, wrapper_co = _strip_title_branding(raw_title)
+    clean_company = _clean_company_wrappers(raw_company)
+    domain_co = _company_from_domain(url)
+
+    if not clean_company or _CAREERY_RE.search(clean_company):
+        clean_company = wrapper_co or domain_co or clean_company
+    clean_title = _strip_trailing_company_echo(clean_title, clean_company)
+
+    ck, tk = _identity_key(clean_company), _identity_key(clean_title)
+    if ck and tk and (ck == tk or ck in tk or tk in ck):
+        for alt in (wrapper_co, domain_co):
+            if alt and _identity_key(alt) != tk:
+                clean_company = alt
+                break
+
+    return (clean_company or "Unknown", clean_title or "Unknown Title")
 
 
 def _short_hash(s: str) -> str:
@@ -299,21 +468,38 @@ _PAY_RANGE_RE = re.compile(
     rf"(?P<hi>{_AMT})",
     re.I,
 )
+# BASE-salary keywords only. "ote" and "total comp" were removed (2026-07-29): a
+# variable-pay figure is NOT base salary, and letting those keywords qualify a range meant
+# an OTE number could become the captured comp value and flow into the Comp Range envelope.
+# Bonus/commission/OTE/equity stay separate (they're preserved in the archival block and in
+# `mine_benefits_equity`), never merged into base.
 _SALARY_KEYWORDS = (
     "salary", "compensation", "pay range", "pay for", "base pay", "base salary",
-    "annual", "annually", "per year", "/year", "/yr", "a year", "ote",
-    "total comp", "target cash", "range for this", "hiring range", "wage",
+    "annual", "annually", "per year", "/year", "/yr", "a year",
+    "target cash", "range for this", "hiring range", "wage",
 )
 
 
-def _prose_compensation(body: str) -> str | None:
-    """Best-effort employer pay figure written into the JD prose. Returns a cleaned
-    range string, or None. Requires a currency marker OR a nearby salary keyword so
-    non-salary numeric ranges don't false-positive."""
+def _prose_compensation_all(body: str) -> list[dict]:
+    """EVERY employer pay range written into the JD prose, in document order, as
+    `[{"value": "<range>", "line": "<the source line, verbatim>"}, ...]`.
+
+    Collecting all of them (this used to stop at the first match) is what lets a
+    multi-zone prose posting feed the full applicable-bands envelope instead of
+    collapsing to whichever band happened to appear first. The verbatim `line` is what
+    populates the EMPLOYER-PROVIDED SOURCE block when no structured field carried comp.
+    """
     if not body:
-        return None
+        return []
+    # Scan the whitespace-collapsed body (so a keyword and its range can sit on different
+    # source lines, as they routinely do), then map each match back to its own line for the
+    # verbatim record.
     text = re.sub(r"\s+", " ", body)
     low = text.lower()
+    lines = [re.sub(r"\s+", " ", ln).strip() for ln in body.splitlines()]
+    lines = [ln for ln in lines if ln]
+    out: list[dict] = []
+    seen: set[str] = set()
     for m in _PAY_RANGE_RE.finditer(text):
         lo, hi = m.group("lo"), m.group("hi")
         has_cur = bool(m.group("cur1") or m.group("cur2"))
@@ -326,9 +512,24 @@ def _prose_compensation(body: str) -> str | None:
         # A currency marker is enough; a comma/K-scaled figure needs a salary keyword;
         # a bare plain-digit range (240000-334000) needs an explicit currency so ids
         # and year ranges can't masquerade as pay.
-        if has_cur or (has_comma_or_k and has_kw):
-            return re.sub(r"\s+", " ", m.group(0)).strip()
-    return None
+        if not (has_cur or (has_comma_or_k and has_kw)):
+            continue
+        value = re.sub(r"\s+", " ", m.group(0)).strip()
+        key = _norm_val(value)
+        if key in seen:
+            continue
+        seen.add(key)
+        source_line = next((ln for ln in lines if value in ln), value)
+        out.append({"value": value, "line": source_line})
+    return out
+
+
+def _prose_compensation(body: str) -> str | None:
+    """The FIRST employer pay figure written into the JD prose (back-compatible single
+    value; `_prose_compensation_all` returns every match). Returns a cleaned range
+    string, or None."""
+    found = _prose_compensation_all(body)
+    return found[0]["value"] if found else None
 
 
 # US state abbreviations, to keep the "City, ST" prose pattern from matching noise.
@@ -401,28 +602,112 @@ def _sanitize_location(val: str | None) -> str | None:
     return None
 
 
-def _prose_working_location(body: str) -> str | None:
-    """Best-effort job location/cadence written into the JD prose: a "City, ST",
-    a Remote/hybrid/onsite signal, or an explicit Location: line. Returns a short,
-    validated snippet, or None. Every candidate is run through _sanitize_location so a
-    nav-label leak ("Locations" -> "s") or a marketing tail never counts as found."""
+def _prose_city_states(body: str, limit: int = 6) -> list[str]:
+    """EVERY distinct "City, ST" the JD prose names, in document order (deduped, capped).
+
+    This used to return only the FIRST match, which silently dropped employer-listed
+    offices — an Airbnb posting listing both San Francisco, CA and New York, NY came out
+    as SF only. The archival capture must preserve every office the employer listed."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for cm in _CITY_STATE_RE.finditer(body or ""):
+        if cm.group(2) not in _US_STATES:
+            continue
+        place = f"{cm.group(1)}, {cm.group(2)}"
+        key = place.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(place)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _prose_working_location_detail(body: str) -> tuple[str | None, str | None]:
+    """(value, verbatim_source_line) for the job location/cadence written into the JD
+    prose. The verbatim line is what fills the EMPLOYER-PROVIDED SOURCE block when no
+    structured location field exists."""
     if not body:
+        return None, None
+
+    def _line_for(needle: str) -> str | None:
+        for raw in (body or "").splitlines():
+            ln = re.sub(r"\s+", " ", raw).strip()
+            if ln and needle and needle.lower() in ln.lower():
+                return ln
         return None
+
     m = _LOC_LABEL_RE.search(body)
     if m and m.group(1).strip():
         cleaned = _sanitize_location(m.group(1))
         if cleaned:
-            return cleaned
+            return cleaned, re.sub(r"\s+", " ", m.group(0)).strip()
     m = _REMOTE_RE.search(body)
     if m:
-        return m.group(0).strip().rstrip(",(").strip().title()
-    for cm in _CITY_STATE_RE.finditer(body):
-        if cm.group(2) in _US_STATES:
-            return f"{cm.group(1)}, {cm.group(2)}"
+        value = m.group(0).strip().rstrip(",(").strip().title()
+        return value, _line_for(m.group(0).strip())
+    cities = _prose_city_states(body)
+    if cities:
+        return "; ".join(cities), _line_for(cities[0])
     m = _CADENCE_RE.search(body)
     if m:
-        return m.group(0).strip()
-    return None
+        return m.group(0).strip(), _line_for(m.group(0).strip())
+    return None, None
+
+
+def _prose_working_location(body: str) -> str | None:
+    """Best-effort job location/cadence written into the JD prose: EVERY named "City, ST"
+    (`"; "`-joined), a Remote/hybrid/onsite signal, or an explicit Location: line. Returns a
+    short, validated snippet, or None. Every candidate is run through _sanitize_location so
+    a nav-label leak ("Locations" -> "s") or a marketing tail never counts as found."""
+    return _prose_working_location_detail(body)[0]
+
+
+# --------------------------------------------------------------------------- #
+# Conflict producers — "materially disagree" = DISJOINT envelopes
+#
+# The CONFLICTING status and the `[CONFLICT]:` line have existed for a while but were
+# UNREACHABLE: nothing in production ever populated `compensation_sources` /
+# `location_sources`, so a real ATS-vs-prose disagreement was never detected. These helpers
+# are the missing producers. The bar is deliberately conservative — identical or merely
+# overlapping figures must NOT flag (a posting that repeats its structured range in the
+# prose is the common case, not a conflict); only genuinely disjoint readings do.
+# --------------------------------------------------------------------------- #
+def _thousands_envelope(text: str) -> tuple[float, float] | None:
+    """(min, max) of every plausible base-salary figure in a comp string, in whole
+    thousands. `$236K – $296K` -> (236, 296); `USD 213,000-266,000` -> (213, 266)."""
+    vals: list[float] = []
+    for m in re.finditer(r"(\d[\d,]*(?:\.\d+)?)\s*([kK])?\b", str(text or "")):
+        raw = m.group(1).replace(",", "")
+        try:
+            v = float(raw)
+        except ValueError:
+            continue
+        if not m.group(2) and v >= 10000:
+            v = v / 1000.0
+        if not (10 <= v <= 2000):
+            continue
+        vals.append(v)
+    return (min(vals), max(vals)) if vals else None
+
+
+def _comp_materially_disagrees(structured: str, prose_values: list[str]) -> bool:
+    """True only when the structured and prose comp envelopes are DISJOINT."""
+    a = _thousands_envelope(structured)
+    b = _thousands_envelope(" ".join(prose_values))
+    if not a or not b:
+        return False
+    return a[1] < b[0] or b[1] < a[0]
+
+
+def _location_materially_disagrees(structured: str, prose_cities: list[str]) -> bool:
+    """True only when BOTH sides name "City, ST" places and the city sets are disjoint."""
+    a = {c.split(",")[0].strip().lower() for c in _prose_city_states(str(structured or ""), limit=12)}
+    b = {c.split(",")[0].strip().lower() for c in prose_cities}
+    if not a or not b:
+        return False
+    return a.isdisjoint(b)
 
 
 def assess_completeness(meta: dict | None, body: str, questions: list | None) -> dict:
@@ -449,7 +734,23 @@ def assess_completeness(meta: dict | None, body: str, questions: list | None) ->
     # ---- compensation ----
     comp_sources = _distinct([s for _, s in (meta.get("compensation_sources") or [])] or [meta.get("compensation")])
     comp_from_q = any(question_provides_employer_comp(q) for q in questions)
-    comp_prose = _prose_compensation(body)
+    comp_prose_all = _prose_compensation_all(body)
+    comp_prose = comp_prose_all[0]["value"] if comp_prose_all else None
+    if comp_prose_all:
+        # Keep every prose band machine-readably (it rides into the manifest entry via
+        # field_status) so the applicable-bands envelope isn't limited to the first match.
+        fs["compensation_prose_all"] = [c["value"] for c in comp_prose_all]
+        fs["compensation_prose_verbatim"] = comp_prose_all[0]["line"]
+    # Conflict producer: a structured ATS figure AND a prose figure that materially
+    # disagree (disjoint envelopes) -> synthesize the two sources so the CONFLICTING
+    # branch below fires and BOTH readings are preserved, never silently picked.
+    if len(comp_sources) < 2 and meta.get("compensation") and comp_prose_all:
+        if _comp_materially_disagrees(meta["compensation"], fs.get("compensation_prose_all") or []):
+            label = str(meta.get("source") or "structured")
+            synthesized = [(label, str(meta["compensation"])),
+                           ("description", "; ".join(fs["compensation_prose_all"]))]
+            fs["compensation_sources"] = synthesized
+            comp_sources = _distinct([s for _, s in synthesized])
     if len(comp_sources) >= 2:
         fs["compensation"] = CONFLICTING
         fs["conflicts"].append(f"compensation: {' vs '.join(comp_sources[:2])}")
@@ -478,7 +779,17 @@ def assess_completeness(meta: dict | None, body: str, questions: list | None) ->
     loc_sources = _distinct([s for _, s in (meta.get("location_sources") or [])]
                             or [meta.get("working_location") or meta.get("location")])
     office_q = any(question_provides_working_location(q) for q in questions)
-    loc_prose = _prose_working_location(body)
+    loc_prose, loc_prose_line = _prose_working_location_detail(body)
+    if loc_prose_line:
+        fs["working_location_prose_verbatim"] = loc_prose_line
+    structured_loc = meta.get("working_location") or meta.get("location")
+    if len(loc_sources) < 2 and structured_loc:
+        prose_cities = _prose_city_states(body)
+        if _location_materially_disagrees(structured_loc, prose_cities):
+            label = str(meta.get("source") or "structured")
+            synthesized = [(label, str(structured_loc)), ("description", "; ".join(prose_cities))]
+            fs["location_sources"] = synthesized
+            loc_sources = _distinct([s for _, s in synthesized])
     if len(loc_sources) >= 2:
         fs["working_location"] = CONFLICTING
         fs["conflicts"].append(f"working-location: {' vs '.join(loc_sources[:2])}")
@@ -624,9 +935,20 @@ def build_output_text(url: str, title: str, company: str, body_text: str, *,
         lines.append("(none kept)")
     lines.append("")
     lines.append("== EMPLOYER-PROVIDED SOURCE (verbatim; the durable archive) ==")
-    lines.append(f'Compensation (verbatim): "{meta.get("compensation_raw") or ""}"')
-    lines.append(f'Locations/Addresses (verbatim): "{meta.get("location_raw") or ""}"')
-    lines.append(f'Office cadence (verbatim): "{cadence_raw or ""}"')
+    # When no structured field carried comp/location, the verbatim archive falls back to the
+    # employer's own PROSE LINE that the value was mined from. These used to render as empty
+    # quotes even when the body was full of comp/location language (an Airbnb regression):
+    # the durable archive must not look blank when the employer did publish the wording.
+    comp_verbatim = meta.get("compensation_raw") or fs.get("compensation_prose_verbatim") or ""
+    loc_verbatim = meta.get("location_raw") or fs.get("working_location_prose_verbatim") or ""
+    cadence_verbatim = cadence_raw
+    if not cadence_verbatim:
+        prose_line = fs.get("working_location_prose_verbatim") or ""
+        if prose_line and _CADENCE_RE.search(prose_line):
+            cadence_verbatim = prose_line
+    lines.append(f'Compensation (verbatim): "{comp_verbatim}"')
+    lines.append(f'Locations/Addresses (verbatim): "{loc_verbatim}"')
+    lines.append(f'Office cadence (verbatim): "{cadence_verbatim or ""}"')
     lines.append("")
     lines.append("--- JOB TEXT START ---")
     lines.append("")
@@ -941,6 +1263,12 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
         body = res.get("body") or ""
         method = res.get("method")
         meta = res.get("meta") or {}
+        # THE choke point for captured identity: whichever fetch path won above, its
+        # (company, title) pair is canonicalized here — once — before the filename, the
+        # header, and the manifest entry are derived from it. Idempotent per URL.
+        company, title = normalize_capture_identity(
+            company, title, url=url, jsonld=meta.get("jsonld_identity"))
+        meta["company"], meta["title"] = company, title
         questions = res.get("questions") if res.get("questions") is not None else meta.get("questions")
         missing = missing_hard_fields(field_status)
         has_comp = field_status.get("compensation") == FOUND
