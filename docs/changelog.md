@@ -11,6 +11,24 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — Track A trust pass over the unified tracker (data repairs; engine gaps -> Track B backlog)
+
+A substantive field-level audit (every row's comp/location/posted-date checked against its capture's
+header AND body, plus a stratified per-ATS sample) found and repaired, in the private data: comp
+envelopes that had collapsed to the home-metro band on six rows (the standing rule is the outer
+envelope across applicable geographic bands — the scorer's band judgment did this twice and is now
+overridden deterministically; backlogged as an engine rule); one ATS-vs-prose comp conflict now
+surfaced honestly as a conflict instead of silently picking a side; question Yes/No options leaked
+into two Working Location headers; generic wrapper-page locations on three captures replaced with
+the job panel's own locations; raw comp labels in four headers; nav chrome in one Benefits field;
+one registry duplicate-identity pair (raw URL vs canonical ATS key) merged so the true earliest
+ORIGINAL capture renders again; and two posted-date CSV/XLSX divergences synced. Affected rows were
+rescored against corrected captures and the ranking re-sorted; human-managed fields untouched.
+Every repaired class is now a Track B backlog item with a live fixture
+(`docs/process-retrospective-2026-07-30.md` §3b). Also added: an Application Question Drafts section
+to the two current application packets (drafted only from finalized letter/evidence; logistical
+questions flagged for the candidate's factual answers, never invented).
+
 ## 2026-07-30 — Post-delivery QA pass + process retrospective (no engine changes)
 
 After the unified-tracker delivery, a targeted cross-artifact QA audit (tracker rows ↔ captures ↔

@@ -119,6 +119,25 @@ Class E plus the fix→refetch→inspect loop being manual.
 4. **Artifact-level assertions in every new test**: pin the written cell/file, not the helper's
    return value.
 
+## 3b. Track B backlog (approved-for-planning 2026-07-30; NOT started — awaits separate approval)
+
+Proposed order, scope, and acceptance criteria. All generic engine work; synthetic fixtures only.
+
+| # | Item | Scope | Acceptance |
+|---|---|---|---|
+| B1 | `qa_captures.py` acceptance gate, auto-run after every prep run | ~2h | Gate flags every defect class from the live QA passes (sections, filename, required fields, fused text, question leaks, legacy markers); wired into both prep exit paths; per-file verdicts printed |
+| B2 | Row-integrity validation at the rankings writer | ~1h | A row missing Job File / Lane Fit, or with out-of-domain Comp Fit / Data Completeness / Status, is repaired from source or fails loudly; the malformed-row shape from the 55-job run is a fixture |
+| B3 | CSV/XLSX divergence prevention | ~1h | One writer path emits both; a regression test diffs every cell, not just headers (the posted-date divergence case is the fixture) |
+| B4 | Single prep CLI (`--engine playwright\|requests\|auto`) | ~half day | Second CLI deleted; divergence guard test retained; all prep tests green through the one entry point |
+| B5 | Canonical ATS identity resolution + registry alias table | ~3h | The raw-URL vs `ats:board:id` duplicate class (found live once) cannot recur: every registry write canonicalizes; backfill folds aliases; a merge test uses the real duplicate shape |
+| B6 | Original/Latest preservation across historical paths and renamed files | ~2h | A capture whose identity appears under older filenames/paths still renders the true earliest ORIGINAL; covered by a renamed-file fixture |
+| B7 | Question-filter hardening | ~2h | Yes/No logistics options can never leak into Working Location(s) (two live instances); generic upload/profile/catch-all/authorization/sponsorship/demographic fields excluded, pinned by positive (thoughtful-question) and negative (standard-field) fixtures |
+| B8 | End-to-end fixture pipeline test | ~half day | fetch(stubbed)→registry→normalize→XLSX asserted at the final artifacts, per ATS shape |
+| B9 | ATS-hosted company-name casing (`Openloophealth` class) | ~2-3h | Brand casing recovered from the JD body's own signature or embedded page data; board-token title-casing only as last resort |
+| B10 | Comp-label stripping breadth | ~1h | `New York Pay Range:` / `Annual Base Salary Range::` shapes render as clean geo-labeled or inline bands (four live instances were hand-fixed) |
+| B11 | **Application-question answer drafting in the tailor step** | ~half day | The tailoring agent reads the capture's APPLICATION QUESTIONS WORTH PREPARING section and appends an `## Application Question Drafts` section to `application_resume_output…md`: exact question preserved above each answer; answers drawn only from the candidate's profile/approved evidence/voice canon; unknown facts flagged for confirmation rather than invented; `None Found` when empty; simplest reliable chain (no cover-letter eval pipeline); positive tests with BetterUp/Bloomerang-style thoughtful questions, negative tests with standard fields; fully generic (candidate data from config/profile, never hardcoded) |
+| B12 | Envelope-vs-scorer comp rule | ~1h | The scorer's "applicable band" judgment is advisory; the tracker's Comp Range is set deterministically as min(applicable lows)-max(applicable highs) per the standing rule — twice now the scorer chose the home-metro band and had to be overridden by hand |
+
 ## 4. QA pass results (2026-07-30, post-delivery)
 
 Cross-artifact audit of the 55-job tracker (rows↔captures↔registry): one malformed row
