@@ -11,6 +11,32 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — B1: qa_captures.py, the permanent capture acceptance gate
+
+Every capture that is about to join a batch as USABLE now passes through a contract gate, wired into
+`process_urls` (so both prep CLIs get it): a failure is LOUDLY printed, the capture is quarantined
+into `Needs Review/` with status `needs-review` and its problems in the manifest notes — it never
+silently ships. The gate also runs standalone (`qa_captures.py <files/folders>`, per-file verdicts +
+summary, nonzero exit on failure).
+
+Deliberately SELF-CONTAINED: the validator re-states the frozen contract rather than importing the
+writer's helpers — a validator sharing the writer's code inherits the writer's bugs. (Building it
+independently immediately paid off: its own first bug was a `\s*` that let a blank field swallow the
+next line and pass the populated-field check.)
+
+Checks map one-to-one to the live 55-job defect classes, each pinned by a synthetic fixture:
+canonical filename shape · section presence/order/underlines · Title Case labels · required fields
+populated (value or `Unknown`) · WL/Office Expectation structure (no Yes/No application-choice text
+in location fields; cadence stated or `Not Specified`) · comp structure (single band inline, never a
+one-item bullet list) · question grammar (`N. … [Required|Optional]` + bracketed context, or
+`None Found.`) with no standard/demographic fields · ORIGINAL/LATEST sanity (LATEST never without
+ORIGINAL; ORIGINAL ≤ LATEST) · no fused text (generic boundary guard + the specific live shapes;
+URL schemes whitelisted) · no legacy markers · minimum body length + recognizable JD structure ·
+no false absence claims (a header may not say "Employer did not mention …" when the body plainly
+contains a benefits section or a salary band).
+
+Suite: 537 → 574 green.
+
 ## 2026-07-30 — Track A trust pass over the unified tracker (data repairs; engine gaps -> Track B backlog)
 
 A substantive field-level audit (every row's comp/location/posted-date checked against its capture's

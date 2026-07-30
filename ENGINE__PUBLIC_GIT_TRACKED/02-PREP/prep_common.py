@@ -3253,6 +3253,21 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
         out_text = build_output_text(url, title, company, body, meta=meta, questions=questions,
                                      field_status=field_status, methods_tried=methods_tried,
                                      captured=ts, capture_update=capture_update)
+        # ---- Permanent acceptance gate (qa_captures) ------------------------ #
+        # Every capture that is about to join the batch as USABLE must pass the
+        # contract gate. A failure is LOUD and the capture is quarantined into
+        # Needs Review with its problems listed — it never silently ships.
+        # (Lazy import: qa_captures is deliberately independent of this module.)
+        qa_problems: list[str] = []
+        if status == USABLE:
+            import qa_captures
+            qa_problems = qa_captures.validate_capture(out_text, filename=fn)
+            if qa_problems:
+                status = NEEDS_REVIEW
+                print(f"  ✗ QA GATE FAILED for {fn} — quarantined into 'Needs Review/':")
+                for pr in qa_problems:
+                    print(f"      - {pr}")
+
         if status == USABLE:
             out = dirs["source"] / fn
             out.write_text(out_text, encoding="utf-8")
@@ -3278,13 +3293,16 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                                       posting_id=meta.get("posting_id"),
                                       capture_history=history,
                                       output_path=_rel(out, batch_root)))
-        else:  # THIN
+        else:  # THIN, or a USABLE capture the QA gate quarantined (NEEDS_REVIEW)
+            if qa_problems:
+                reason = ("failed the capture QA gate: " + "; ".join(qa_problems))
             out = dirs["needs_review"] / fn
             out.write_text(thin_text(url, title, company, body, reason, ts, meta=meta,
                                      questions=questions, field_status=field_status,
                                      methods_tried=methods_tried,
                                      capture_update=capture_update), encoding="utf-8")
-            entries.append(base_entry(url, norm, status=THIN, method=method, company=company,
+            entries.append(base_entry(url, norm, status=(NEEDS_REVIEW if qa_problems else THIN),
+                                      method=method, company=company,
                                       title=title, char_count=len(body), notes=reason,
                                       field_status=field_status, missing_fields=missing,
                                       methods_tried=methods_tried, has_compensation=has_comp,

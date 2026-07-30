@@ -2366,11 +2366,12 @@ def test_additional_notes_compare_snapshot_fields_not_only_the_body(tmp_path):
     body_rich = ("About the role\nResponsibilities include shipping product.\n"
                  "Full Time, Exempt\n"
                  "Onsite three days per week: Tuesday, Wednesday, Thursday.\n"
-                 + ("x " * 60))
+                 + ("value delivered. " * 60))
 
     def first(u):
         return {"ok": True, "title": "PM", "company": "Acme",
-                "body": "About the role\nResponsibilities include shipping product.\n" + ("x " * 60),
+                "body": "About the role\nResponsibilities include shipping product.\n"
+                        + ("value delivered. " * 60),
                 "method": "requests", "error": None, "meta": dict(thin_meta), "questions": []}
 
     def second(u):
@@ -2929,7 +2930,7 @@ def test_formatting_only_change_is_named_as_restoration_never_job_text_unchanged
     flattened = ("About the role\nResponsibilities include shipping product.\n"
                  "Ship product\nTalk to customers\n"
                  "The base salary range for this role is $150,000 - $180,000 annually.\n"
-                 + ("x " * 60))
+                 + ("value delivered. " * 60))
     structured = flattened.replace("Ship product\nTalk to customers",
                                    "- Ship product\n- Talk to customers")
     assert pc.material_change_notes(flattened, structured) == \
