@@ -1993,6 +1993,10 @@ def capture_identity_from_file(text: str) -> str | None:
     head = text.split(_END_MARKER, 1)[0]
     tail = text.split(_END_MARKER, 1)[1] if _END_MARKER in text else ""
     m = re.search(r"^Job Posting URL:\s*(\S+)\s*$", head, re.M)
+    if m is None:
+        # A LEGACY-format capture carries `URL:` instead — a renamed, moved, or
+        # old-format file must still resolve to the same canonical identity.
+        m = re.search(r"^URL:\s*(\S+)\s*$", head, re.M)
     url = m.group(1) if m else None
     fields = _detail_fields(tail)
     detail = fields.get("original") or fields.get("latest") or {}

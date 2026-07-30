@@ -11,6 +11,22 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — B6: ORIGINAL/LATEST hold across renames, moves, and legacy formats
+
+History discovery is by CANONICAL IDENTITY, never by current filename or directory. B5 supplied the
+canonicalization; this closes the remaining gap and pins the class: `capture_identity_from_file` now
+also reads a LEGACY-format capture's `URL:` line (it only knew `Job Posting URL:`), so an old-format
+file under a brand-new filename still resolves to the same posting and re-renders the true earliest
+ORIGINAL from the registry, with its legacy head untouched byte-for-byte.
+
+Pinned scenarios: one posting recorded across three batches under an older filename, an older
+(archive) directory, and a raw-URL identity later converted to the ATS identity — the backfill folds
+all three into ONE posting with the true earliest original and latest; a sparse historical entry
+(no method, no posting id, no path) still contributes its timestamp; multiple re-fetches including
+an idempotent no-change one and a failed attempt leave ORIGINAL byte-stable while LATEST tracks the
+newest genuine success; and backfill replay over the same manifests is byte-idempotent.
+(Correction: the previous entry said 611; the B5 suite count was 610.) Suite: 610 → 615 green.
+
 ## 2026-07-30 — B5: one canonical identity per posting, aliases recorded, repair CLI
 
 The live defect: a raw employer URL (`…?ashby_jid=<id>`) coexisted in the registry beside the same

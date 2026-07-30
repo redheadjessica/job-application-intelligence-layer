@@ -4268,3 +4268,114 @@ def test_a_new_fetch_of_the_raw_lark_form_lands_on_the_ats_key(tmp_path):
     pc.process_urls([_LARK_RAW_URL], src, fetch, registry_path=reg_path)
     reg = pc.load_capture_registry(reg_path)
     assert list(reg["postings"]) == [_LARK_KEY]
+
+
+# ===========================================================================
+# B6 — true ORIGINAL/LATEST across history: discovery by CANONICAL IDENTITY,
+# never by current filename or directory. A renamed, moved, or legacy-formatted
+# capture still contributes its earliest genuine timestamp.
+# ===========================================================================
+_B6_URL = "https://boards.greenhouse.io/acme/jobs/654321"
+_B6_KEY = "greenhouse:acme:654321"
+
+
+def _manifest_entry(fetched_at, url=_B6_URL, filename="acme__pm.txt", **kw):
+    e = {"original_url": url, "normalized_url": pc.normalize_url(url),
+         "status": "usable", "method": "ats", "fetched_at": fetched_at,
+         "output_path": f"3 - Source Material/All Job Posts (full text)/{filename}"}
+    e.update(kw)
+    return e
+
+
+def test_history_folds_across_filenames_directories_and_url_forms(tmp_path):
+    """One posting recorded across three batches under (1) an older FILENAME,
+    (2) an older DIRECTORY, (3) a raw-URL identity later converted to the ATS
+    identity — the registry holds ONE posting with the true earliest original."""
+    import backfill_capture_registry as bf
+    root = tmp_path / "reviews"
+    # Oldest: raw employer URL form, old filename, archive directory.
+    _write_manifest(root, "archive/07-01-26", [_manifest_entry(
+        "2026-07-01T10:00:00+00:00",
+        url="https://acme.com/positions/654321",
+        filename="acme__product-manager-old-name.txt")])
+    # Middle: ATS URL, renamed file, different directory.
+    _write_manifest(root, "07-10-26", [_manifest_entry(
+        "2026-07-10T10:00:00+00:00", filename="acme__pm-renamed.txt")])
+    # Newest: current filename.
+    _write_manifest(root, "07-20-26", [_manifest_entry("2026-07-20T10:00:00+00:00")])
+    reg_path = tmp_path / "registry.json"
+    registry = bf.backfill(root, reg_path, out=lambda *_: None)
+    assert set(registry["postings"]) == {_B6_KEY}
+    posting = registry["postings"][_B6_KEY]
+    assert posting["original_capture"]["fetched_at"] == "2026-07-01T10:00:00+00:00"
+    assert posting["latest_capture"]["fetched_at"] == "2026-07-20T10:00:00+00:00"
+    assert len(posting["history"]) == 3
+
+
+def test_missing_historical_metadata_still_contributes_its_timestamp(tmp_path):
+    import backfill_capture_registry as bf
+    root = tmp_path / "reviews"
+    sparse = {"original_url": _B6_URL, "normalized_url": pc.normalize_url(_B6_URL),
+              "status": "usable", "fetched_at": "2026-07-01T10:00:00+00:00"}
+    _write_manifest(root, "07-01-26", [sparse])   # no method, no posting_id, no path
+    registry = bf.backfill(root, tmp_path / "registry.json", out=lambda *_: None)
+    posting = registry["postings"][_B6_KEY]
+    assert posting["original_capture"]["fetched_at"] == "2026-07-01T10:00:00+00:00"
+
+
+def test_original_stays_stable_across_future_refetches_and_latest_advances():
+    reg = {"schema_version": 1, "postings": {}}
+    pc.record_capture_event(reg, _B6_KEY, _ev(1, "first"), success=True)
+    original = dict(reg["postings"][_B6_KEY]["original_capture"])
+    # Multiple re-fetches, incl. an idempotent one with no substantive change and a
+    # failed attempt: ORIGINAL never moves; LATEST = latest genuine SUCCESS.
+    pc.record_capture_event(reg, _B6_KEY, _ev(5, "refetch-1"), success=True)
+    pc.record_capture_event(reg, _B6_KEY, _ev(9, "refetch-2-no-change"), success=True)
+    pc.record_capture_event(reg, _B6_KEY, _ev(12, "failed-attempt", ok=False), success=False)
+    posting = reg["postings"][_B6_KEY]
+    assert posting["original_capture"] == original
+    assert posting["latest_capture"]["url"] == "refetch-2-no-change"
+    assert len(posting["history"]) == 4
+
+
+def test_a_renamed_legacy_format_capture_rerenders_the_true_original(tmp_path):
+    """A LEGACY-format capture (old `URL:` line) under a NEW filename still resolves
+    its canonical identity from its own content and re-renders the true earliest
+    ORIGINAL from the registry."""
+    legacy = (
+        f"URL: {_B6_URL}\n"
+        "Application URL: https://boards.greenhouse.io/acme/jobs/654321\n"
+        "Company: Acme\nRole: Senior PM\n"
+        "Source: greenhouse-boards-api · Posting ID: 654321 · Captured: 2026-07-20 · "
+        "Methods tried: ats\n\n"
+        "== NORMALIZED (for vetting) ==\n"
+        "Working Location: Remote   [found]\n\n"
+        "--- JOB TEXT START ---\nAbout the role\nResponsibilities include shipping.\n"
+        "--- JOB TEXT END ---\n")
+    path = tmp_path / "acme__senior-pm-totally-renamed.txt"
+    path.write_text(legacy, encoding="utf-8")
+    assert pc.capture_identity_from_file(legacy) == _B6_KEY
+    reg_path = tmp_path / "registry.json"
+    pc.save_capture_registry(reg_path, {"schema_version": 1, "postings": {
+        _B6_KEY: {"history": [_ev(1, "first"), _ev(20, "later")],
+                  "original_capture": _ev(1, "first"),
+                  "latest_capture": _ev(20, "later")}}})
+    assert pc.apply_registry_history(path, reg_path) is True
+    out = path.read_text(encoding="utf-8")
+    assert "ORIGINAL CAPTURE DETAILS" in out
+    assert "Captured At: July 1, 2026" in out          # the TRUE earliest, from _ev(1)
+    assert "LATEST CAPTURE DETAILS" in out
+    # Everything above the END marker (the legacy head + body) is untouched.
+    assert out.split("--- JOB TEXT END ---")[0] == legacy.split("--- JOB TEXT END ---")[0]
+
+
+def test_backfill_replay_is_idempotent_for_a_no_change_refetch(tmp_path):
+    import backfill_capture_registry as bf
+    root = tmp_path / "reviews"
+    _write_manifest(root, "07-01-26", [_manifest_entry("2026-07-01T10:00:00+00:00")])
+    _write_manifest(root, "07-02-26", [_manifest_entry("2026-07-02T10:00:00+00:00")])
+    reg_path = tmp_path / "registry.json"
+    bf.backfill(root, reg_path, out=lambda *_: None)
+    snapshot = reg_path.read_text(encoding="utf-8")
+    bf.backfill(root, reg_path, out=lambda *_: None)
+    assert reg_path.read_text(encoding="utf-8") == snapshot
