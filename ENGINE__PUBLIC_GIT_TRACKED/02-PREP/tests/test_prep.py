@@ -1358,7 +1358,7 @@ def test_benefits_and_equity_mentioned_without_details_is_not_not_posted():
                                field_status={"conflicts": []}, methods_tried=["requests"])
     # The equity/bonus/travel-credit eligibility lives in Additional Compensation,
     # split out of the old Equity shoehorn — honest mention phrasing, never "Not Posted".
-    assert ("Additional Compensation: Bonus, Equity, and Employee Travel Credits "
+    assert ("Additional Compensation: Bonus, equity, and Employee Travel Credits "
             "mentioned, but details not provided.") in out
     assert "Benefits: Mentioned, but details not provided." in out
     assert "Not Posted" not in out and "Not posted" not in out
@@ -2075,7 +2075,7 @@ def test_base_salary_and_additional_compensation_stay_separated():
     comp_section = out.split("COMPENSATION")[1].split("APPLICATION QUESTIONS")[0]
     base = comp_section.split("Additional Compensation:")[0]
     assert "$232-282K" in base and "bonus" not in base.lower() and "equity" not in base.lower()
-    assert ("Additional Compensation: Bonus and Equity mentioned, but details "
+    assert ("Additional Compensation: Bonus and equity mentioned, but details "
             "not provided.") in out
 
 
@@ -2632,7 +2632,7 @@ def test_compensation_section_matches_the_approved_layout():
             "============\n"
             "Base Salary: $232-282K\n"
             "\n"
-            "Additional Compensation: Bonus, Equity, and Employee Travel Credits "
+            "Additional Compensation: Bonus, equity, and Employee Travel Credits "
             "mentioned, but details not provided.\n"
             "\n"
             "Benefits: Mentioned, but details not provided.\n") in out
@@ -3406,7 +3406,7 @@ def test_additional_compensation_never_restates_the_base_range():
                                              "description": pc.FOUND, "conflicts": []},
                                methods_tried=["ats"])
     line = next(l for l in out.splitlines() if l.startswith("Additional Compensation:"))
-    assert line == "Additional Compensation: Equity and Benefits mentioned, but details not provided."
+    assert line == "Additional Compensation: Equity and benefits mentioned, but details not provided."
     assert "122,400" not in line and "170,000" not in line and "base salary" not in line.lower()
     # Base Salary still carries the range (abbreviated, one decimal — $122,400 is not round).
     assert "Base Salary: $122.4-170K" in out
@@ -3545,3 +3545,124 @@ def test_office_expectation_is_never_inferred_from_the_word_hybrid():
     body2 = body.replace("This is a hybrid role based in our San Francisco office.",
                          "Hybrid: employees work from the San Francisco office 3 days per week.")
     assert pc._mine_office_expectation(body2) == "3 Days Per Week"
+
+
+# ===========================================================================
+# Second canary pass (2026-07-30): the page-<title> company source, sentence-case
+# component values, and remote-first location consistency.
+# ===========================================================================
+_HELPSCOUT_TITLE_HTML = (
+    "<html><head><title>Lead/Principal Product Manager, Resolve – Careers at Help Scout"
+    "</title></head><body>x</body></html>")
+_HELPSCOUT_URL = "https://www.helpscout.com/company/careers/?ashby_jid=abc"
+_HELPSCOUT_ROLE = "Lead/Principal Product Manager, Resolve"
+
+
+def test_page_title_wrapper_supplies_the_correctly_spaced_company():
+    """The page declares NO og:site_name and NO JSON-LD hiringOrganization — the only
+    correctly-spaced company name is in the <title>'s "– Careers at X" wrapper, the very
+    suffix the title normalizer discards."""
+    assert af.company_from_page_title(_HELPSCOUT_TITLE_HTML) == "Help Scout"
+    assert af.employer_declared_name(_HELPSCOUT_TITLE_HTML) == "Help Scout"
+    co, ro = pc.normalize_capture_identity(
+        "Helpscout", f"{_HELPSCOUT_ROLE} – Careers at Help Scout",
+        url=_HELPSCOUT_URL, html=_HELPSCOUT_TITLE_HTML)
+    assert co == "Help Scout"
+    # The identity choke point must not regress: the ROLE keeps its own text, wrapper gone.
+    assert ro == _HELPSCOUT_ROLE
+    assert pc.base_filename(co, ro) == "help-scout__lead-principal-product-manager-resolve.txt"
+
+
+@pytest.mark.parametrize("title", [
+    "Senior PM – Careers at Help Scout",
+    "Senior PM - Careers at Help Scout",
+    "Senior PM — Jobs at Help Scout",
+    "Senior PM | Help Scout Careers",
+    "Careers at Help Scout",
+])
+def test_every_title_wrapper_separator_and_shape_is_read(title):
+    assert af.company_from_page_title(f"<title>{title}</title>") == "Help Scout"
+
+
+def test_a_title_wrapper_naming_a_different_company_is_rejected_by_the_guard():
+    """The same-company-modulo-spacing guard means a wrapper can only re-space or
+    re-punctuate the name — never swap in a different employer."""
+    html = "<title>Senior PM – Careers at Acme Corporation</title>"
+    assert af.employer_declared_name(html) == "Acme Corporation"
+    co, _ro = pc.normalize_capture_identity(
+        "Helpscout", "Senior PM", url=_HELPSCOUT_URL, html=html)
+    assert co == "Helpscout"          # guard rejected it; the token is retained
+
+
+def test_a_title_with_no_wrapper_falls_back_to_the_board_token():
+    for html in ("<title>Senior Product Manager</title>",
+                 "<title>Careers</title>",
+                 "<html><head></head><body>no title at all</body></html>"):
+        assert af.company_from_page_title(html) in (None, "")
+        co, _ro = pc.normalize_capture_identity(
+            "Helpscout", "Senior PM", url=_HELPSCOUT_URL, html=html)
+        assert co == "Helpscout"
+
+
+def test_the_two_title_wrapper_implementations_agree():
+    """`ats_fetchers.company_from_page_title` mirrors the wrapper family that
+    `prep_common._strip_title_branding` removes from titles. Pin that they agree, so the
+    deliberate mirroring can't drift."""
+    for title in ("Senior PM – Careers at Help Scout", "Senior PM | Help Scout Careers",
+                  "Senior PM - Jobs at Acme", "Senior PM — Acme Jobs"):
+        page = af.company_from_page_title(f"<title>{title}</title>")
+        _clean, wrapper_co = pc._strip_title_branding(title)
+        assert page == wrapper_co, title
+
+
+def test_component_values_are_sentence_case_not_title_case():
+    """Title Case is for LABELS only: a mid-sentence generic component word is lowercase,
+    while an employer's own phrase keeps the capitalization they wrote."""
+    assert pc._sentence_case_components(["Equity", "Benefits"]) == ["Equity", "benefits"]
+    assert pc._sentence_case_components(["Bonus", "Equity", "Employee Travel Credits"]) == \
+        ["Bonus", "equity", "Employee Travel Credits"]
+    assert pc._sentence_case_components(["Benefits"]) == ["Benefits"]
+    out = pc.build_output_text("http://x", "PM", "Acme", _BASE_RANGE_SENTENCE,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "$122,400 - $170,000",
+                                     "working_location": "Remote"},
+                               field_status={"compensation": pc.FOUND,
+                                             "working_location": pc.FOUND,
+                                             "description": pc.FOUND, "conflicts": []},
+                               methods_tried=["ats"])
+    assert ("Additional Compensation: Equity and benefits mentioned, but details "
+            "not provided.") in out
+    assert "and Benefits mentioned" not in out
+
+
+def test_remote_plus_metro_renders_remote_first_consistently():
+    """Defect 3: `SF or Remote, US` and `Remote (US; …) or IRL SF` described the same
+    shape two ways. Remote leads, the country folds into the parenthetical."""
+    assert pc._format_working_locations("San Francisco, CA; Remote, US") == \
+        "Remote (US) or IRL SF"
+    assert pc._format_working_locations("Remote, US; San Francisco, CA") == \
+        "Remote (US) or IRL SF"
+    assert pc._format_working_locations("Remote (US); New York City") == \
+        "Remote (US) or IRL NYC"
+    # The office-naming convention still renders as before...
+    assert pc._format_working_locations(
+        "Remote - New York City, NY; Remote - Seattle, WA; Remote - United States; "
+        "San Francisco - Hybrid") == "Remote (US; NYC or Seattle) or IRL SF"
+    # ...and lists with no remote entry, or a bare Remote, are untouched.
+    assert pc._format_working_locations("New York City; San Francisco") == "NYC or SF"
+    assert pc._format_working_locations("Remote") == "Remote"
+    assert pc._format_working_locations("Remote, US") == "Remote (US)"
+
+
+def test_maven_shaped_location_reads_remote_first_end_to_end():
+    body = ("About the role\nResponsibilities include shipping product.\n"
+            "Strong preference for those based in San Francisco.\n" + ("x " * 60))
+    meta = {"title": "PM", "source": "greenhouse-boards-api", "structured_source": True,
+            "compensation": "USD 200,000-250,000",
+            "working_location": "San Francisco, CA; Remote, US"}
+    fs = pc.assess_completeness(meta, body, [])
+    out = pc.build_output_text("http://x", "PM", "Acme", body, meta=meta,
+                               field_status=fs, methods_tried=["ats"])
+    assert "Working Location(s): Remote (US) or IRL SF" in out
+    assert "Conflicting employer information" not in out
+    assert "Location Preference: Strong preference for those based in SF." in out

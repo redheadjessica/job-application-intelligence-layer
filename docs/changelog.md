@@ -62,6 +62,29 @@ Groundwork for a parallel refresh, where several workers touch the same durable 
   cover-letter workflows keep working against an unmigrated file instead of silently writing
   nothing. The cover-letter marker is now the literal `Yes` (was `Y`) per the column semantics.
 
+## 2026-07-30 — Canary pass 2: the page-<title> company source, sentence-case values, remote-first locations
+
+- **The company name was hiding in a signal we discarded.** A careers page with no
+  `og:site_name` and no JSON-LD `hiringOrganization` still spells its company correctly in the
+  `<title>`'s trailing branding wrapper ("… – Careers at Help Scout") — the very suffix the title
+  normalizer strips off ROLES. `employer_declared_name()` gained that as a third source (after
+  JSON-LD and og:site_name), covering `– / - / — / |` separators and the `Careers at X` / `X Careers`
+  / `Jobs at X` shapes. The same-company-modulo-spacing guard still applies, so a wrapper can only
+  re-space or re-punctuate a name, never swap in a different employer (pinned), and a title with no
+  wrapper still falls back to the board token. The role text is unaffected — pinned that the wrapper
+  is still stripped from the title while the company is read out of it. Because this mirrors
+  patterns that live in `prep_common` (which imports this module, so the dependency can only run
+  one way), a test pins that both implementations agree on the same input.
+- **Sentence case inside VALUES.** Title Case is for labels only, so a mid-sentence generic
+  component word is now lowercase (`Equity and benefits mentioned, but details not provided.`)
+  while an employer's own phrase keeps the capitalization they wrote (`Employee Travel Credits`).
+- **Remote-plus-metro reads one way.** A plain `Remote, US` entry mixed with an office is now
+  collapsed by the same rule as the `Remote - <city>` naming convention, so both shapes render
+  remote-first with the country folded into the parenthetical (`Remote (US) or IRL SF`). A bare
+  `Remote`, and any list with no remote entry, are untouched.
+
+Suite: 483 → 495 green. Golden fixture regenerated for the one sentence-case word.
+
 ## 2026-07-30 — Canary-run extraction fixes: comp components, honest benefits, metro aliases, employer names, office conventions
 
 Six defects the 4-job canary surfaced, all fixed from structured source data (synthetic fixtures):

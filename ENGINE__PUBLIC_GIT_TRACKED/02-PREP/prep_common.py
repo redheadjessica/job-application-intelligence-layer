@@ -1416,6 +1416,10 @@ _OFFICE_ARRANGEMENT_RE = re.compile(
     r"|(?P<rest2>.+?)\s*[-–—:]\s*(?P<trail>remote|hybrid|on-?site|in-?office))\s*$")
 _NATIONWIDE_RE = re.compile(r"(?i)^(united states|usa|us|nationwide|anywhere in the us"
                             r"|remote us|us remote)$")
+# A plain remote entry with an optional region — "Remote", "Remote, US", "Remote (US)".
+# Recognized alongside the `Remote - <city>` convention so a MIXED list renders the same
+# way whichever form the employer used: remote first, region folded into the parenthetical.
+_PLAIN_REMOTE_RE = re.compile(r"(?i)^remote\b[\s,;:()–—-]*(?P<region>[^()]*?)\)?\s*$")
 
 
 def _parse_office_entry(part: str) -> tuple[str | None, str]:
@@ -1444,6 +1448,10 @@ def _collapse_office_convention(parts: list[str]) -> str | None:
     used_convention = False
     for part in parts:
         arrangement, place = _parse_office_entry(part)
+        if arrangement is None:
+            m = _PLAIN_REMOTE_RE.match(re.sub(r"\s+", " ", str(part or "")).strip())
+            if m:
+                arrangement, place = "Remote", (m.group("region") or "").strip()
         short = _short_metro(place)
         if arrangement is None:
             if short:
@@ -1457,7 +1465,9 @@ def _collapse_office_convention(parts: list[str]) -> str | None:
                 remote_places.append(short)
         elif short and short not in office_places:
             office_places.append(short)
-    if not used_convention:
+    # A list that is ONLY remote-with-no-place carries no arrangement/place structure to
+    # collapse — leave it to the plain join so a bare "Remote" stays exactly "Remote".
+    if not used_convention or not (office_places or plain or remote_places or remote_nationwide):
         return None
     segments: list[str] = []
     if remote_nationwide or remote_places:
@@ -1543,6 +1553,28 @@ _ADDL_COMP_TOKENS = (
     (re.compile(r"(?i)\b(equity|stock options?|rsus?|restricted stock)\b"), "Equity"),
     (re.compile(r"(?i)\btravel credits?\b"), "Employee Travel Credits"),
 )
+# Generic component words are ordinary nouns and follow sentence case inside a VALUE
+# (Title Case is for LABELS only). Anything not listed here — an employer's own product-ish
+# phrase like "Employee Travel Credits" — keeps the capitalization the employer wrote.
+_GENERIC_COMP_WORDS = {"bonus", "commission", "equity", "benefits", "signing bonus",
+                       "perks", "stock options", "commissions"}
+
+
+def _sentence_case_components(names: list[str]) -> list[str]:
+    """First component capitalized (it opens the sentence); every later GENERIC one
+    lowercased; employer-specific phrases untouched."""
+    out: list[str] = []
+    for i, name in enumerate(names):
+        s = str(name or "").strip()
+        if not s:
+            continue
+        if i == 0:
+            out.append(s[0].upper() + s[1:])
+        elif s.lower() in _GENERIC_COMP_WORDS:
+            out.append(s.lower())
+        else:
+            out.append(s)
+    return out
 
 
 def _mine_additional_comp_mentions(body: str) -> list[str]:
@@ -1650,7 +1682,8 @@ def _additional_compensation_value(meta: dict, body: str, fs: dict | None = None
     elif equity == MENTIONED_NO_DETAILS and "Equity" not in mentions:
         mentions.append("Equity")
     if mentions:
-        parts.append(f"{_oxford_join(mentions)} mentioned, but details not provided.")
+        parts.append(f"{_oxford_join(_sentence_case_components(mentions))} "
+                     f"mentioned, but details not provided.")
     if not parts:
         return "Employer did not mention additional compensation."
     return " ".join(parts)

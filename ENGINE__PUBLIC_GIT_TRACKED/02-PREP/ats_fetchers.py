@@ -2250,11 +2250,48 @@ _OG_SITE_NAME_ALT_RE = re.compile(
     r'(?:property|name)\s*=\s*["\']og:site_name["\']')
 
 
+# The company name a careers page puts in its <title>'s trailing branding wrapper —
+# "Lead/Principal Product Manager, Resolve – Careers at Help Scout". This is the SAME
+# wrapper family `prep_common._strip_title_branding` removes from job titles, read here
+# for the opposite purpose: the discarded suffix is often the only place a page spells its
+# company with correct spacing. (Deliberately mirrored rather than imported: prep_common
+# imports this module, so the dependency can only run one way. A test pins that both
+# implementations agree on the same input.)
+_PAGE_TITLE_RE = re.compile(r"(?is)<title[^>]*>(.*?)</title>")
+_TITLE_SEP = r"\s*[|\-–—·]\s*"
+_PAGE_TITLE_CO_RES = (
+    # "<Role> – Careers at <Co>" / "<Role> — Jobs at <Co>"
+    re.compile(rf"{_TITLE_SEP}(?:careers?|jobs?)\s+at\s+(?P<co>[^|\-–—·]+?)\s*$", re.I),
+    # "<Role> | <Co> Careers" / "<Role> - <Co> Jobs"
+    re.compile(rf"{_TITLE_SEP}(?P<co>[^|\-–—·]+?)\s+(?:careers?|jobs?)\s*$", re.I),
+    # "Careers at <Co>" as the whole title
+    re.compile(r"^\s*(?:careers?|jobs?)\s+at\s+(?P<co>.+?)\s*$", re.I),
+)
+
+
+def company_from_page_title(html_text: Optional[str]) -> Optional[str]:
+    """The employer name from a careers page's <title> branding wrapper, or None."""
+    m = _PAGE_TITLE_RE.search(str(html_text or ""))
+    if not m:
+        return None
+    title = re.sub(r"\s+", " ", html.unescape(m.group(1))).strip()
+    for rx in _PAGE_TITLE_CO_RES:
+        hit = rx.search(title)
+        if not hit:
+            continue
+        co = re.sub(r"\s+", " ", hit.group("co")).strip(" \t|·:,-–—")
+        # A wrapper that names no company ("| Careers") yields nothing usable.
+        if co and not re.search(r"(?i)^\s*(?:careers?|jobs?)\s*$", co):
+            return co
+    return None
+
+
 def employer_declared_name(html_text: Optional[str] = None,
                            jsonld: Optional[dict] = None) -> Optional[str]:
     """The employer's OWN declared name from their careers page, in confidence order:
-    JSON-LD `hiringOrganization.name` (or an Organization `name`), then
-    `og:site_name`. Returns None when the page declares neither.
+    JSON-LD `hiringOrganization.name` (or an Organization `name`), then `og:site_name`,
+    then the <title>'s branding wrapper ("… – Careers at Help Scout"). Returns None when
+    the page declares none of them.
 
     Why this exists: a board TOKEN title-cased into one word ("helpscout" ->
     "Helpscout") is a guess, and several ATS APIs expose no organization name at all.
@@ -2273,7 +2310,9 @@ def employer_declared_name(html_text: Optional[str] = None,
             name = re.sub(r"\s+", " ", html.unescape(m.group(1))).strip()
             if name:
                 return name
-    return None
+    # Third source: the <title>'s trailing branding wrapper. Many careers pages declare
+    # neither JSON-LD nor og:site_name, yet spell the company correctly right here.
+    return company_from_page_title(src)
 
 
 def _prettify_slug(slug: str) -> str:
