@@ -2602,6 +2602,11 @@ _EMPLOYER_GH_ID_RES = (
     re.compile(r"[?&]gh_jid=(\d{6,})"),
     re.compile(r"/positions?/(\d{6,})(?:[/?#]|$)"),
 )
+# An Ashby job id carried on the EMPLOYER's own domain (`lark.com/careers?ashby_jid=<uuid>`).
+# Without this, the raw employer URL became its own registry key alongside `ashby:<org>:<uuid>`
+# — the live Lark duplicate, which mislabeled ORIGINAL until hand-merged.
+_EMPLOYER_ASHBY_JID_RE = re.compile(
+    r"[?&]ashby_jid=([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})")
 
 
 def canonical_capture_key(url: str, apply_url: str | None = None,
@@ -2614,6 +2619,17 @@ def canonical_capture_key(url: str, apply_url: str | None = None,
         if k:
             return k
     u = str(url or "")
+    # Employer-domain Ashby: the jid names the posting; the org is the same
+    # domain-derived guess the custom-domain fetcher itself uses ("lark" for lark.com),
+    # so the key matches the one the ATS route produces.
+    m = _EMPLOYER_ASHBY_JID_RE.search(u)
+    if m:
+        try:
+            tokens = _gh_board_tokens_from_domain(u)
+        except Exception:
+            tokens = []
+        if tokens:
+            return f"ashby:{min(tokens, key=len)}:{m.group(1).lower()}"
     pid = None
     for rx in _EMPLOYER_GH_ID_RES:
         m = rx.search(u)
@@ -2786,6 +2802,106 @@ def merge_registry_shards(global_path, shard_paths, accepted_keys):
     return update_capture_registry(global_path, _mutate)
 
 
+_ATS_KEY_RE = re.compile(r"^(greenhouse|ashby|lever|linkedin):")
+
+
+def resolve_registry_key(registry: dict, key: str) -> str:
+    """The canonical posting key for `key`: itself when it names a posting, the
+    canonical key when `key` is a recorded ALIAS of one. Every registry write goes
+    through this, so a known alternate representation (raw employer URL, tracking
+    variant) can never re-open a second posting beside the canonical one."""
+    postings = registry.get("postings") or {}
+    if key in postings:
+        return key
+    for canon, posting in postings.items():
+        if key in (posting.get("aliases") or []):
+            return canon
+    return key
+
+
+def canonical_key_for_posting(key: str, posting: dict):
+    """(canonical_key, conflict) recomputed from a posting's OWN recorded events.
+    A posting keyed by a raw URL whose events canonicalize to an ATS identity
+    returns that identity; two DIFFERENT ATS identities among one posting's events
+    is an unresolved conflict (returned for reporting, never auto-merged)."""
+    candidates = []
+    for ev in (posting.get("history") or []):
+        k = canonical_capture_key(ev.get("url") or "", posting_id=ev.get("posting_id"))
+        if k:
+            candidates.append(k)
+    if _ATS_KEY_RE.match(key):
+        candidates.append(key)
+    ats_like = sorted({k for k in candidates if _ATS_KEY_RE.match(k)})
+    if len(ats_like) > 1:
+        return None, ats_like
+    if ats_like:
+        return ats_like[0], None
+    return key, None
+
+
+def merge_postings(target: dict, source: dict) -> dict:
+    """Merge `source` into `target` under the registry's invariants: history
+    unioned and deduped on (fetched_at, url); the EARLIEST original wins and stays
+    immutable; latest advances only to the newest successful event; aliases union."""
+    history = target.setdefault("history", [])
+    seen = {(h.get("fetched_at"), h.get("url")) for h in history}
+    for ev in (source.get("history") or []):
+        sig = (ev.get("fetched_at"), ev.get("url"))
+        if sig not in seen:
+            seen.add(sig)
+            history.append(dict(ev))
+    history.sort(key=lambda h: (h.get("fetched_at") or ""))
+    for other in (source.get("original_capture"),):
+        cur = target.get("original_capture")
+        if other and (not cur or (other.get("fetched_at") or "") < (cur.get("fetched_at") or "")):
+            target["original_capture"] = dict(other)
+            target["original_source"] = source.get("original_source") or "merged"
+    s_latest = source.get("latest_capture")
+    if s_latest and s_latest.get("ok") is not False:
+        cur = target.get("latest_capture")
+        if not cur or (s_latest.get("fetched_at") or "") > (cur.get("fetched_at") or ""):
+            target["latest_capture"] = dict(s_latest)
+    aliases = list(dict.fromkeys((target.get("aliases") or []) + (source.get("aliases") or [])))
+    if aliases:
+        target["aliases"] = aliases
+    return target
+
+
+def canonicalize_registry(registry: dict, out=print) -> dict:
+    """Fold every alias-keyed posting into its canonical identity, in place.
+    Returns counts: aliases_discovered / identities_merged / unresolved_conflicts.
+    Idempotent — a second pass reports zeros. Conflicting identities are reported
+    and left untouched, never silently merged or overwritten."""
+    postings = registry.setdefault("postings", {})
+    counts = {"aliases_discovered": 0, "identities_merged": 0, "unresolved_conflicts": 0}
+    for key in sorted(postings):
+        posting = postings.get(key)
+        if posting is None:
+            continue
+        canonical, conflict = canonical_key_for_posting(key, posting)
+        if conflict:
+            counts["unresolved_conflicts"] += 1
+            out(f"[registry-repair] CONFLICT {key}: events canonicalize to multiple "
+                f"identities {conflict} — left untouched; resolve by hand")
+            continue
+        if canonical == key:
+            continue
+        counts["aliases_discovered"] += 1
+        source = postings.pop(key)
+        if canonical in postings:
+            counts["identities_merged"] += 1
+            out(f"[registry-repair] merge {key} -> {canonical} "
+                f"(earliest original wins; history unioned)")
+            merge_postings(postings[canonical], source)
+        else:
+            out(f"[registry-repair] rekey {key} -> {canonical}")
+            postings[canonical] = source
+        aliases = postings[canonical].setdefault("aliases", [])
+        if key not in aliases:
+            aliases.append(key)
+    return counts
+
+
 def record_capture_event(registry: dict, key: str, event: dict, *, success: bool,
                          origin: str = "live", dedupe: bool = False) -> dict:
     """Append one fetch event to a posting's history. The original is set only
@@ -2793,6 +2909,7 @@ def record_capture_event(registry: dict, key: str, event: dict, *, success: bool
     only on success. With `dedupe=True` (backfill), identical (fetched_at, url)
     events collapse — mirrored batch folders contribute one event, not two.
     Returns the posting record."""
+    key = resolve_registry_key(registry, key)   # aliases always land on the canonical
     posting = registry.setdefault("postings", {}).setdefault(key, {})
     history = posting.setdefault("history", [])
     dup = dedupe and any(h.get("fetched_at") == event.get("fetched_at")

@@ -4141,3 +4141,130 @@ def test_linkedin_relative_posted_wording_is_never_converted_to_a_date():
                                      "compensation": "USD 200,000", "working_location": "Remote"},
                                methods_tried=["ats"])
     assert "Job Posted At: Unknown" in out
+
+
+# ===========================================================================
+# B5 — canonical ATS identity + alias mechanism. The live defect: a raw
+# `lark.com/careers/open-positions?ashby_jid=<id>` key coexisted with
+# `ashby:lark:<id>`, splitting the history and mislabeling ORIGINAL as the later
+# fetch until hand-merged.
+# ===========================================================================
+_LARK_UUID = "4ccf1e87-0317-4dca-949d-f7cb4f76fad7"
+_LARK_RAW_URL = f"https://lark.com/careers/open-positions?ashby_jid={_LARK_UUID}"
+_LARK_KEY = f"ashby:lark:{_LARK_UUID}"
+
+
+def test_every_entry_form_of_one_posting_canonicalizes_to_one_key():
+    forms = [
+        _LARK_RAW_URL,                                             # raw employer URL
+        _LARK_RAW_URL + "&utm_source=x&src=LinkedIn",              # tracking variant
+        f"https://jobs.ashbyhq.com/lark/{_LARK_UUID}",             # ATS job URL
+        f"https://jobs.ashbyhq.com/lark/{_LARK_UUID}/application", # ATS application URL
+    ]
+    keys = {pc.canonical_capture_key(u) for u in forms}
+    assert keys == {_LARK_KEY}, keys
+    # And the already-canonical form is a fixed point (via normalized_url storage).
+    assert pc.normalize_url(f"https://jobs.ashbyhq.com/lark/{_LARK_UUID}") == _LARK_KEY
+
+
+def test_registry_writes_resolve_recorded_aliases_to_the_canonical_posting():
+    reg = {"schema_version": 1, "postings": {
+        _LARK_KEY: {"history": [_ev(1, "u1")], "original_capture": _ev(1, "u1"),
+                    "latest_capture": _ev(1, "u1"),
+                    "aliases": ["https://lark.com/careers/open-positions"]}}}
+    # A write under the recorded alias lands on the canonical posting.
+    pc.record_capture_event(reg, "https://lark.com/careers/open-positions",
+                            _ev(2, "u2"), success=True)
+    assert set(reg["postings"]) == {_LARK_KEY}
+    assert len(reg["postings"][_LARK_KEY]["history"]) == 2
+    assert reg["postings"][_LARK_KEY]["original_capture"]["url"] == "u1"  # immutable
+
+
+def test_the_lark_duplicate_shape_is_repaired_with_the_earliest_original(tmp_path):
+    """The exact live shape: the raw-URL posting holds the EARLIER capture, the ATS
+    posting the later one — pre-repair the ATS posting mislabeled ORIGINAL."""
+    reg_path = tmp_path / "registry.json"
+    raw_key = pc.normalize_url(_LARK_RAW_URL)
+    assert raw_key == _LARK_KEY or raw_key.startswith("https://")  # legacy raw form
+    legacy_raw_key = "https://lark.com/careers/open-positions?ashby_jid=" + _LARK_UUID
+    pc.save_capture_registry(reg_path, {"schema_version": 1, "postings": {
+        legacy_raw_key: {"history": [_ev(1, _LARK_RAW_URL)],
+                         "original_capture": _ev(1, _LARK_RAW_URL),
+                         "latest_capture": _ev(1, _LARK_RAW_URL)},
+        _LARK_KEY: {"history": [_ev(9, "https://jobs.ashbyhq.com/lark/" + _LARK_UUID)],
+                    "original_capture": _ev(9, "https://jobs.ashbyhq.com/lark/" + _LARK_UUID),
+                    "latest_capture": _ev(9, "https://jobs.ashbyhq.com/lark/" + _LARK_UUID)},
+    }})
+    import repair_capture_registry as rcr
+    msgs: list = []
+    counts = rcr.run(registry_path=reg_path, out=msgs.append)
+    assert counts["aliases_discovered"] == 1
+    assert counts["identities_merged"] == 1
+    assert counts["unresolved_conflicts"] == 0
+    reg = pc.load_capture_registry(reg_path)
+    assert set(reg["postings"]) == {_LARK_KEY}
+    posting = reg["postings"][_LARK_KEY]
+    # The TRUE earliest capture is the original again.
+    assert posting["original_capture"]["fetched_at"] == _ev(1)["fetched_at"]
+    assert posting["latest_capture"]["fetched_at"] == _ev(9)["fetched_at"]
+    assert len(posting["history"]) == 2
+    assert legacy_raw_key in posting["aliases"]
+    # A backup was written before mutation.
+    assert any(p.name.startswith("registry.json.backup-") for p in tmp_path.iterdir())
+    # Idempotent: a second run reports zeros and writes nothing new.
+    backups_before = sorted(p.name for p in tmp_path.iterdir() if "backup" in p.name)
+    counts2 = rcr.run(registry_path=reg_path, out=msgs.append)
+    assert counts2["aliases_discovered"] == 0 and counts2["identities_merged"] == 0
+    assert sorted(p.name for p in tmp_path.iterdir() if "backup" in p.name) == backups_before
+
+
+def test_dry_run_reports_without_touching_the_file(tmp_path):
+    reg_path = tmp_path / "registry.json"
+    legacy_raw_key = _LARK_RAW_URL
+    pc.save_capture_registry(reg_path, {"schema_version": 1, "postings": {
+        legacy_raw_key: {"history": [_ev(1, _LARK_RAW_URL)],
+                         "original_capture": _ev(1, _LARK_RAW_URL)}}})
+    before = reg_path.read_bytes()
+    import repair_capture_registry as rcr
+    counts = rcr.run(registry_path=reg_path, dry_run=True, out=lambda _m: None)
+    assert counts["aliases_discovered"] == 1
+    assert reg_path.read_bytes() == before
+    assert not any("backup" in p.name for p in tmp_path.iterdir())
+
+
+def test_conflicting_identities_are_reported_and_left_untouched(tmp_path):
+    """One posting whose events canonicalize to TWO different ATS identities is a
+    data problem a machine must not guess about."""
+    reg_path = tmp_path / "registry.json"
+    posting = {"history": [
+        _ev(1, "https://boards.greenhouse.io/acme/jobs/111111"),
+        _ev(2, "https://boards.greenhouse.io/acme/jobs/222222"),
+    ], "original_capture": _ev(1, "https://boards.greenhouse.io/acme/jobs/111111")}
+    pc.save_capture_registry(reg_path, {"schema_version": 1,
+                                        "postings": {"https://example.com/x": posting}})
+    import repair_capture_registry as rcr
+    msgs: list = []
+    counts = rcr.run(registry_path=reg_path, out=msgs.append)
+    assert counts["unresolved_conflicts"] == 1
+    assert counts["identities_merged"] == 0
+    reg = pc.load_capture_registry(reg_path)
+    assert "https://example.com/x" in reg["postings"]        # untouched
+    assert any("CONFLICT" in m and "resolve by hand" in m for m in msgs)
+
+
+def test_a_new_fetch_of_the_raw_lark_form_lands_on_the_ats_key(tmp_path):
+    """End-to-end through process_urls: fetching the RAW employer form produces the
+    canonical ATS key directly — the duplicate class cannot form again."""
+    src = _batch_source(tmp_path)
+    reg_path = tmp_path / "reg.json"
+
+    def fetch(u):
+        return {"ok": True, "title": "PM", "company": "Lark", "body": _SYNTH_BODY,
+                "method": "ats", "error": None,
+                "meta": {"title": "PM", "source": "ashby-posting-api (custom-domain jid)",
+                         "structured_source": True, "compensation": "USD 200,000",
+                         "working_location": "Remote"}, "questions": []}
+
+    pc.process_urls([_LARK_RAW_URL], src, fetch, registry_path=reg_path)
+    reg = pc.load_capture_registry(reg_path)
+    assert list(reg["postings"]) == [_LARK_KEY]

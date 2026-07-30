@@ -11,6 +11,33 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — B5: one canonical identity per posting, aliases recorded, repair CLI
+
+The live defect: a raw employer URL (`…?ashby_jid=<id>`) coexisted in the registry beside the same
+posting's ATS identity, splitting the history and mislabeling ORIGINAL as the later fetch until it
+was merged by hand. Three layers now prevent and repair the class:
+
+- **`canonical_capture_key` closes the entry-form gap**: an employer-domain `ashby_jid` now
+  canonicalizes to `ashby:<org>:<uuid>` using the same domain-derived org guess the custom-domain
+  fetcher itself uses — so the raw URL, its tracking variants, the ATS job URL, and the ATS
+  application URL all yield ONE key (pinned).
+- **Registry writes always canonicalize AND follow aliases**: `record_capture_event` resolves a
+  recorded alias to its canonical posting before writing, so a known alternate representation can
+  never re-open a second posting.
+- **`repair_capture_registry.py`** recomputes each posting's canonical identity from its OWN recorded
+  events and folds alias-keyed postings into the canonical one under the registry's invariants
+  (history unioned+deduped, EARLIEST original wins and stays immutable, latest advances only to the
+  newest success), recording the old key as an alias. `--dry-run` reports without writing; a real
+  run writes a timestamped backup before any mutation, atomically and lock-guarded. Idempotent
+  (second run reports zeros). Two different ATS identities among one posting's events is an
+  UNRESOLVED CONFLICT — reported, exit code 1, never auto-merged.
+
+The exact Lark duplicate shape is the regression fixture (true earliest ORIGINAL restored, alias
+recorded, backup written, second run zero). A dry-run against a COPY of the live registry reported
+0 aliases / 0 merges / 0 conflicts across 75 postings — the expected verification, since the only
+live defect had already been hand-repaired; the live registry itself was not touched.
+Suite: 604 → 611 green.
+
 ## 2026-07-30 — Gate precision: an honest total-comp capture is a must-pass
 
 The gate's first read-only run over real captures produced one false positive: a capture that
