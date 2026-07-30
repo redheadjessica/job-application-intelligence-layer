@@ -11,6 +11,17 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — Phase A (cont.): docs record the capture format and the column contract
+
+`docs/v2-end-to-end-workflow.md` and `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/CLAUDE.md` now describe the
+approved-and-standard JOB SNAPSHOT capture format (section order, the honest sentence-case field
+states, employer list-structure preservation, ORIGINAL vs LATEST capture details, and that the machine
+record stays the manifest's `field_status`), the durable capture-history registry and what "ORIGINAL"
+actually promises (the earliest capture JAIL can establish from its durable records — not necessarily
+the first ever), and the 27-column rankings contract including why `Location Fit` was removed as
+redundant with `Working Location`. The superseded historical bullets are annotated rather than
+rewritten, so the record of what changed and when stays readable.
+
 ## 2026-07-30 — Phase A (cont.): atomic lock-guarded writes and isolated capture-registry shards
 
 Groundwork for a parallel refresh, where several workers touch the same durable records at once.
