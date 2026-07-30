@@ -10,15 +10,17 @@ WORK DETAILS
 ============
 Employment: Full Time
 Work Arrangement: Hybrid
-Working Location(s): Austin, TX Or SF Or NYC Or Arlington, VA Or SF Bay Area Or DC
+Working Location(s): Austin, TX or SF or NYC or Arlington, VA or SF Bay Area or DC
 Office Expectation: At Least 2 Days Per Week
 
 COMPENSATION
 ============
 Base Salary:
-  - Zone A: SF Bay Area / NYC $236,000–$296,000 USD
-  - Zone B: Austin / D.C. $213,000–$266,000 USD
-Additional Compensation: Bonus and Equity Mentioned, but Details Were Not Provided.
+- Zone A: SF Bay Area / NYC $236-296K
+- Zone B: Austin / D.C. $213-266K
+
+Additional Compensation: Bonus and Equity mentioned, but details not provided.
+
 Benefits: At BetterUp, we are committed to living out our mission every day and that starts with providing benefits that allow our employees to care for themselves, support their families, and give back to their community. Access to BetterUp coaching. One for you and one for a friend or family member. A competitive compensation plan with opportunity for advancement. Medical, dental, and vision insurance. Flexible paid time off.
 
 APPLICATION QUESTIONS WORTH PREPARING
@@ -44,123 +46,76 @@ If that sounds exciting—and the job description below feels like a fit—we re
 
 We are a hybrid company with a focus on in-person collaboration when necessary. Employees are expected to be available to work from one of our office hubs at least two days per week, or eight days per month. Our US hub locations include: Austin, TX; New York City, NY; San Francisco, CA; and the Washington, DC metro area. If this is a role based in Europe, our Europe hub locations are London, UK and Amsterdam, NL. Please ensure you can realistically commit to this structure before applying.
 
-
-
 The Opportunity
 
 This role is a single-threaded Product Lead: you own a product area end-to-end, drive product-market fit, and operate as the Mini-Founder CEO of your domain. This is a builder-operator role for someone who thrives in ambiguity, ships with urgency, and treats AI as their primary tool.
 
-
-
 What You Own
 
- - Carry an opinionated 3-year product vision and translate it into a rolling 3-week execution plan. Own product-market fit — if it’s not selling, that’s your problem to diagnose and fix.
-
- - Spend 50%+ of your time external-facing: solution design sessions, product demos, and strategic conversations with enterprise buyers and end-users. Build trust and credibility with key executive stakeholders.
-
- - Prototype working demos with AI tools (Claude, Cursor, Replit, Figma Make) before engineering spends a sprint. Run hypothesis-driven experiments; kill what isn’t working and redirect without drama.
-
- - Decide and move with imperfect information. You don’t wait for alignment, permission, or consensus — you listen, synthesize, decide, and act. When you’re wrong, you course-correct fast. You never stall.
-
- - Lead a cross-functional pod (PM/GPM, PMM Lead, GTM Lead) with an embedded R&D team (Engineering Lead, Design Lead, Product Analyst, TPM). Set the product direction; your partners execute against your vision with productive tension. You will ensure science-backed practices in the experience working with BetterUp Labs, and deliver real outcomes aligned to our People Insights Consultants and Partner Value teams.
-
- - Ensure your product fits into the broader portfolio — leveraging shared platform capabilities, aligning roadmaps with peer product leaders, and driving synergies that enhance the value of the entire platform.
-
- - Define and track product success metrics, ensuring the product delivers measurable business value. Communicate progress against outcomes and facilitate risk discussions with leadership.
-
-
+- Carry an opinionated 3-year product vision and translate it into a rolling 3-week execution plan. Own product-market fit — if it’s not selling, that’s your problem to diagnose and fix.
+- Spend 50%+ of your time external-facing: solution design sessions, product demos, and strategic conversations with enterprise buyers and end-users. Build trust and credibility with key executive stakeholders.
+- Prototype working demos with AI tools (Claude, Cursor, Replit, Figma Make) before engineering spends a sprint. Run hypothesis-driven experiments; kill what isn’t working and redirect without drama.
+- Decide and move with imperfect information. You don’t wait for alignment, permission, or consensus — you listen, synthesize, decide, and act. When you’re wrong, you course-correct fast. You never stall.
+- Lead a cross-functional pod (PM/GPM, PMM Lead, GTM Lead) with an embedded R&D team (Engineering Lead, Design Lead, Product Analyst, TPM). Set the product direction; your partners execute against your vision with productive tension. You will ensure science-backed practices in the experience working with BetterUp Labs, and deliver real outcomes aligned to our People Insights Consultants and Partner Value teams.
+- Ensure your product fits into the broader portfolio — leveraging shared platform capabilities, aligning roadmaps with peer product leaders, and driving synergies that enhance the value of the entire platform.
+- Define and track product success metrics, ensuring the product delivers measurable business value. Communicate progress against outcomes and facilitate risk discussions with leadership.
 
 What We’re Looking For
 
 Experience
 
- - 8+ years in product management or related roles, including at least 4 years leading product direction at the team or product-area level.
-
- - Demonstrated ownership of product-market fit — you’ve been the person responsible for diagnosing why something isn’t landing, changing course, and making it work. Not just shipping features, but finding the fit.
-
- - Experience building products in B2B2C environments — you understand how to sell to enterprise buyers while building for the end-users those buyers serve. You’ve navigated the tension between buyer requirements and user experience.
-
- - Direct, sustained customer exposure in enterprise contexts — you’ve been in the room with economic buyers, built those relationships yourself, and used that signal to drive product direction.
-
- - Domain expertise in organizational transformation, human transformation, talent intelligence, or related fields is a plus.
+- 8+ years in product management or related roles, including at least 4 years leading product direction at the team or product-area level.
+- Demonstrated ownership of product-market fit — you’ve been the person responsible for diagnosing why something isn’t landing, changing course, and making it work. Not just shipping features, but finding the fit.
+- Experience building products in B2B2C environments — you understand how to sell to enterprise buyers while building for the end-users those buyers serve. You’ve navigated the tension between buyer requirements and user experience.
+- Direct, sustained customer exposure in enterprise contexts — you’ve been in the room with economic buyers, built those relationships yourself, and used that signal to drive product direction.
+- Domain expertise in organizational transformation, human transformation, talent intelligence, or related fields is a plus.
 
 Skills & Competencies
 
- - Relentless agency. You have an internal locus of control — when something isn't working, you own it and fix it rather than pointing to external factors or waiting for someone else to act. Humility to know what you don't know; relentlessness to figure it out anyway.
-
- - Exceptional executive presence and storytelling ability, with a knack for building trust and influencing stakeholders at all levels.
-
- - Strong product vision and strategic thinking, with a history of delivering impactful results in complex, multi-stakeholder environments.
-
- - Product taste. You have an instinct for what good looks like — in the product experience, in the positioning, in how your product shows up in the market. You can guide the marketing and branding of your products, not just the roadmap.
-
- - Deep expertise in customer-centric product development, with a focus on solution design and innovation.
-
- - Outstanding cross-functional collaboration skills, with the ability to align diverse teams (Engineering, Design, Sales, Services) toward shared goals.
-
- - Effective team leadership, mentoring, and people management skills.
-
- - AI-native fluency. You build working prototypes and functional demos using AI tools (Claude, Cursor, Replit, Figma Make) before engineering spends a sprint. You can modify prompts, adjust UI flows, and run data analyses without filing a ticket. This is your default operating method, not a novelty.
+- Relentless agency. You have an internal locus of control — when something isn't working, you own it and fix it rather than pointing to external factors or waiting for someone else to act. Humility to know what you don't know; relentlessness to figure it out anyway.
+- Exceptional executive presence and storytelling ability, with a knack for building trust and influencing stakeholders at all levels.
+- Strong product vision and strategic thinking, with a history of delivering impactful results in complex, multi-stakeholder environments.
+- Product taste. You have an instinct for what good looks like — in the product experience, in the positioning, in how your product shows up in the market. You can guide the marketing and branding of your products, not just the roadmap.
+- Deep expertise in customer-centric product development, with a focus on solution design and innovation.
+- Outstanding cross-functional collaboration skills, with the ability to align diverse teams (Engineering, Design, Sales, Services) toward shared goals.
+- Effective team leadership, mentoring, and people management skills.
+- AI-native fluency. You build working prototypes and functional demos using AI tools (Claude, Cursor, Replit, Figma Make) before engineering spends a sprint. You can modify prompts, adjust UI flows, and run data analyses without filing a ticket. This is your default operating method, not a novelty.
 
 Preferred Backgrounds
 
- - Former founders or early employees at high-growth startups — people who have lived the zero-to-one journey and thrived in the chaos.
-
- - Builder PMs or Commercial PMs from B2B2C or enterprise SaaS environments — people whose superpower is either vision + build or deep customer intimacy.
-
- - Expertise in organizational transformation, human transformation, talent intelligence, or related fields.
-
- - Solution design experience — whether from consulting, customer-facing product roles, or implementation work — where you were personally in the room shaping what gets built with the buyer.
+- Former founders or early employees at high-growth startups — people who have lived the zero-to-one journey and thrived in the chaos.
+- Builder PMs or Commercial PMs from B2B2C or enterprise SaaS environments — people whose superpower is either vision + build or deep customer intimacy.
+- Expertise in organizational transformation, human transformation, talent intelligence, or related fields.
+- Solution design experience — whether from consulting, customer-facing product roles, or implementation work — where you were personally in the room shaping what gets built with the buyer.
 
 Why This Role
 
- - You’ll own a product area inside a platform that enterprises are building their talent strategy on. The surface area for impact is enormous.
-
- - You’ll work directly with customers — not behind layers of account management. If that’s not appealing, this isn’t the right role.
-
- - You’ll operate with real autonomy. We’re looking for people who want ownership and ambiguity, not clearer lanes and more consensus.
-
- - You’ll build in an AI-native environment where prototyping with agents, compressing cycle times, and shipping fast are expected, not exceptional.
-
- - Our stakeholder complexity — members, coaches, enterprise buyers, alliances — is a feature for the right person: more surface area, more interesting problems, more leverage.
-
-
+- You’ll own a product area inside a platform that enterprises are building their talent strategy on. The surface area for impact is enormous.
+- You’ll work directly with customers — not behind layers of account management. If that’s not appealing, this isn’t the right role.
+- You’ll operate with real autonomy. We’re looking for people who want ownership and ambiguity, not clearer lanes and more consensus.
+- You’ll build in an AI-native environment where prototyping with agents, compressing cycle times, and shipping fast are expected, not exceptional.
+- Our stakeholder complexity — members, coaches, enterprise buyers, alliances — is a feature for the right person: more surface area, more interesting problems, more leverage.
 
 AI at BetterUp
 
 Our team thrives at the intersection of human expertise and AI capability. As an AI-forward company, adaptation and continuous learning are part of our daily work. We're looking for teammates who are excited to evolve alongside technology – people who experiment boldly, share their discoveries openly, and help define best practices for AI-augmented work. These professionals thoughtfully integrate AI into their work to deliver exceptional results while maintaining the human judgment and creativity that drives real innovation. During our interview process, you’ll have opportunities to showcase how you harness AI to learn, iterate, and amplify your impact.
 
-
-
 Benefits:
 
 At BetterUp, we are committed to living out our mission every day and that starts with providing benefits that allow our employees to care for themselves, support their families, and give back to their community.
 
- - Access to BetterUp coaching; one for you and one for a friend or family member
-
- - A competitive compensation plan with opportunity for advancement
-
- - Medical, dental, and vision insurance
-
- - Flexible paid time off
-
- - Per year:
-   
-   - All federal/statutory holidays observed
-   
-   - 4 BetterUp Inner Workdays (https://www.betterup.co/inner-work)
-   
-   - 5 Volunteer Days to give back
-   
-   - Learning and Development stipend
-   
-   - Company wide Summer & Winter breaks
-
- - Year-round charitable contribution of your choice on behalf of BetterUp
-
- - 401(k) self contribution
-   
-   
+- Access to BetterUp coaching; one for you and one for a friend or family member
+- A competitive compensation plan with opportunity for advancement
+- Medical, dental, and vision insurance
+- Flexible paid time off
+- Per year:
+  - All federal/statutory holidays observed
+  - 4 BetterUp Inner Workdays ( https://www.betterup.co/inner-work )
+  - 5 Volunteer Days to give back
+  - Learning and Development stipend
+  - Company wide Summer & Winter breaks
+- Year-round charitable contribution of your choice on behalf of BetterUp
+- 401(k) self contribution
 
 We are dedicated to building diverse teams that fuel an authentic workplace and sense of belonging for each and every employee. We know applying for a job can be intimidating, please don’t hesitate to reach out — we encourage everyone interested in joining us to apply.
 
@@ -174,15 +129,15 @@ New York City and San Francisco: $236,000 - $296,000
 
 Austin and Arlington: $213,000 - $266,000
 
-Protecting your privacy and treating your personal information with care is very important to us, and central to the entire BetterUp family. By submitting your application, you acknowledge that your personal information will be processed in accordance with our Applicant Privacy Notice https://www.betterup.com/applicant-privacy-notice. If you have any questions about the privacy of your personal information or your rights with regards to your personal information, please reach out to support@betterup.co
+Protecting your privacy and treating your personal information with care is very important to us, and central to the entire BetterUp family. By submitting your application, you acknowledge that your personal information will be processed in accordance with our Applicant Privacy Notice. If you have any questions about the privacy of your personal information or your rights with regards to your personal information, please reach out to support@betterup.co
 
 #LI-Hybrid
 
 --- JOB TEXT END ---
 
-CAPTURE DETAILS
----------------
-Captured: July 29, 2026 at 4:06 PM ET
+ORIGINAL CAPTURE DETAILS
+------------------------
+Captured At: July 29, 2026 at 4:06 PM ET
 Application URL: https://jobs.ashbyhq.com/betterup/fa0a5d05-39f9-47d5-9fc9-0a0540ff9018/application
 Source: Ashby
 Posting ATS ID: fa0a5d05-39f9-47d5-9fc9-0a0540ff9018

@@ -672,9 +672,12 @@ def _ashby_working_location(job: dict) -> tuple[Optional[str], Optional[str]]:
 def _ashby_job_to_result(job: dict, org: str) -> Optional[dict]:
     """Pure Ashby job-object -> normalized result. Kept separate from the network
     fetch so it is unit-testable against a saved posting-api fixture."""
-    body = (job.get("descriptionPlain") or "").strip()
+    # Prefer the HTML description: it carries the employer's REAL list structure,
+    # which the structure-preserving renderer keeps (`- item` / `1. item` lines).
+    # descriptionPlain is Ashby's own pre-flattened text — fallback only.
+    body = _html_to_text(job.get("descriptionHtml") or "")
     if not body:
-        body = _html_to_text(job.get("descriptionHtml") or "")
+        body = (job.get("descriptionPlain") or "").strip()
     if not body:
         return None
 
@@ -2157,6 +2160,98 @@ def _prettify_slug(slug: str) -> str:
     return " ".join(w if w[:1].isupper() else w.capitalize() for w in s.split()) or slug
 
 
+# --------------------------------------------------------------------------- #
+# HTML -> text, STRUCTURE-PRESERVING (2026-07-29 spec): the employer's own list
+# structure survives into the captured body — `<ul>/<ol>/<li>` become `- item` /
+# `1. item` lines (nested lists indented two spaces per level), headings and
+# paragraphs stay blank-line separated, link TEXT is kept. Nothing is invented:
+# prose is never bulleted, wording is never altered, no text is dropped.
+# --------------------------------------------------------------------------- #
+_HTML_LIST_TAGS = {"ul", "ol"}
+_HTML_BLOCK_TAGS = {
+    "p", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "table", "tr",
+    "header", "footer", "section", "article", "div", "main", "aside", "figure",
+    "figcaption", "body", "html",
+}
+
+
+def _render_html_list(tag, depth: int) -> str:
+    """A <ul>/<ol> as `- item` / `1. item` lines; nested lists indent 2 spaces
+    per level and follow their parent item's text."""
+    from bs4 import Tag
+
+    ordered = tag.name.lower() == "ol"
+    lines: list[str] = []
+
+    def li_content(node, inline_parts, nested):
+        from bs4 import NavigableString
+        for c in node.children:
+            if isinstance(c, NavigableString):
+                inline_parts.append(str(c))
+            elif isinstance(c, Tag):
+                n = c.name.lower()
+                if n in ("script", "style", "noscript"):
+                    continue
+                if n in _HTML_LIST_TAGS:
+                    nested.append(c)
+                elif c.find(list(_HTML_LIST_TAGS)) is not None:
+                    li_content(c, inline_parts, nested)  # block wrapper holding a list
+                else:
+                    inline_parts.append(c.get_text(" "))
+
+    for i, li in enumerate(tag.find_all("li", recursive=False), 1):
+        inline_parts: list[str] = []
+        nested: list = []
+        li_content(li, inline_parts, nested)
+        text = re.sub(r"\s+", " ", "".join(inline_parts)).strip()
+        marker = f"{i}." if ordered else "-"
+        indent = "  " * depth
+        lines.append(f"{indent}{marker} {text}".rstrip())
+        for sub in nested:
+            rendered = _render_html_list(sub, depth + 1)
+            if rendered:
+                lines.append(rendered)
+    return "\n".join(lines)
+
+
+def _html_blocks(node, depth: int = 0) -> list[str]:
+    """Block-level text pieces of a node, in document order. Lists render via
+    `_render_html_list`; paragraph-ish content collapses internal whitespace."""
+    from bs4 import NavigableString, Tag
+
+    out: list[str] = []
+    inline_buf: list[str] = []
+
+    def flush():
+        t = re.sub(r"\s+", " ", "".join(inline_buf)).strip()
+        inline_buf.clear()
+        if t:
+            out.append(t)
+
+    for c in node.children:
+        if isinstance(c, NavigableString):
+            inline_buf.append(str(c))
+        elif isinstance(c, Tag):
+            n = c.name.lower()
+            if n in ("script", "style", "noscript"):
+                continue
+            if n == "br":
+                inline_buf.append(" ")
+            elif n in _HTML_LIST_TAGS:
+                flush()
+                rendered = _render_html_list(c, depth)
+                if rendered:
+                    out.append(rendered)
+            elif n in _HTML_BLOCK_TAGS:
+                flush()
+                out.extend(_html_blocks(c, depth))
+            else:
+                # Inline tag (a/strong/em/span/…): text only — a link keeps its text.
+                inline_buf.append(c.get_text(" "))
+    flush()
+    return out
+
+
 def _html_to_text(html: str) -> str:
     if not html:
         return ""
@@ -2170,7 +2265,7 @@ def _html_to_text(html: str) -> str:
         # a page with a large comment block leaks it straight into the captured job text.
         for c in soup.find_all(string=lambda s: isinstance(s, Comment)):
             c.extract()
-        text = soup.get_text("\n", strip=True)
+        text = "\n\n".join(_html_blocks(soup))
     except Exception:
         # Crude tag strip if bs4 is unavailable.
         text = re.sub(r"<[^>]+>", " ", html)

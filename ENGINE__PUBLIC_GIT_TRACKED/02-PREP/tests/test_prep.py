@@ -1,3 +1,4 @@
+import re  # noqa: E402  (used by the HTML-structure tests)
 """Regression suite for the comp/working-location completeness gate, provenance,
 statuses, and the narrow application-question filter (Priorities 1-3).
 
@@ -176,7 +177,7 @@ def test_conflicting_sources_kept_and_flagged():
     assert fs["conflicts"] and "compensation" in fs["conflicts"][0]
     out = pc.build_output_text("http://x", "PM", "Acme", "Responsibilities...",
                                meta=meta, field_status=fs, methods_tried=["ats"])
-    assert "Conflicting Employer Information:" in out
+    assert "Conflicting employer information:" in out
     assert "100,000" in out and "180,000" in out  # both readings preserved
 
 
@@ -1358,8 +1359,8 @@ def test_benefits_and_equity_mentioned_without_details_is_not_not_posted():
     # The equity/bonus/travel-credit eligibility lives in Additional Compensation,
     # split out of the old Equity shoehorn — honest mention phrasing, never "Not Posted".
     assert ("Additional Compensation: Bonus, Equity, and Employee Travel Credits "
-            "Mentioned, but Details Were Not Provided.") in out
-    assert "Benefits: Mentioned, but Details Were Not Provided." in out
+            "mentioned, but details not provided.") in out
+    assert "Benefits: Mentioned, but details not provided." in out
     assert "Not Posted" not in out and "Not posted" not in out
 
 
@@ -1370,8 +1371,8 @@ def test_a_posting_that_says_nothing_still_reports_did_not_mention():
     assert benefits is None and equity is None
     out = pc.build_output_text("http://x", "PM", "Acme", "Responsibilities...",
                                meta={"title": "PM"}, field_status={"conflicts": []})
-    assert "Benefits: Employer Did Not Mention Benefits." in out
-    assert "Additional Compensation: Employer Did Not Mention Additional Compensation." in out
+    assert "Benefits: Employer did not mention benefits." in out
+    assert "Additional Compensation: Employer did not mention additional compensation." in out
 
 
 def test_comp_disclaimer_sentence_is_never_surfaced_as_the_equity_value():
@@ -1399,7 +1400,7 @@ def test_prose_derived_fields_populate_the_capture_when_structured_is_absent():
                                meta=meta, field_status=fs, methods_tried=["requests"])
     # The employer's own prose values fill the sections — never a blank/quoted-empty field.
     assert "Base Salary:" in out and "220,000" in out
-    assert "SF Or NYC" in out.split("WORK DETAILS")[1].split("COMPENSATION")[0]
+    assert "SF or NYC" in out.split("WORK DETAILS")[1].split("COMPENSATION")[0]
     # The prose states a "3 days per week" cadence — mined into Office Expectation.
     assert "Office Expectation: 3 Days Per Week" in out
     assert ': ""' not in out  # no empty quoted fields anywhere in the new contract
@@ -1439,7 +1440,7 @@ def test_conflicting_is_reachable_when_ats_and_prose_envelopes_are_disjoint():
     assert labels == ["greenhouse-boards-api", "description"]
     assert "236,000" in values[0] and "110,000" in values[1]
     out = pc.build_output_text("http://x", "PM", "Acme", body, meta=meta, field_status=fs)
-    assert "Conflicting Employer Information:" in out
+    assert "Conflicting employer information:" in out
     assert "Compensation ⚠ Conflicting" in out  # the Verification line flags it too
 
 
@@ -1550,16 +1551,16 @@ def test_posted_and_updated_lines_are_always_present_and_human_readable():
 
 def test_posted_and_updated_are_distinct_from_captured():
     """Job Posted At / Job Updated At are the EMPLOYER's dates (JOB SNAPSHOT);
-    Captured is OUR fetch moment (CAPTURE DETAILS, in ET) — never conflated."""
+    Captured is OUR fetch moment (ORIGINAL CAPTURE DETAILS, in ET) — never conflated."""
     out = pc.build_output_text("http://x", "PM", "Acme", "Responsibilities...",
                                meta={"title": "PM", "posted_date": "2026-06-13",
                                      "updated_date": "2026-06-20"},
                                field_status={"conflicts": []},
                                captured="2026-07-29T20:06:00+00:00")
     head, _, tail = out.partition("--- JOB TEXT START ---")
-    assert "Job Posted At: June 13, 2026" in head and "Captured:" not in head
-    assert "Captured: July 29, 2026 at 4:06 PM ET" in tail
-    assert "June 13, 2026" not in tail.split("Captured:")[1].splitlines()[0]
+    assert "Job Posted At: June 13, 2026" in head and "Captured At:" not in head
+    assert "Captured At: July 29, 2026 at 4:06 PM ET" in tail
+    assert "June 13, 2026" not in tail.split("Captured At:")[1].splitlines()[0]
 
 
 def test_manifest_records_the_posting_dates(tmp_path):
@@ -1919,7 +1920,7 @@ _TITLE_CASE_LABELS = [
     "Company:", "Role:", "Job Posting URL:", "Job Posted At:", "Job Updated At:",
     "Employment:", "Work Arrangement:", "Working Location(s):", "Office Expectation:",
     "Base Salary:", "Additional Compensation:", "Benefits:",
-    "Captured:", "Application URL:", "Source:", "Posting ATS ID:", "Methods Checked:",
+    "Captured At:", "Application URL:", "Source:", "Posting ATS ID:", "Methods Checked:",
     "Verification:",
 ]
 
@@ -1940,22 +1941,22 @@ def test_sections_appear_in_the_exact_specified_order():
     out = _synth_out()
     order = ["JOB SNAPSHOT", "WORK DETAILS", "COMPENSATION",
              "APPLICATION QUESTIONS WORTH PREPARING",
-             "--- JOB TEXT START ---", "--- JOB TEXT END ---", "CAPTURE DETAILS"]
+             "--- JOB TEXT START ---", "--- JOB TEXT END ---", "ORIGINAL CAPTURE DETAILS"]
     positions = [out.index(s) for s in order]
     assert positions == sorted(positions)
     # Banner underlines match their banner text exactly.
     lines = out.splitlines()
     for banner, ch in [("JOB SNAPSHOT", "="), ("WORK DETAILS", "="), ("COMPENSATION", "="),
                        ("APPLICATION QUESTIONS WORTH PREPARING", "="),
-                       ("CAPTURE DETAILS", "-")]:
+                       ("ORIGINAL CAPTURE DETAILS", "-")]:
         i = lines.index(banner)
         assert lines[i + 1] == ch * len(banner), banner
 
 
 def test_capture_details_sits_after_the_end_marker():
     out = _synth_out()
-    assert out.index("CAPTURE DETAILS") > out.index("--- JOB TEXT END ---")
-    assert "CAPTURE UPDATE DETAILS" not in out  # never on a first capture
+    assert out.index("ORIGINAL CAPTURE DETAILS") > out.index("--- JOB TEXT END ---")
+    assert "LATEST CAPTURE DETAILS" not in out  # never on a first capture
 
 
 def test_et_conversion_is_dst_aware_january_and_july():
@@ -1970,7 +1971,7 @@ def test_et_conversion_is_dst_aware_january_and_july():
 def test_date_only_historical_captured_never_invents_a_time():
     assert pc.capture_timestamp("2026-07-29") == "July 29, 2026 — Time Unavailable"
     out = _synth_out(captured="2026-07-29")
-    assert "Captured: July 29, 2026 — Time Unavailable" in out
+    assert "Captured At: July 29, 2026 — Time Unavailable" in out
     assert "12:00 AM" not in out
 
 
@@ -2073,21 +2074,22 @@ def test_base_salary_and_additional_compensation_stay_separated():
                                methods_tried=["ats"])
     comp_section = out.split("COMPENSATION")[1].split("APPLICATION QUESTIONS")[0]
     base = comp_section.split("Additional Compensation:")[0]
-    assert "232,000" in base and "bonus" not in base.lower() and "equity" not in base.lower()
-    assert ("Additional Compensation: Bonus and Equity Mentioned, but Details "
-            "Were Not Provided.") in out
+    assert "$232-282K" in base and "bonus" not in base.lower() and "equity" not in base.lower()
+    assert ("Additional Compensation: Bonus and Equity mentioned, but details "
+            "not provided.") in out
 
 
-def test_base_salary_bullets_expand_k_amounts_to_full_dollars():
+def test_base_salary_multi_band_renders_abbreviated_bullets():
     out = _synth_out(meta={"title": "PM", "structured_source": True,
                            "compensation": "Zone A: $236K – $296K · Zone B: $213K – $266K",
                            "working_location": "Remote"},
                      field_status={"compensation": pc.FOUND,
                                    "working_location": pc.FOUND,
                                    "description": pc.FOUND, "conflicts": []})
-    assert "  - Zone A: $236,000\u2013$296,000 USD" in out
-    assert "  - Zone B: $213,000\u2013$266,000 USD" in out
-    assert "$236K" not in out
+    # Multiple geo/level ranges keep bullets, abbreviated thousands, no USD tag.
+    assert "\n- Zone A: $236-296K\n" in out
+    assert "\n- Zone B: $213-266K\n" in out
+    assert "USD" not in out.split("COMPENSATION")[1].split("Additional")[0]
 
 
 def test_body_is_preserved_byte_for_byte_between_the_markers():
@@ -2101,7 +2103,7 @@ def test_body_is_preserved_byte_for_byte_between_the_markers():
     assert pc.body_from_capture(out) == body
 
 
-# ---- Re-fetch: CAPTURE UPDATE DETAILS + best-verified merge -----------------
+# ---- Re-fetch: LATEST CAPTURE DETAILS + best-verified merge -----------------
 def _refetch_manifest(tmp_path, first_fetch, second_fetch):
     src = _batch_source(tmp_path)
     url = "https://example.com/job/refetch"
@@ -2126,17 +2128,17 @@ def test_first_capture_has_no_update_details_and_a_refetch_gets_one(tmp_path):
     url = "https://example.com/job/one"
     manifest = pc.process_urls([url], src, _fetch_result(_SYNTH_BODY))
     first = (src / Path(manifest["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
-    assert "CAPTURE UPDATE DETAILS" not in first
-    original_captured_line = next(l for l in first.splitlines() if l.startswith("Captured:"))
+    assert "LATEST CAPTURE DETAILS" not in first
+    original_captured_line = next(l for l in first.splitlines() if l.startswith("Captured At:"))
     # Verified re-fetch of the SAME url -> UPDATE DETAILS present, original Captured kept.
     manifest2 = pc.process_urls([url], src, _fetch_result(_SYNTH_BODY), force=True)
     entry = manifest2["entries"][0]
     second = (src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
-    assert "CAPTURE UPDATE DETAILS" in second
-    assert second.index("CAPTURE UPDATE DETAILS") > second.index("CAPTURE DETAILS")
+    assert "LATEST CAPTURE DETAILS" in second
+    assert second.index("LATEST CAPTURE DETAILS") > second.index("ORIGINAL CAPTURE DETAILS")
     assert original_captured_line in second          # original Captured never overwritten
-    assert "Re-Captured:" in second
-    assert "Additional Notes: No Material Changes Detected." in second
+    assert "Captured At:" in second.split("LATEST CAPTURE DETAILS")[1]
+    assert "Additional Notes: No material changes detected." in second
     # The manifest carries the capture-history record for future re-fetches.
     assert entry["capture_history"] and entry["capture_history"][0]["fetched_at"]
 
@@ -2147,17 +2149,16 @@ def test_material_content_diff_not_length_drives_additional_notes(tmp_path):
            + ("filler words here. " * 40))
     # Same material content, VERY different length (chrome churn) -> no material change.
     chrome_only = old + "\nCookie notice\nSite map\nFollow us on social media\n" + ("nav " * 200)
-    assert pc.material_change_notes(old, chrome_only) == "No Material Changes Detected."
+    assert pc.material_change_notes(old, chrome_only) == "No material changes detected."
     # Nearly identical length but the salary changed -> material change, named.
     edited = old.replace("$150,000 - $180,000", "$160,000 - $190,000")
     notes = pc.material_change_notes(old, edited)
-    assert notes.startswith("Material Changes Detected In:")
-    assert "Compensation" in notes
+    assert notes == "Employer materially updated the posting."
     # End-to-end through a re-fetch.
     _src, entry = _refetch_manifest(
         tmp_path, _fetch_result(old), _fetch_result(edited, comp="USD 160,000–190,000"))
     out = (_src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
-    assert "Material Changes Detected In:" in out and "Compensation" in out
+    assert "Employer materially updated the posting." in out
 
 
 def test_best_field_merge_never_degrades_a_better_body(tmp_path):
@@ -2316,7 +2317,7 @@ def test_additional_compensation_never_emits_bullet_junk():
 def test_capture_update_details_carries_the_new_fetch_fields(tmp_path):
     """Defect 3: the UPDATE block must carry Re-Captured, Source, Posting ATS ID,
     Methods Checked, Verification, Additional Notes — describing the NEW fetch —
-    while CAPTURE DETAILS keeps describing the ORIGINAL capture."""
+    while ORIGINAL CAPTURE DETAILS keeps describing the ORIGINAL capture."""
     src = _batch_source(tmp_path)
     url = "https://example.com/job/update-fields"
 
@@ -2339,11 +2340,11 @@ def test_capture_update_details_carries_the_new_fetch_fields(tmp_path):
     pc.process_urls([url], src, first)
     manifest = pc.process_urls([url], src, second, force=True)
     out = (src / Path(manifest["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
-    details, update = out.split("CAPTURE UPDATE DETAILS")
-    # Original capture's identity stays in CAPTURE DETAILS.
+    details, update = out.split("LATEST CAPTURE DETAILS")
+    # Original capture's identity stays in ORIGINAL CAPTURE DETAILS.
     assert "Source: Greenhouse" in details and "Posting ATS ID: gh-1" in details
     # The new fetch's identity lives in the UPDATE block, fields in spec order.
-    labels = ["Re-Captured:", "Source:", "Posting ATS ID:", "Methods Checked:",
+    labels = ["Captured At:", "Source:", "Posting ATS ID:", "Methods Checked:",
               "Verification:", "Additional Notes:"]
     positions = [update.index(lbl) for lbl in labels]
     assert positions == sorted(positions)
@@ -2380,7 +2381,7 @@ def test_additional_notes_compare_snapshot_fields_not_only_the_body(tmp_path):
     manifest = pc.process_urls([url], src, second, force=True)
     out = (src / Path(manifest["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
     notes = next(l for l in out.splitlines() if l.startswith("Additional Notes:"))
-    assert "No Material Changes Detected." not in notes
+    assert "No material changes detected." not in notes
     assert "Added the" in notes
     assert "employer's posting date" in notes
     assert "employment type" in notes
@@ -2427,27 +2428,27 @@ def test_field_notes_read_a_legacy_format_prior_capture():
     assert "Corrected the" in notes2 and "employment type" in notes2
     # No prior text at all keeps the honest sentence.
     assert pc.capture_update_notes(None, same_new) == \
-        "Previous Capture Was Not Available for Comparison."
+        "Previous capture was not available for comparison."
 
 
 def test_working_locations_render_as_short_metro_or_list():
-    """Defect 5: multi-city lists render `NYC Or SF` style — short canon names,
+    """Defect 5: multi-city lists render `NYC or SF` style — short canon names,
     Title Case Or, deduped after canonicalization."""
     out = _synth_out(meta={"title": "PM", "structured_source": True,
                            "compensation": "USD 150,000",
                            "working_location": "New York City; San Francisco"})
-    assert "Working Location(s): NYC Or SF" in out
+    assert "Working Location(s): NYC or SF" in out
     # Dedupe after canonicalization; unknown cities pass through verbatim.
     assert pc._format_working_locations(
-        "New York, NY; New York City; Austin, TX") == "NYC Or Austin, TX"
+        "New York, NY; New York City; Austin, TX") == "NYC or Austin, TX"
     # Single values (Remote / one city) stay simple.
     assert pc._format_working_locations("Remote") == "Remote"
     assert pc._format_working_locations("San Francisco, CA") == "SF"
 
 
 def test_base_salary_annual_range_renders_en_dash_and_annually():
-    """Defect 6: `$182,000–$227,000 USD Annually` — spaceless en dash, and
-    `Annually` only when the employer's own wording states the range is annual."""
+    """Revised spec: `Base Salary: $182-227K Annually` — inline single range,
+    abbreviated thousands, `Annually` only when the employer's wording states it."""
     out = _synth_out(meta={"title": "PM", "structured_source": True,
                            "compensation": "$182,000 - $227,000",
                            "compensation_raw": "The base salary range for this role is "
@@ -2455,14 +2456,14 @@ def test_base_salary_annual_range_renders_en_dash_and_annually():
                            "working_location": "Remote"},
                      field_status={"compensation": pc.FOUND, "working_location": pc.FOUND,
                                    "description": pc.FOUND, "conflicts": []})
-    assert "  - $182,000–$227,000 USD Annually" in out
+    assert "Base Salary: $182-227K Annually\n" in out
     # No annual statement anywhere -> never inferred.
     out2 = _synth_out(meta={"title": "PM", "structured_source": True,
                             "compensation": "$182,000 - $227,000",
                             "working_location": "Remote"},
                       field_status={"compensation": pc.FOUND, "working_location": pc.FOUND,
                                     "description": pc.FOUND, "conflicts": []})
-    assert "  - $182,000–$227,000 USD\n" in out2 and "Annually" not in out2
+    assert "Base Salary: $182-227K\n" in out2 and "Annually" not in out2
     # An hourly figure never gains "Annually".
     out3 = _synth_out(meta={"title": "PM", "structured_source": True,
                             "compensation": "$27 - $44/hour",
@@ -2504,7 +2505,7 @@ def test_partial_run_carries_forward_untouched_manifest_entries(tmp_path):
                            if e["original_url"] == url_a)["output_path"]).name
     original_captured_line = next(
         l for l in (src / alpha_file).read_text(encoding="utf-8").splitlines()
-        if l.startswith("Captured:"))
+        if l.startswith("Captured At:"))
 
     # A partial run over ONLY alpha (force -> genuine re-fetch).
     manifest2 = pc.process_urls([url_a], src, fetch_both, force=True)
@@ -2517,7 +2518,7 @@ def test_partial_run_carries_forward_untouched_manifest_entries(tmp_path):
     alpha_after = next(e for e in manifest2["entries"] if e["original_url"] == url_a)
     assert alpha_after["capture_history"] and alpha_after["capture_history"][0]["fetched_at"]
     out = (src / Path(alpha_after["output_path"]).name).read_text(encoding="utf-8")
-    assert "CAPTURE UPDATE DETAILS" in out
+    assert "LATEST CAPTURE DETAILS" in out
     assert original_captured_line in out
     # Counts cover the whole batch, not just this run's input.
     assert manifest2["counts"][pc.USABLE] == 2
@@ -2525,20 +2526,22 @@ def test_partial_run_carries_forward_untouched_manifest_entries(tmp_path):
 
 @pytest.mark.parametrize("raw,expected", [
     # The observed Airbnb defect: raw ATS label + bare currency-code range.
-    ("Pay Range: USD 232,000–282,000", "$232,000–$282,000 USD"),
-    ("Salary Range: USD $232,000 - $282,000", "$232,000–$282,000 USD"),
-    ("Compensation: $232,000 - 282,000", "$232,000–$282,000 USD"),
-    ("Base Pay: USD 232,000 to 282,000", "$232,000–$282,000 USD"),
+    ("Pay Range: USD 232,000–282,000", "$232-282K"),
+    ("Salary Range: USD $232,000 - $282,000", "$232-282K"),
+    ("Compensation: $232,000 - 282,000", "$232-282K"),
+    ("Base Pay: USD 232,000 to 282,000", "$232-282K"),
     # No label at all — still normalized.
-    ("USD 232,000-282,000", "$232,000–$282,000 USD"),
+    ("USD 232,000-282,000", "$232-282K"),
 ])
 def test_base_salary_generic_labels_strip_and_currency_normalizes(raw, expected):
     out = _synth_out(meta={"title": "PM", "structured_source": True,
                            "compensation": raw, "working_location": "Remote"},
                      field_status={"compensation": pc.FOUND, "working_location": pc.FOUND,
                                    "description": pc.FOUND, "conflicts": []})
-    assert f"  - {expected}\n" in out, out.split("COMPENSATION")[1].split("Additional")[0]
-    assert "Pay Range:" not in out and "Annually" not in out  # never inferred annual
+    # A single range renders INLINE — no one-item bullet list, $ implies USD.
+    assert f"Base Salary: {expected}\n" in out, out.split("COMPENSATION")[1].split("Additional")[0]
+    assert "Pay Range:" not in out and "USD" not in out.split("COMPENSATION")[1].split("Additional")[0]
+    assert "Annually" not in out  # never inferred annual
 
 
 def test_base_salary_geo_and_level_labels_survive():
@@ -2549,22 +2552,22 @@ def test_base_salary_geo_and_level_labels_survive():
                            "working_location": "Remote"},
                      field_status={"compensation": pc.FOUND, "working_location": pc.FOUND,
                                    "description": pc.FOUND, "conflicts": []})
-    assert "  - Zone A: SF Bay Area / NYC $236,000–$296,000 USD" in out
-    assert "  - US Tier 1: $174,000–$290,000 USD" in out
+    assert "\n- Zone A: SF Bay Area / NYC $236-296K\n" in out
+    assert "\n- US Tier 1: $174-290K\n" in out
 
 
 def test_flat_city_state_blob_renders_short_metro_or_join():
     """Defect 3: a flat Greenhouse offices blob (`San Francisco, CA, New York, NY`)
-    must render `SF Or NYC` — employer order preserved, never re-sorted."""
+    must render `SF or NYC` — employer order preserved, never re-sorted."""
     out = _synth_out(meta={"title": "PM", "structured_source": True,
                            "compensation": "USD 150,000",
                            "working_location": "San Francisco, CA, New York, NY"})
-    assert "Working Location(s): SF Or NYC" in out
+    assert "Working Location(s): SF or NYC" in out
     # Employer order is preserved (NYC-first stays NYC-first).
-    assert pc._format_working_locations("New York, NY, San Francisco, CA") == "NYC Or SF"
+    assert pc._format_working_locations("New York, NY, San Francisco, CA") == "NYC or SF"
     # Unknown cities in a blob pass through verbatim.
     assert pc._format_working_locations(
-        "San Francisco, CA, Bozeman, MT") == "SF Or Bozeman, MT"
+        "San Francisco, CA, Bozeman, MT") == "SF or Bozeman, MT"
     # A single City, ST is NOT a blob — unchanged behavior.
     assert pc._format_working_locations("Austin, TX") == "Austin, TX"
 
@@ -2577,3 +2580,370 @@ def test_a_genuine_employer_edit_does_replace_the_body(tmp_path):
     src, entry = _refetch_manifest(tmp_path, _fetch_result(old), _fetch_result(new))
     out = (src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
     assert pc.body_from_capture(out) == new  # a real edit is not "degradation"
+
+
+# ===========================================================================
+# Second approval round (2026-07-29): location preference, simplified comp
+# layout, ORIGINAL/LATEST capture sections, the durable capture-history
+# registry (ten requirements), backfill, HTML list-structure preservation,
+# and normalized body-comparison semantics. All fixtures synthetic.
+# ===========================================================================
+def test_location_preference_field_emitted_only_when_stated():
+    body = ("About the role\nResponsibilities include shipping product.\n"
+            "Due to the nature of this position, there is a strong preference for the "
+            "successful applicant to be based in San Francisco, CA ir New York, NY.\n"
+            + ("x " * 60))
+    out = pc.build_output_text("http://x", "PM", "Acme", body,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 232,000-282,000",
+                                     "working_location": "San Francisco, CA; New York, NY"},
+                               methods_tried=["ats"])
+    # Distinct field, right after Working Location(s); obvious "ir" typo normalized;
+    # cities in canonical short form; stays a PREFERENCE (never a requirement).
+    assert "Working Location(s): SF or NYC" in out
+    assert ("Location Preference: Strong preference for the successful applicant "
+            "to be based in SF or NYC." in out)
+    lines = out.splitlines()
+    assert lines[lines.index("Working Location(s): SF or NYC") + 1].startswith(
+        "Location Preference:")
+    # Never folded into Work Arrangement / Office Expectation.
+    assert "Office Expectation: Not Specified" in out
+    # The employer's full sentence stays in the body, verbatim (typo included).
+    assert "San Francisco, CA ir New York, NY" in pc.body_from_capture(out)
+    # No stated preference -> the line is omitted entirely.
+    out2 = _synth_out()
+    assert "Location Preference:" not in out2
+
+
+def test_compensation_section_matches_the_approved_layout():
+    """Her exact target shape: inline single range, blank line between fields,
+    sentence-case values."""
+    body = ("About the role\nResponsibilities include shipping product.\n"
+            "You may also be eligible for bonus, equity, benefits, and Employee "
+            "Travel Credits.\n" + ("x " * 60))
+    out = pc.build_output_text("http://x", "PM", "Acme", body,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 232,000-282,000",
+                                     "working_location": "Remote"},
+                               methods_tried=["ats"])
+    assert ("COMPENSATION\n"
+            "============\n"
+            "Base Salary: $232-282K\n"
+            "\n"
+            "Additional Compensation: Bonus, Equity, and Employee Travel Credits "
+            "mentioned, but details not provided.\n"
+            "\n"
+            "Benefits: Mentioned, but details not provided.\n") in out
+
+
+def test_original_and_latest_capture_sections(tmp_path):
+    """First-and-only capture -> ORIGINAL CAPTURE DETAILS only. A later successful
+    fetch adds LATEST CAPTURE DETAILS; `Captured At:` labels both; `Re-Captured`
+    is gone."""
+    src = _batch_source(tmp_path)
+    url = "https://example.com/job/sections"
+    m1 = pc.process_urls([url], src, _fetch_result(_SYNTH_BODY))
+    first = (src / Path(m1["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
+    assert "ORIGINAL CAPTURE DETAILS\n------------------------" in first
+    assert "LATEST CAPTURE DETAILS" not in first
+    assert first.count("Captured At:") == 1
+    m2 = pc.process_urls([url], src, _fetch_result(_SYNTH_BODY), force=True)
+    second = (src / Path(m2["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
+    assert "LATEST CAPTURE DETAILS\n----------------------" in second
+    assert second.index("ORIGINAL CAPTURE DETAILS") < second.index("LATEST CAPTURE DETAILS")
+    assert second.count("Captured At:") == 2
+    assert "Re-Captured" not in second
+
+
+# ---- The durable capture-history registry: the ten requirements --------------
+def _registry(tmp_path):
+    return tmp_path / "registry.json"
+
+
+def test_registry_req1_original_is_immutable_and_req2_every_fetch_appends(tmp_path):
+    src = _batch_source(tmp_path)
+    url = "https://boards.greenhouse.io/acme/jobs/123456"
+    reg_path = _registry(tmp_path)
+    pc.process_urls([url], src, _fetch_result(_SYNTH_BODY), registry_path=reg_path)
+    reg = pc.load_capture_registry(reg_path)
+    key = "greenhouse:acme:123456"
+    original = dict(reg["postings"][key]["original_capture"])
+    assert len(reg["postings"][key]["history"]) == 1
+    # Requirement 2: a second successful fetch appends an event...
+    pc.process_urls([url], src, _fetch_result(_SYNTH_BODY), force=True,
+                    registry_path=reg_path)
+    reg2 = pc.load_capture_registry(reg_path)
+    assert len(reg2["postings"][key]["history"]) == 2
+    # Requirement 1: ...and the original is byte-identical (immutable).
+    assert reg2["postings"][key]["original_capture"] == original
+
+
+def test_registry_req3_and_req7_rerender_is_not_a_capture(tmp_path):
+    src = _batch_source(tmp_path)
+    url = "https://boards.greenhouse.io/acme/jobs/123456"
+    reg_path = _registry(tmp_path)
+    pc.process_urls([url], src, _fetch_result(_SYNTH_BODY), registry_path=reg_path)
+    before = reg_path.read_text(encoding="utf-8")
+    # Local re-render / preview generation without network (build_output_text)
+    # never touches the registry; reformatting changes neither timestamp.
+    pc.build_output_text(url, "PM", "Acme", _SYNTH_BODY,
+                         meta={"title": "PM", "structured_source": True,
+                               "compensation": "USD 150,000",
+                               "working_location": "Remote"},
+                         methods_tried=["ats"])
+    assert reg_path.read_text(encoding="utf-8") == before
+
+
+def test_registry_req4_skipped_urls_are_not_captures(tmp_path):
+    src = _batch_source(tmp_path)
+    url = "https://boards.greenhouse.io/acme/jobs/123456"
+    reg_path = _registry(tmp_path)
+    pc.process_urls([url], src, _fetch_result(_SYNTH_BODY), registry_path=reg_path)
+    # A plain re-run (no force) carries the usable entry forward — no fetch, no event.
+    pc.process_urls([url], src, _fetch_result(_SYNTH_BODY), registry_path=reg_path)
+    reg = pc.load_capture_registry(reg_path)
+    assert len(reg["postings"]["greenhouse:acme:123456"]["history"]) == 1
+
+
+def _failing_fetch(u):
+    return {"ok": False, "title": None, "company": None, "body": "",
+            "method": "requests", "error": "boom", "meta": {}, "questions": []}
+
+
+def test_registry_req5_req6_failed_fetch_never_replaces_latest(tmp_path):
+    src = _batch_source(tmp_path)
+    url = "https://boards.greenhouse.io/acme/jobs/123456"
+    reg_path = _registry(tmp_path)
+    pc.process_urls([url], src, _fetch_result(_SYNTH_BODY, comp="USD 150,000"),
+                    registry_path=reg_path)
+    key = "greenhouse:acme:123456"
+    latest1 = pc.load_capture_registry(reg_path)["postings"][key]["latest_capture"]
+    # A failed re-fetch appends history but NEVER replaces Latest...
+    pc.process_urls([url], src, _failing_fetch, force=True, registry_path=reg_path)
+    reg = pc.load_capture_registry(reg_path)
+    assert reg["postings"][key]["latest_capture"] == latest1
+    assert reg["postings"][key]["history"][-1]["ok"] is False
+    # ...and Latest = the most recent SUCCESSFUL retrieval (unit-level, with
+    # explicit distinct timestamps: success, fail, success).
+    reg = {"schema_version": 1, "postings": {}}
+    pc.record_capture_event(reg, "k", {"fetched_at": "2026-07-01T10:00:00+00:00",
+                                       "url": "u1", "ok": True}, success=True)
+    pc.record_capture_event(reg, "k", {"fetched_at": "2026-07-02T10:00:00+00:00",
+                                       "url": "u1", "ok": False}, success=False)
+    assert reg["postings"]["k"]["latest_capture"]["fetched_at"] == "2026-07-01T10:00:00+00:00"
+    pc.record_capture_event(reg, "k", {"fetched_at": "2026-07-03T10:00:00+00:00",
+                                       "url": "u1", "ok": True}, success=True)
+    assert reg["postings"]["k"]["latest_capture"]["fetched_at"] == "2026-07-03T10:00:00+00:00"
+    assert reg["postings"]["k"]["original_capture"]["fetched_at"] == "2026-07-01T10:00:00+00:00"
+    assert len(reg["postings"]["k"]["history"]) == 3
+
+
+def test_registry_req8_manifest_is_a_mirror_not_the_source_of_truth(tmp_path):
+    src = _batch_source(tmp_path)
+    url = "https://boards.greenhouse.io/acme/jobs/123456"
+    reg_path = _registry(tmp_path)
+    m1 = pc.process_urls([url], src, _fetch_result(_SYNTH_BODY), registry_path=reg_path)
+    first = (src / Path(m1["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
+    original_line = next(l for l in first.splitlines() if l.startswith("Captured At:"))
+    # Destroy the batch manifest (and the prior file): the registry still proves
+    # the earlier capture, so the re-fetch gets a LATEST section with the
+    # ORIGINAL Captured At intact.
+    (tmp_path / "0 - Prep Report" / "prep-manifest.json").unlink()
+    m2 = pc.process_urls([url], src, _fetch_result(_SYNTH_BODY), registry_path=reg_path)
+    out = (src / Path(m2["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
+    assert "LATEST CAPTURE DETAILS" in out
+    assert original_line in out
+
+
+def test_registry_req9_url_aliases_resolve_to_one_history(tmp_path):
+    src = _batch_source(tmp_path)
+    reg_path = _registry(tmp_path)
+    aliases = [
+        "https://boards.greenhouse.io/acme/jobs/123456?gh_src=x",
+        "https://job-boards.greenhouse.io/acme/jobs/123456",
+        "https://careers.acme.com/positions/123456",       # employer deep link
+        "https://www.acmecareers.com/jobs/?gh_jid=123456",  # listing + gh_jid
+    ]
+    for i, u in enumerate(aliases):
+        src_i = _batch_source(tmp_path / f"b{i}")
+        pc.process_urls([u], src_i, _fetch_result(_SYNTH_BODY), registry_path=reg_path)
+    reg = pc.load_capture_registry(reg_path)
+    assert list(reg["postings"].keys()) == ["greenhouse:acme:123456"]
+    assert len(reg["postings"]["greenhouse:acme:123456"]["history"]) == len(aliases)
+
+
+def test_registry_req10_partial_runs_preserve_other_jobs_history(tmp_path):
+    src = _batch_source(tmp_path)
+    reg_path = _registry(tmp_path)
+    url_a = "https://boards.greenhouse.io/acme/jobs/111111"
+    url_b = "https://boards.greenhouse.io/acme/jobs/222222"
+    pc.process_urls([url_a, url_b], src, _fetch_result(_SYNTH_BODY), registry_path=reg_path)
+    b_before = pc.load_capture_registry(reg_path)["postings"]["greenhouse:acme:222222"]
+    pc.process_urls([url_a], src, _fetch_result(_SYNTH_BODY), force=True,
+                    registry_path=reg_path)
+    reg = pc.load_capture_registry(reg_path)
+    assert reg["postings"]["greenhouse:acme:222222"] == b_before
+    assert len(reg["postings"]["greenhouse:acme:111111"]["history"]) == 2
+
+
+def test_registry_cross_batch_refetch_keeps_the_first_batchs_original(tmp_path):
+    """The live defect: the same posting fetched in a NEW batch must render the
+    FIRST batch's Captured At as ORIGINAL, via the registry (no shared manifest)."""
+    reg_path = _registry(tmp_path)
+    src1 = _batch_source(tmp_path / "batch1")
+    url = "https://boards.greenhouse.io/acme/jobs/123456"
+    m1 = pc.process_urls([url], src1, _fetch_result(_SYNTH_BODY), registry_path=reg_path)
+    first = (src1 / Path(m1["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
+    original_line = next(l for l in first.splitlines() if l.startswith("Captured At:"))
+    src2 = _batch_source(tmp_path / "batch2")
+    m2 = pc.process_urls([url], src2, _fetch_result(_SYNTH_BODY), registry_path=reg_path)
+    out = (src2 / Path(m2["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
+    assert "LATEST CAPTURE DETAILS" in out
+    assert original_line in out.split("LATEST CAPTURE DETAILS")[0]
+
+
+# ---- Backfill ----------------------------------------------------------------
+def _write_manifest(root, batch, entries):
+    d = root / batch / "0 - Prep Report"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "prep-manifest.json").write_text(
+        json.dumps({"schema_version": 1, "batch": batch, "entries": entries}),
+        encoding="utf-8")
+
+
+def test_backfill_canonicalizes_raw_employer_url_keys_and_picks_the_earliest(tmp_path):
+    """The alias-resolution trap: the OLDEST manifests key a posting under the raw
+    employer URL while newer ones use the ATS identity. All forms must land under
+    ONE key, with the original on the EARLIEST reliable timestamp."""
+    import backfill_capture_registry as bf
+    root = tmp_path / "reviews"
+    _write_manifest(root, "archive/07-01-26", [
+        {"original_url": "https://careers.acme.com/positions/123456",
+         "normalized_url": "https://careers.acme.com/positions/123456",  # raw-URL key
+         "status": "usable", "method": "requests",
+         "fetched_at": "2026-07-01T17:46:53+00:00"}])
+    _write_manifest(root, "07-02-26", [
+        {"original_url": "https://boards.greenhouse.io/acme/jobs/123456",
+         "normalized_url": "greenhouse:acme:123456",  # already-canonical key
+         "status": "usable", "method": "ats",
+         "fetched_at": "2026-07-02T22:43:43+00:00"}])
+    reg_path = tmp_path / "registry.json"
+    registry = bf.backfill(root, reg_path, out=lambda *_: None)
+    postings = registry["postings"]
+    assert list(postings.keys()) == ["greenhouse:acme:123456"]
+    posting = postings["greenhouse:acme:123456"]
+    assert posting["original_capture"]["fetched_at"] == "2026-07-01T17:46:53+00:00"
+    assert posting["original_source"] == "backfill-earliest-known"
+    assert posting["latest_capture"]["fetched_at"] == "2026-07-02T22:43:43+00:00"
+    assert len(posting["history"]) == 2
+
+
+def test_backfill_dedupes_mirrored_batch_folders_and_skips_non_captures(tmp_path):
+    import backfill_capture_registry as bf
+    root = tmp_path / "reviews"
+    entry = {"original_url": "https://boards.greenhouse.io/acme/jobs/123456",
+             "normalized_url": "greenhouse:acme:123456", "status": "usable",
+             "method": "ats", "fetched_at": "2026-07-01T17:46:53+00:00"}
+    _write_manifest(root, "07-01-26", [
+        entry,
+        # A skipped duplicate is not a capture; an entry with no timestamp neither.
+        {"original_url": "https://boards.greenhouse.io/acme/jobs/123456?x=1",
+         "normalized_url": "greenhouse:acme:123456", "status": "duplicate",
+         "fetched_at": "2026-07-01T17:46:53+00:00"},
+        {"original_url": "https://boards.greenhouse.io/acme/jobs/999999",
+         "normalized_url": "greenhouse:acme:999999", "status": "usable",
+         "fetched_at": None},
+    ])
+    _write_manifest(root, "07-01-26/_rescore", [dict(entry)])  # mirrored copy
+    reg_path = tmp_path / "registry.json"
+    registry = bf.backfill(root, reg_path, out=lambda *_: None)
+    posting = registry["postings"]["greenhouse:acme:123456"]
+    assert len(posting["history"]) == 1  # mirror deduped
+    assert "greenhouse:acme:999999" not in registry["postings"]
+    # A failed legacy fetch backfills as history, never as original/latest.
+    _write_manifest(root, "07-03-26", [
+        {"original_url": "https://boards.greenhouse.io/acme/jobs/123456",
+         "normalized_url": "greenhouse:acme:123456", "status": "failed",
+         "fetched_at": "2026-07-03T10:00:00+00:00"}])
+    registry = bf.backfill(root, reg_path, out=lambda *_: None)
+    posting = registry["postings"]["greenhouse:acme:123456"]
+    assert posting["latest_capture"]["fetched_at"] == "2026-07-01T17:46:53+00:00"
+    assert posting["original_capture"]["fetched_at"] == "2026-07-01T17:46:53+00:00"
+
+
+# ---- HTML list-structure preservation ------------------------------------------
+def test_html_unordered_and_ordered_lists_become_marked_lines():
+    html = ("<h2>What you'll do</h2><ul><li>Ship product</li><li>Talk to "
+            "<a href='http://x'>customers</a> weekly</li></ul>"
+            "<h2>Process</h2><ol><li>Apply online</li><li>Interview</li></ol>")
+    text = af._html_to_text(html)
+    assert "What you'll do\n\n- Ship product\n- Talk to customers weekly" in text
+    assert "Process\n\n1. Apply online\n2. Interview" in text
+
+
+def test_html_nested_lists_indent_two_spaces_per_level():
+    html = ("<ul><li>Benefits<ul><li>Medical</li><li>Dental<ul><li>Ortho rider</li>"
+            "</ul></li></ul></li><li>Equity</li></ul>")
+    text = af._html_to_text(html)
+    assert ("- Benefits\n"
+            "  - Medical\n"
+            "  - Dental\n"
+            "    - Ortho rider\n"
+            "- Equity") in text
+
+
+def test_html_paragraphs_are_never_bulleted():
+    html = ("<p>We are a mission-driven company. We ship weekly.</p>"
+            "<p>Our team is distributed. Everyone writes.</p>")
+    text = af._html_to_text(html)
+    assert not any(l.startswith(("-", "1.")) for l in text.splitlines())
+    assert text == ("We are a mission-driven company. We ship weekly.\n\n"
+                    "Our team is distributed. Everyone writes.")
+
+
+def test_html_conversion_loses_no_text_and_invents_none():
+    html = ("<h1>Role</h1><p>Intro paragraph here.</p>"
+            "<ul><li>First <strong>bullet</strong> item</li><li>Second item</li></ul>"
+            "<p>Closing paragraph.</p>")
+    text = af._html_to_text(html)
+    expected_words = ("Role Intro paragraph here. First bullet item Second item "
+                      "Closing paragraph.")
+    normalized = re.sub(r"\s+", " ", re.sub(r"^[ \t]*(?:[-•*·]|\d+\.)\s*", "", text,
+                                            flags=re.M)).strip()
+    assert normalized == expected_words  # no loss, no duplication, no invention
+    assert text.count("First bullet item") == 1
+    assert "- First bullet item" in text
+
+
+def test_li_wrapped_paragraphs_render_as_single_items():
+    # The Ashby shape: <li><p>text</p></li>.
+    html = "<ul><li><p>Own the roadmap end-to-end.</p></li><li><p>Ship weekly.</p></li></ul>"
+    text = af._html_to_text(html)
+    assert text == "- Own the roadmap end-to-end.\n- Ship weekly."
+
+
+# ---- Body-comparison semantics ---------------------------------------------------
+def test_formatting_only_change_is_named_as_restoration_never_job_text_unchanged(tmp_path):
+    flattened = ("About the role\nResponsibilities include shipping product.\n"
+                 "Ship product\nTalk to customers\n"
+                 "The base salary range for this role is $150,000 - $180,000 annually.\n"
+                 + ("x " * 60))
+    structured = flattened.replace("Ship product\nTalk to customers",
+                                   "- Ship product\n- Talk to customers")
+    assert pc.material_change_notes(flattened, structured) == \
+        "Employer content unchanged; source list formatting restored."
+    src, entry = _refetch_manifest(tmp_path, _fetch_result(flattened),
+                                   _fetch_result(structured))
+    out = (src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
+    notes = next(l for l in out.splitlines() if l.startswith("Additional Notes:"))
+    assert "Employer content unchanged; source list formatting restored." in notes
+    assert "Job text unchanged" not in notes
+
+
+def test_material_update_uses_the_new_vocabulary(tmp_path):
+    old = ("About the role\nResponsibilities include shipping product.\n"
+           "The base salary range for this role is $150,000 - $180,000 annually.\n"
+           + ("x " * 60))
+    edited = old.replace("$150,000 - $180,000", "$160,000 - $190,000")
+    assert pc.material_change_notes(old, edited) == "Employer materially updated the posting."
+    assert pc.material_change_notes(old, old) == "No material changes detected."

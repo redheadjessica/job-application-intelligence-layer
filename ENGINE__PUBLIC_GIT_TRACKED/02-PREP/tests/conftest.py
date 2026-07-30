@@ -12,6 +12,15 @@ if str(PREP_DIR) not in sys.path:
     sys.path.insert(0, str(PREP_DIR))
 
 
+@pytest.fixture(autouse=True)
+def _isolated_capture_registry(tmp_path, monkeypatch):
+    """No test may ever read or write the user's REAL capture-history registry
+    (it lives under the gitignored PRIVATE root). Every test gets its own."""
+    import prep_common
+    monkeypatch.setattr(prep_common, "DEFAULT_REGISTRY_PATH",
+                        tmp_path / "_registry" / "capture-history-registry.json")
+
+
 @pytest.fixture
 def fixtures_dir() -> Path:
     return FIXTURES

@@ -592,9 +592,9 @@ Office Expectation: Not Specified
 body
 --- JOB TEXT END ---
 
-CAPTURE DETAILS
----------------
-Captured: July 29, 2026 at 4:06 PM ET
+ORIGINAL CAPTURE DETAILS
+------------------------
+Captured At: July 29, 2026 at 4:06 PM ET
 Application URL: https://example.com/job/1
 Source: Greenhouse
 Posting ATS ID: 1

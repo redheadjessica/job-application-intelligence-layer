@@ -11,6 +11,58 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Second approval round: capture-history registry, ORIGINAL/LATEST sections, simplified comp layout, list-structure preservation
+
+The user reviewed both previews and issued a second set of required changes. All engine/test work in
+one atomic commit (synthetic fixtures only):
+
+- **Durable capture-history registry (the big one).** Batch-local capture history was insufficient —
+  the same posting is fetched across batches, and a scan of the durable manifests proved earlier
+  captures existed that the batch-local view silently discarded as "original". New gitignored
+  registry at `PRIVATE__YOUR_FILES_GITIGNORED/02-PREP__YOUR_PRIVATE_INFO/capture-history-registry.json`
+  (the PRIVATE root is gitignored wholesale), keyed by canonical posting identity
+  (`<ats>:<board>:<id>` when recognizable — URL aliases like employer `/positions/<id>` deep links and
+  `?gh_jid=` params resolve to one key — else the normalized URL). Per posting: an IMMUTABLE
+  `original_capture` (earliest successful fetch), `latest_capture` (most recent successful fetch),
+  and an append-only history. All ten user requirements are individually pinned by tests: original
+  immutable; every successful fetch appends; local re-render/preview is not a capture; skipped URLs
+  are not captures; a failed request never replaces Latest (even when the best-verified merge
+  preserves the batch file, the registry records a failed attempt); Latest = most recent success;
+  reformatting changes no timestamp; batch manifests are mirrors, not the source of truth (proven by
+  deleting one); aliases resolve to one history; partial runs preserve other jobs' history.
+  `process_urls` reads/writes it; the writer takes Original/Latest from it (cross-batch re-fetches
+  now keep the first batch's Captured At).
+- **Backfill** (`02-PREP/backfill_capture_registry.py`): read-only recursive scan of all batch
+  manifests (including archives and mirrored subfolders, deduped), replayed chronologically so each
+  posting's original lands on the EARLIEST reliable timestamp. Legacy manifests keyed some postings
+  under raw employer URLs — canonicalization folds those aliases in (a backfill matching only
+  normalized keys would have crowned a later fetch "original", the exact user-reported error).
+  Backfilled originals are marked `backfill-earliest-known`: the "ORIGINAL" heading means "the
+  earliest capture JAIL can establish from its durable records".
+- **Sections renamed:** `CAPTURE DETAILS` → `ORIGINAL CAPTURE DETAILS`, `CAPTURE UPDATE DETAILS` →
+  `LATEST CAPTURE DETAILS`; both timestamps labeled `Captured At:`; `Re-Captured:` is gone. First-
+  and-only capture → ORIGINAL section only.
+- **Location Preference field** (optional, distinct from Working Location(s) / Office Expectation /
+  Work Arrangement): emitted only when the employer STATES a preference, rendered with canonical
+  short metros and the obvious `ir` → `or` source-typo normalized; the full sentence stays verbatim
+  in the body. Multi-city joins are now lowercase `or` (`SF or NYC`).
+- **Compensation layout simplified:** single range inline (`Base Salary: $232-282K`, abbreviated
+  thousands, no stray `.0`, `$` implies USD, non-USD codes preserved, `Annually` only when stated);
+  multiple geo/level ranges keep bullets; blank line between comp fields; all honest-distinction
+  VALUES sentence-cased (`mentioned, but details not provided.`, `Could not verify.`, `Employer did
+  not mention benefits.`) — Title Case remains for field labels.
+- **Employer list structure preserved in job text:** the HTML-to-text conversion now renders
+  `<ul>/<ol>/<li>` as `- item` / `1. item` lines (nested lists indented), keeps paragraph/heading
+  boundaries and link text, and never invents bullets from prose or drops text; Ashby now prefers
+  `descriptionHtml` over its pre-flattened `descriptionPlain`.
+- **Body-comparison semantics updated:** Additional Notes now compare normalized SUBSTANTIVE text
+  (bullets/formatting stripped) plus the material regions — a formatting-only difference reads
+  `Employer content unchanged; source list formatting restored.` (never `Job text unchanged`), a real
+  edit reads `Employer materially updated the posting.`
+
+Suite: 418 → 438 green. Golden fixture regenerated deliberately (new section names/labels,
+abbreviated comp bullets, lowercase `or` joins, `Captured At:`).
+
 ## 2026-07-29 — Third live-run review: partial runs no longer wipe the batch manifest, plus two comp/location renderings
 
 The third live re-capture (a Greenhouse-path job) surfaced one REAL engine bug and two formatting

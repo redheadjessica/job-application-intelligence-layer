@@ -24,6 +24,7 @@ from ats_fetchers import (
     MENTIONED_NO_DETAILS,
     UUID_RE,
     _EQUITY_SPECIFICS_RE,
+    _gh_board_tokens_from_domain,
     _greenhouse_ids,
     _linkedin_job_id,
     _prettify_slug,
@@ -1334,7 +1335,7 @@ def _split_city_state_blob(s: str) -> list[str] | None:
 
 def _format_working_locations(value: str) -> str:
     """A multi-city working-location list rendered for humans: short metro names
-    joined with ` Or ` (`New York City; San Francisco` -> `NYC Or SF`), deduped
+    joined with ` or ` (`New York City; San Francisco` -> `NYC or SF`), deduped
     after canonicalization. Handles both `;`-separated lists and a flat
     comma-joined `City, ST, City, ST` blob (Greenhouse offices strings). Display
     only — the employer's own order is always preserved, never re-sorted.
@@ -1349,7 +1350,43 @@ def _format_working_locations(value: str) -> str:
     if len(parts) == 1:
         return _short_metro(parts[0])
     shorts = list(dict.fromkeys(_short_metro(p) for p in parts))
-    return " Or ".join(shorts)
+    return " or ".join(shorts)
+
+
+# Long metro forms -> short, for rewriting cities INSIDE a quoted preference
+# sentence. Ordered longest-first so "San Francisco Bay Area" wins over
+# "San Francisco, CA".
+_METRO_SENTENCE_FORMS = sorted(
+    [("San Francisco Bay Area", "SF Bay Area"), ("San Francisco, California", "SF"),
+     ("San Francisco, CA", "SF"), ("New York City, New York", "NYC"),
+     ("New York City, NY", "NYC"), ("New York City", "NYC"), ("New York, NY", "NYC"),
+     ("Los Angeles, CA", "LA"), ("Washington, D.C.", "DC"), ("Washington, DC", "DC")],
+    key=lambda kv: -len(kv[0]))
+# An employer-stated location PREFERENCE (never a requirement): a sentence whose
+# preference wording attaches to being based/located somewhere.
+_LOC_PREFERENCE_RE = re.compile(
+    r"(?i)\b((?:strong(?:ly)?\s+)?prefer(?:ence|red|s)?\b[^.\n]*?"
+    r"\b(?:based|located|reside|residing|work(?:ing)?\s+(?:from|in|out\s+of))\b[^.\n]*)")
+
+
+def _mine_location_preference(body: str) -> str | None:
+    """An employer-stated location PREFERENCE mined from the body, rendered as a
+    short sentence with canonical metro names (`Strong preference for the
+    successful applicant to be based in SF or NYC.`). Only a stated preference
+    qualifies — a mandatory requirement is location/arrangement data, not a
+    preference, and nothing here ever labels a preference a requirement. The full
+    employer sentence stays in the body; only the obvious `ir` -> `or` source
+    typo between place names is normalized."""
+    m = _LOC_PREFERENCE_RE.search(body or "")
+    if not m:
+        return None
+    s = re.sub(r"\s+", " ", m.group(1)).strip().rstrip(" ,;:")
+    # The observed source typo: "San Francisco, CA ir New York, NY".
+    s = re.sub(r"(?<=[A-Za-z.,])\s+ir\s+(?=[A-Z])", " or ", s)
+    for long_form, short in _METRO_SENTENCE_FORMS:
+        s = s.replace(long_form, short)
+    s = s[0].upper() + s[1:]
+    return s if s.endswith(".") else s + "."
 
 
 # Eligibility/mention sentences that reference additional-compensation components.
@@ -1428,9 +1465,9 @@ def _additional_compensation_value(meta: dict, body: str) -> str:
     elif equity == MENTIONED_NO_DETAILS and "Equity" not in mentions:
         mentions.append("Equity")
     if mentions:
-        parts.append(f"{_oxford_join(mentions)} Mentioned, but Details Were Not Provided.")
+        parts.append(f"{_oxford_join(mentions)} mentioned, but details not provided.")
     if not parts:
-        return "Employer Did Not Mention Additional Compensation."
+        return "Employer did not mention additional compensation."
     return " ".join(parts)
 
 
@@ -1463,9 +1500,9 @@ def _benefits_value(meta: dict, body: str) -> str:
     if benefits is None and body:
         benefits, _e = mine_benefits_equity(body)
     if not benefits:
-        return "Employer Did Not Mention Benefits."
+        return "Employer did not mention benefits."
     if benefits == MENTIONED_NO_DETAILS:
-        return "Mentioned, but Details Were Not Provided."
+        return "Mentioned, but details not provided."
     items: list[str] = []
     for raw in str(benefits).split(";"):
         item = _strip_bullet_and_label(raw)
@@ -1477,7 +1514,7 @@ def _benefits_value(meta: dict, body: str) -> str:
         if item:
             items.append(item[0].upper() + item[1:])
     if not items:
-        return "Employer Did Not Mention Benefits."
+        return "Employer did not mention benefits."
 
     def render(parts: list[str]) -> str:
         joined = ". ".join(parts)
@@ -1530,10 +1567,50 @@ def _normalize_salary_band(seg: str) -> str:
     return seg
 
 
-def _base_salary_bullets(compensation, fs: dict, meta: dict | None = None) -> list[str]:
-    """One bullet per geo/level band: full dollar amounts (`$236K` -> `$236,000`),
-    spaceless en-dash ranges, USD-tagged, with `Annually` appended when the
-    employer's own wording states the range is annual (never inferred)."""
+# Abbreviated-thousands rendering (2026-07-29 revised spec): `$232,000–$282,000`
+# -> `$232-282K`, no unnecessary `.0`. Non-USD currency codes are preserved
+# explicitly; a `$` amount implies USD (no trailing code).
+_ABBREV_RANGE_RE = re.compile(r"\$([\d,]+(?:\.\d+)?)–\$([\d,]+(?:\.\d+)?)")
+_ABBREV_SINGLE_RE = re.compile(r"\$([\d,]+(?:\.\d+)?)(?![\d,])")
+_NON_USD_CODE_RE = re.compile(r"(?i)\b(EUR|GBP|CAD|AUD|CHF|JPY|MXN|BRL|INR)\b|[£€¥]")
+
+
+def _k_amount(raw: str) -> str | None:
+    """`232,000` -> `232`; `82,500` -> `82.5`; amounts under 1000 -> None."""
+    try:
+        v = float(raw.replace(",", ""))
+    except ValueError:
+        return None
+    if v < 1000:
+        return None
+    kv = v / 1000.0
+    s = f"{kv:.1f}".rstrip("0").rstrip(".")
+    return s
+
+
+def _abbrev_band(seg: str) -> str:
+    """Abbreviate a normalized band's dollar amounts to thousands:
+    `$232,000–$282,000` -> `$232-282K`; a lone `$232,000` -> `$232K`."""
+    def range_sub(m):
+        lo, hi = _k_amount(m.group(1)), _k_amount(m.group(2))
+        if lo is None or hi is None:
+            return m.group(0)
+        return f"${lo}-{hi}K"
+
+    seg = _ABBREV_RANGE_RE.sub(range_sub, seg)
+
+    def single_sub(m):
+        k = _k_amount(m.group(1))
+        return f"${k}K" if k is not None else m.group(0)
+
+    return re.sub(r"\$([\d,]{4,}(?:\.\d+)?)(?!-|\d|,\d|K)", single_sub, seg)
+
+
+def _base_salary_bands(compensation, fs: dict, meta: dict | None = None) -> list[str]:
+    """One entry per geo/level band: generic ATS labels stripped, abbreviated
+    thousands (`$232-282K`), `Annually` appended only when the employer's own
+    wording states the range is annual (never inferred). A `$` amount implies
+    USD; non-USD currency codes stay explicit."""
     meta = meta or {}
     segments: list[str] = []
     if compensation:
@@ -1546,9 +1623,12 @@ def _base_salary_bullets(compensation, fs: dict, meta: dict | None = None) -> li
     stated_annual = bool(_ANNUAL_MARKER_RE.search(employer_wording))
     out: list[str] = []
     for seg in segments:
+        raw_seg = seg
         seg = _normalize_salary_band(seg)
-        if "usd" not in seg.lower() and "$" in seg:
-            seg = f"{seg} USD"
+        seg = _abbrev_band(seg)
+        # Strip a redundant USD tag ($ implies it); keep explicit non-USD codes.
+        if not _NON_USD_CODE_RE.search(raw_seg):
+            seg = re.sub(r"\s*\bUSD\b\s*", " ", seg).strip()
         if stated_annual and not _ANNUAL_MARKER_RE.search(seg) and not _NON_ANNUAL_RE.search(seg):
             seg = f"{seg} Annually"
         out.append(seg)
@@ -1558,8 +1638,8 @@ def _base_salary_bullets(compensation, fs: dict, meta: dict | None = None) -> li
 def _conflict_phrase(sources) -> str:
     values = [str(v).strip() for _s, v in (sources or []) if str(v or "").strip()]
     if len(values) >= 2:
-        return f"Conflicting Employer Information: {values[0]} vs {values[1]}."
-    return "Conflicting Employer Information: Two Sources Disagree (Both Kept in the Manifest)."
+        return f"Conflicting employer information: {values[0]} vs {values[1]}."
+    return "Conflicting employer information: two sources disagree (both kept in the manifest)."
 
 
 _V_MARK = {FOUND: "✓", NOT_POSTED: "—", CAPTURE_FAILED: "✗", CONFLICTING: "⚠ Conflicting"}
@@ -1574,8 +1654,11 @@ def _verification_line(fs: dict) -> str:
 
 def _capture_details_lines(*, captured, apply_url, source, posting_id, methods, fs,
                            verification: str | None = None) -> list[str]:
-    lines = _banner("CAPTURE DETAILS", "-")
-    lines.append(f"Captured: {capture_timestamp(captured)}")
+    """ORIGINAL CAPTURE DETAILS. The human heading "ORIGINAL" means the earliest
+    capture JAIL can establish from its durable records (the capture-history
+    registry) — backfilled records may predate any batch still on disk."""
+    lines = _banner("ORIGINAL CAPTURE DETAILS", "-")
+    lines.append(f"Captured At: {capture_timestamp(captured)}")
     lines.append(f"Application URL: {apply_url}")
     lines.append(f"Source: {source}")
     lines.append(f"Posting ATS ID: {posting_id}")
@@ -1585,15 +1668,16 @@ def _capture_details_lines(*, captured, apply_url, source, posting_id, methods, 
 
 
 def _capture_update_lines(capture_update: dict, *, source, posting_id, methods, fs) -> list[str]:
-    """The re-fetch record: the NEW fetch's source/methods/verification (CAPTURE
-    DETAILS above keeps describing the ORIGINAL capture), then the comparison notes."""
-    lines = _banner("CAPTURE UPDATE DETAILS", "-")
-    lines.append(f"Re-Captured: {capture_timestamp(capture_update.get('re_captured'))}")
+    """LATEST CAPTURE DETAILS — present only when at least one later successful
+    fetch exists. Describes the NEW fetch (ORIGINAL CAPTURE DETAILS above keeps
+    describing the earliest one), then the comparison notes."""
+    lines = _banner("LATEST CAPTURE DETAILS", "-")
+    lines.append(f"Captured At: {capture_timestamp(capture_update.get('re_captured'))}")
     lines.append(f"Source: {source}")
     lines.append(f"Posting ATS ID: {posting_id}")
     lines.append(f"Methods Checked: {methods}")
     lines.append(_verification_line(fs))
-    notes = capture_update.get("notes") or "Previous Capture Was Not Available for Comparison."
+    notes = capture_update.get("notes") or "Previous capture was not available for comparison."
     lines.append(f"Additional Notes: {notes}")
     return lines
 
@@ -1634,19 +1718,38 @@ def _region_set(lines: list[str], keys: tuple) -> set:
     return {ln for ln in lines if any(k in ln for k in keys)}
 
 
+def _normalize_substantive(body: str | None) -> str:
+    """The SUBSTANTIVE text of a body — bullet markers, list numbering, and
+    whitespace/formatting characters stripped — so restoring the employer's list
+    structure never reads as an employer edit."""
+    out: list[str] = []
+    for raw in str(body or "").splitlines():
+        ln = re.sub(r"^[ \t]*(?:[-•*·]+|\d{1,3}\.)\s*", "", raw)
+        ln = re.sub(r"\s+", " ", ln).strip().lower()
+        if ln:
+            out.append(ln)
+    return " ".join(out)
+
+
 def material_change_notes(old_body: str | None, new_body: str | None) -> str:
-    """The CAPTURE UPDATE DETAILS `Additional Notes:` sentence, from a NORMALIZED
-    CONTENT comparison of the material regions (responsibilities / qualifications /
-    comp / location / cadence / questions) — never body length. Chrome-only churn
-    is `No Material Changes Detected.`"""
+    """The `Additional Notes:` body sentence: (a) list/formatting-only differences
+    are named as formatting restoration, never as an employer edit; (b) genuine
+    content changes are detected on NORMALIZED SUBSTANTIVE text + the material
+    regions — never body length. Chrome-only churn is no material change."""
     if old_body is None:
-        return "Previous Capture Was Not Available for Comparison."
-    old_lines, new_lines = _material_lines(old_body), _material_lines(new_body or "")
+        return "Previous capture was not available for comparison."
+    old_raw = str(old_body or "")
+    new_raw = str(new_body or "")
+    if old_raw == new_raw:
+        return "No material changes detected."
+    if _normalize_substantive(old_raw) == _normalize_substantive(new_raw):
+        return "Employer content unchanged; source list formatting restored."
+    old_lines, new_lines = _material_lines(old_raw), _material_lines(new_raw)
     changed = [name for name, keys in _MATERIAL_REGIONS
                if _region_set(old_lines, keys) != _region_set(new_lines, keys)]
     if changed:
-        return f"Material Changes Detected In: {', '.join(changed)}."
-    return "No Material Changes Detected."
+        return "Employer materially updated the posting."
+    return "No material changes detected."
 
 
 def body_would_degrade(old_body: str | None, new_body: str | None) -> bool:
@@ -1723,8 +1826,8 @@ def _capture_fields(text: str) -> dict:
     f["working_location"] = loc
     f["office_expectation"] = office
     base = _grab_line(head, "Base Salary") or _grab_line(head, "Compensation")
-    if not base:  # current-format bullet list
-        m = re.search(r"^Base Salary:\s*\n((?:\s+-\s+.*\n?)+)", head, re.M)
+    if not base:  # bullet list (current bullets start at col 0; earlier were indented)
+        m = re.search(r"^Base Salary:\s*\n((?:[ \t]*-\s+.*\n?)+)", head, re.M)
         if m:
             base = " · ".join(ln.strip().lstrip("- ").strip()
                               for ln in m.group(1).splitlines() if ln.strip())
@@ -1759,7 +1862,14 @@ def _norm_field_value(key: str, value: str | None) -> str | None:
         except ValueError:
             return re.sub(r"[^0-9]+", "", v) or None
     if key == "base_salary":
-        return ",".join(re.findall(r"\d[\d,]*", v)).replace(",", "") or None
+        # Expand abbreviated-thousands shorthand so `$182-227K` compares equal to
+        # `USD 182,000-227,000` — a rendering change is never a "correction".
+        v = v.replace(",", "")
+        v = re.sub(r"(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)[Kk]\b",
+                   lambda m: f"{int(float(m.group(1)) * 1000)}-{int(float(m.group(2)) * 1000)}", v)
+        v = re.sub(r"(\d+(?:\.\d+)?)[Kk]\b",
+                   lambda m: str(int(float(m.group(1)) * 1000)), v)
+        return ",".join(re.findall(r"\d+", v)) or None
     if key == "working_location":
         parts = re.split(r";|\bor\b|\bOr\b", v)
         toks = sorted({re.sub(r"[^a-z0-9]+", "", _short_metro(p).lower())
@@ -1775,7 +1885,7 @@ def capture_update_notes(prior_text: str | None, new_text: str,
     normalized material-content body comparison. Only when both fields and material
     body content are unchanged may it say `No Material Changes Detected.`"""
     if prior_text is None:
-        return "Previous Capture Was Not Available for Comparison."
+        return "Previous capture was not available for comparison."
     old_f, new_f = _capture_fields(prior_text), _capture_fields(new_text)
     added: list[str] = []
     corrected: list[str] = []
@@ -1788,7 +1898,6 @@ def capture_update_notes(prior_text: str | None, new_text: str,
     old_body = body_from_capture(prior_text)
     new_body = body_from_capture(new_text)
     body_notes = material_change_notes(old_body, new_body)
-    body_changed = body_notes.startswith("Material Changes Detected")
     parts: list[str] = []
     if added and corrected:
         parts.append(f"Added the {_oxford_join(added)} and corrected the "
@@ -1799,12 +1908,15 @@ def capture_update_notes(prior_text: str | None, new_text: str,
         parts.append(f"Corrected the {_oxford_join(corrected)} from the original capture.")
     if kept_prior_body:
         parts.append("The new fetch's job text was degraded, so the prior job text was kept.")
-    elif body_changed:
+    elif body_notes == "Employer content unchanged; source list formatting restored.":
+        # NEVER "Job text unchanged" when the formatting changed.
+        parts.append(body_notes)
+    elif body_notes == "Employer materially updated the posting.":
         parts.append(body_notes)
     elif parts:
         parts.append("Job text unchanged.")
     if not parts:
-        return "No Material Changes Detected."
+        return "No material changes detected."
     return " ".join(parts)
 
 
@@ -1893,8 +2005,8 @@ def build_output_text(url: str, title: str, company: str, body_text: str, *,
             key = "compensation_sources" if field == "compensation" else "location_sources"
             return _conflict_phrase(fs.get(key) or meta.get(key))
         if st == NOT_POSTED:
-            return f"Employer Did Not Mention {label}."
-        return "Could Not Verify."
+            return f"Employer did not mention {label}."
+        return "Could not verify."
 
     lines: list[str] = []
     lines += _banner("JOB SNAPSHOT", "=")
@@ -1913,21 +2025,31 @@ def build_output_text(url: str, title: str, company: str, body_text: str, *,
     elif working_location:
         loc_value = _format_working_locations(working_location)
     else:
-        loc_value = _honest(None, "working_location", "Working Location")
+        loc_value = _honest(None, "working_location", "working location")
     lines.append(f"Working Location(s): {loc_value}")
+    # Optional: an employer-STATED location preference (never a requirement, never
+    # folded into Work Arrangement or Office Expectation; omitted when unstated).
+    preference = _mine_location_preference(body_text)
+    if preference:
+        lines.append(f"Location Preference: {preference}")
     office = _format_cadence(cadence) or _mine_office_expectation(body_text)
     lines.append(f"Office Expectation: {office or 'Not Specified'}")
     lines.append("")
     lines += _banner("COMPENSATION", "=")
-    bullets = ([] if fs.get("compensation") == CONFLICTING
-               else _base_salary_bullets(compensation, fs, meta))
-    if bullets:
+    bands = ([] if fs.get("compensation") == CONFLICTING
+             else _base_salary_bands(compensation, fs, meta))
+    if len(bands) == 1:
+        # A single range renders INLINE — no one-item bullet list.
+        lines.append(f"Base Salary: {bands[0]}")
+    elif bands:
         lines.append("Base Salary:")
-        for b in bullets:
-            lines.append(f"  - {b}")
+        for b in bands:
+            lines.append(f"- {b}")
     else:
-        lines.append(f"Base Salary: {_honest(None, 'compensation', 'Compensation')}")
+        lines.append(f"Base Salary: {_honest(None, 'compensation', 'compensation')}")
+    lines.append("")
     lines.append(f"Additional Compensation: {_additional_compensation_value(meta, body_text)}")
+    lines.append("")
     lines.append(f"Benefits: {_benefits_value(meta, body_text)}")
     lines.append("")
     lines += _banner("APPLICATION QUESTIONS WORTH PREPARING", "=")
@@ -2021,6 +2143,107 @@ def failed_text(url: str, error: str, ts: str) -> str:
                                     source="Not Available", posting_id="Not Available",
                                     methods="Not Recorded", fs=fs)
     return "\n".join(lines) + "\n"
+
+
+# --------------------------------------------------------------------------- #
+# Global capture-history registry (durable, GITIGNORED — lives under the PRIVATE
+# root, which .gitignore covers wholesale).
+#
+# The batch manifest is a per-batch MIRROR; this registry is the source of truth
+# for a posting's capture history across batches. Keyed by canonical posting
+# identity: `<ats>:<board>:<posting id>` when recognizable (URL aliases —
+# employer-hosted deep links, gh_jid query params, board URLs — all resolve to
+# the same key), else the canonical normalized URL.
+#
+# Semantics (2026-07-29 spec, all pinned by tests):
+#   - `original_capture` is IMMUTABLE once set — the earliest SUCCESSFUL fetch
+#     the registry knows of. The human heading "ORIGINAL" in a capture file means
+#     "the earliest capture JAIL can establish from its durable records": a
+#     backfilled record (original_source: backfill-earliest-known) may not be the
+#     true first-ever fetch, only the earliest provable one.
+#   - Every successful network fetch appends a history event and advances
+#     `latest_capture`. A FAILED request appends an event but NEVER replaces
+#     latest. Skipped (carried-forward) URLs and local re-renders/preview
+#     generation are NOT captures and never touch the registry.
+# --------------------------------------------------------------------------- #
+DEFAULT_REGISTRY_PATH = (Path(__file__).resolve().parents[2]
+                         / "PRIVATE__YOUR_FILES_GITIGNORED"
+                         / "02-PREP__YOUR_PRIVATE_INFO"
+                         / "capture-history-registry.json")
+_EMPLOYER_GH_ID_RES = (
+    re.compile(r"[?&]gh_jid=(\d{6,})"),
+    re.compile(r"/positions?/(\d{6,})(?:[/?#]|$)"),
+)
+
+
+def canonical_capture_key(url: str, apply_url: str | None = None,
+                          posting_id=None) -> str:
+    """The registry key for a posting: a recognized ATS identity from the URL or
+    the (canonical) apply URL, an employer-hosted Greenhouse identity recovered
+    from `/positions/<id>` / `?gh_jid=<id>` shapes, else the normalized URL."""
+    for u in (url, apply_url):
+        k = ats_canonical_key(u) if u else None
+        if k:
+            return k
+    u = str(url or "")
+    pid = None
+    for rx in _EMPLOYER_GH_ID_RES:
+        m = rx.search(u)
+        if m:
+            pid = m.group(1)
+            break
+    if pid is None and posting_id is not None and str(posting_id).isdigit() \
+            and len(str(posting_id)) >= 6:
+        pid = str(posting_id)
+    if pid:
+        try:
+            tokens = _gh_board_tokens_from_domain(u)
+        except Exception:
+            tokens = []
+        if tokens:
+            # The suffix-stripped (shortest) brand variant, so acmecareers.com and
+            # careers.acme.com alias to the same key.
+            return f"greenhouse:{min(tokens, key=len)}:{pid}"
+    return normalize_url(u)
+
+
+def load_capture_registry(path) -> dict:
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        if isinstance(data, dict) and isinstance(data.get("postings"), dict):
+            return data
+    except Exception:
+        pass
+    return {"schema_version": 1, "postings": {}}
+
+
+def save_capture_registry(path, registry: dict) -> None:
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(registry, indent=2) + "\n", encoding="utf-8")
+
+
+def record_capture_event(registry: dict, key: str, event: dict, *, success: bool,
+                         origin: str = "live", dedupe: bool = False) -> dict:
+    """Append one fetch event to a posting's history. The original is set only
+    once (immutable thereafter) and only by a SUCCESSFUL fetch; latest advances
+    only on success. With `dedupe=True` (backfill), identical (fetched_at, url)
+    events collapse — mirrored batch folders contribute one event, not two.
+    Returns the posting record."""
+    posting = registry.setdefault("postings", {}).setdefault(key, {})
+    history = posting.setdefault("history", [])
+    dup = dedupe and any(h.get("fetched_at") == event.get("fetched_at")
+                         and h.get("url") == event.get("url") for h in history)
+    if not dup:
+        history.append(dict(event))
+    if success:
+        if "original_capture" not in posting:
+            posting["original_capture"] = dict(event)
+            posting["original_source"] = origin
+        latest = posting.get("latest_capture")
+        if latest is None or (event.get("fetched_at") or "") >= (latest.get("fetched_at") or ""):
+            posting["latest_capture"] = dict(event)
+    return posting
 
 
 # --------------------------------------------------------------------------- #
@@ -2169,7 +2392,8 @@ def _remove_if_exists(rel_path: str, batch: Path) -> None:
 # Orchestrator — both scripts call this with their own fetch_one()
 # --------------------------------------------------------------------------- #
 def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
-                  fetch_fallback=None, fallback_label: str | None = None) -> dict:
+                  fetch_fallback=None, fallback_label: str | None = None,
+                  registry_path=None) -> dict:
     """fetch_one(url) -> dict: {ok: bool, title, company, body, method, error}.
     Manifest-aware: a plain re-run skips already-usable URLs and retries
     thin/failed ones (set force=True to refetch everything).
@@ -2187,6 +2411,12 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
     mpath = dirs["report"] / "prep-manifest.json"
     manifest = load_manifest(mpath) or new_manifest(batch_root.name)
     prev_by_norm = {e["normalized_url"]: e for e in manifest.get("entries", [])}
+    # The durable cross-batch capture-history registry (gitignored). The batch
+    # manifest below is a mirror; the registry is the source of truth for a
+    # posting's Original/Latest capture identity.
+    reg_path = Path(registry_path) if registry_path else DEFAULT_REGISTRY_PATH
+    registry = load_capture_registry(reg_path)
+    registry_dirty = False
 
     # Rebuild the "taken filename -> owning normalized_url" map from prior entries.
     taken: dict[str, str] = {}
@@ -2321,6 +2551,14 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                     res, status, reason, field_status, field_gap = (
                         res_rec, status_r, reason_r, field_status_r, gap_r)
 
+        # The NETWORK outcome of this fetch, recorded before the merge below can
+        # preserve the prior body — a failed request is a failed capture attempt
+        # in the registry even when the batch keeps its existing file.
+        fetch_success = bool(res.get("ok")) and status != FAILED
+        fetch_method = res.get("method")
+        fetch_source = (res.get("meta") or {}).get("source")
+        fetch_status = status
+
         # Best-verified merge on a re-fetch (revision #4): never let a truncated /
         # contaminated / blocked new fetch replace a better existing body. The prior
         # body wins when the new one demonstrably degrades it; the new fetch's
@@ -2343,6 +2581,22 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
         # record, falling back to the prior entry's fetched_at) and Additional Notes
         # come from a normalized-content comparison of the material regions — never
         # body length (revision #5).
+        # Record this network fetch in the durable registry (success advances
+        # Latest and may seed the immutable Original; a failure is history only).
+        res_meta = res.get("meta") or {}
+        cap_key = canonical_capture_key(url, apply_url=res_meta.get("apply_url"),
+                                        posting_id=res_meta.get("posting_id"))
+        posting_prior = dict((registry.get("postings") or {}).get(cap_key) or {})
+        prior_original = posting_prior.get("original_capture")
+        record_capture_event(registry, cap_key, {
+            "fetched_at": ts, "url": url, "normalized_url": norm,
+            "batch": batch_root.name, "method": fetch_method,
+            "source": fetch_source, "posting_id": res_meta.get("posting_id"),
+            "status": fetch_status, "ok": fetch_success}, success=fetch_success)
+        registry_dirty = True
+
+        # A LATEST CAPTURE DETAILS block appears when the registry (or the batch
+        # manifest mirror) proves at least one earlier successful capture.
         capture_update = None
         history = []
         if prev:
@@ -2350,10 +2604,19 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
             history.append({"fetched_at": prev.get("fetched_at"),
                             "source": prev.get("method"),
                             "posting_id": prev.get("posting_id")})
-            original_captured = (history[0].get("fetched_at") or prev.get("fetched_at"))
+        if prior_original or prev:
+            original_captured = ((prior_original or {}).get("fetched_at")
+                                 or (history[0].get("fetched_at") if history else None)
+                                 or (prev or {}).get("fetched_at"))
+            original_details = _original_capture_details(prior_text if prev else None, prev)
+            if prior_original:
+                if prior_original.get("source") and not original_details.get("source"):
+                    original_details["source"] = _human_source(prior_original["source"])
+                if prior_original.get("posting_id") and not original_details.get("posting_id"):
+                    original_details["posting_id"] = str(prior_original["posting_id"])
             capture_update = {"original_captured": original_captured,
                               "re_captured": ts,
-                              "original": _original_capture_details(prior_text, prev),
+                              "original": original_details,
                               # Notes are computed AFTER the new capture's fields are
                               # rendered (field-level diff needs both snapshots).
                               "notes": None}
@@ -2402,7 +2665,7 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
             # Two-pass: render the new capture WITHOUT the update block, diff its
             # snapshot fields + body against the prior file, then render for real.
             if prior_text is None:
-                capture_update["notes"] = "Previous Capture Was Not Available for Comparison."
+                capture_update["notes"] = "Previous capture was not available for comparison."
             else:
                 provisional = build_output_text(
                     url, title, company, body, meta=meta, questions=questions,
@@ -2481,6 +2744,8 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
     manifest["input_count"] = sum(1 for u in urls if u.strip() and not u.strip().startswith("#"))
     manifest["counts"] = _counts(entries)
     manifest["fetched_at"] = ts
+    if registry_dirty:
+        save_capture_registry(reg_path, registry)
     save_manifest(mpath, manifest)
     write_report(dirs["report"] / "prep-report.md", manifest)
     _print_summary(manifest, dirs)
