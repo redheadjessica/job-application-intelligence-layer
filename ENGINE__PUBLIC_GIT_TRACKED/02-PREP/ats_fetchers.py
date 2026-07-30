@@ -357,9 +357,16 @@ _CATCHALL_RE = re.compile(
     r"(?i)^(additional (information|comments|notes|details)|comments|"
     r"anything else( you('|’)d like (us )?to (know|share|add))?|"
     r"is there anything else.{0,40})[?.!]?$")
+# Widened 2026-07-31 after the live staged run: "How DOES BetterUp's mission align…"
+# and "What IS the most meaningful customer outcome…" were mislabeled logistical —
+# `does` and `is/was/are` were missing. Precision holds because classification order
+# is standard → catch-all → substantive: "What is your desired salary?" is caught by
+# the standard-field exclusion vocabulary before this regex is ever consulted.
 _SUBSTANTIVE_WORDING_RE = re.compile(
     r"(?i)\b(describe|tell us about|walk us through|explain|why do|why are|why would|"
-    r"how (do|did|would|have)|what (do|did|would|excites|interests|draws|made))\b")
+    r"how (do|did|does|would|have|has|will)|"
+    r"what (is|was|are|do|did|would|excites|interests|draws|made|motivates)|"
+    r"which\b.{0,60}\bdo you)\b")
 
 
 def classify_question(q: dict) -> str:

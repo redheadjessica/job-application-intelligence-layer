@@ -25,6 +25,7 @@ With no captured questions the section reads `None Found`.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -78,19 +79,42 @@ def parse_capture_questions(text: str) -> list[dict]:
     return out
 
 
-def drafts_skeleton(capture_text: str) -> str:
+def classes_from_manifest(capture_path) -> dict:
+    """label -> fetch-time class, from the batch manifest (the machine mirror).
+    The capture format deliberately strips internal types, so wording-only
+    re-classification at draft time can differ from what the fetcher knew (a
+    LongText is substantive whatever its wording) — the manifest is authoritative
+    when present. Empty dict when the manifest or entry is absent."""
+    try:
+        path = Path(capture_path).resolve()
+        batch = path.parent.parent.parent            # …/<batch>/3 - Source Material/All Job Posts (full text)/x.txt
+        manifest = json.loads((batch / "0 - Prep Report" / "prep-manifest.json")
+                              .read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    for entry in manifest.get("entries") or []:
+        rel = entry.get("output_path") or entry.get("quarantine_path") or ""
+        if Path(rel).name == Path(capture_path).name:
+            return {str(q.get("label", "")): q.get("class")
+                    for q in (entry.get("questions") or []) if q.get("class")}
+    return {}
+
+
+def drafts_skeleton(capture_text: str, question_classes: dict | None = None) -> str:
     """The Application Question Drafts section skeleton for one capture: exact
     question text preserved in each heading, class-specific drafting instruction
     under it, `None Found` when the capture holds no questions. Standard fields
     (which the prep filter should never have captured) are skipped with a note
-    rather than answered."""
+    rather than answered. `question_classes` (label -> class, from the manifest)
+    is authoritative; wording-only classification is the fallback."""
+    question_classes = question_classes or {}
     questions = parse_capture_questions(capture_text)
     lines = [SECTION_HEADING, ""]
     if not questions:
         lines.append(NONE_FOUND)
         return "\n".join(lines) + "\n"
     for q in questions:
-        cls = classify_question({"label": q["label"]})
+        cls = question_classes.get(q["label"]) or classify_question({"label": q["label"]})
         marker = "[Required]" if q["required"] else "[Optional]"
         lines.append(f"### Q{q['number']}: {q['label']} {marker}")
         for ctx in q["context"]:
@@ -113,7 +137,8 @@ def main(argv):
         description="Print the Application Question Drafts skeleton for a capture.")
     parser.add_argument("capture", help="the job capture .txt")
     args = parser.parse_args(argv[1:])
-    print(drafts_skeleton(Path(args.capture).read_text(encoding="utf-8")), end="")
+    print(drafts_skeleton(Path(args.capture).read_text(encoding="utf-8"),
+                          question_classes=classes_from_manifest(args.capture)), end="")
     return 0
 
 

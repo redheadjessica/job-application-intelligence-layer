@@ -38,6 +38,7 @@ from ats_fetchers import (
     _greenhouse_ids,
     _linkedin_job_id,
     _prettify_slug,
+    classify_question,
     mine_benefits_equity,
     parse_office_cadence,
     repair_conjunction_fusion,
@@ -3185,6 +3186,10 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
              # Employer posting dates (plain YYYY-MM-DD, or None when the source has none) —
              # the rankings `Posted` column reads these back out of the capture.
              "posted_date": None, "updated_date": None,
+             # Kept application questions, with their FETCH-TIME classification —
+             # the capture format deliberately carries no internal types, so this
+             # manifest field is how draft time avoids re-guessing from bare text.
+             "questions": [],
              # ATS posting id (when the source exposed one) + per-entry capture history —
              # prior fetched_at/source/ats-id records so CAPTURE UPDATE DETAILS can be
              # regenerated faithfully and the ORIGINAL Captured survives later re-fetches.
@@ -3410,6 +3415,14 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
         # as a capture failure in the completeness line, the manifest, and the report.
         field_status["title"] = FOUND if title != "Unknown Title" else CAPTURE_FAILED
         questions = res.get("questions") if res.get("questions") is not None else meta.get("questions")
+        # The machine mirror of each kept question: label + required + the class as
+        # classified AT FETCH TIME (where the source type — LongText etc. — is still
+        # in hand). question_drafts.py prefers this over wording-only re-guessing.
+        question_records = [
+            {"label": _strip_wrapping_quotes(str(q.get("label", "")).strip()),
+             "required": bool(q.get("required")),
+             "class": q.get("question_class") or classify_question(q)}
+            for q in (questions or []) if isinstance(q, dict)]
         missing = missing_hard_fields(field_status)
         has_comp = field_status.get("compensation") == FOUND
         has_loc = field_status.get("working_location") == FOUND
@@ -3475,7 +3488,7 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                                       posted_date=meta.get("posted_date"),
                                       updated_date=meta.get("updated_date"),
                                       posting_id=meta.get("posting_id"),
-                                      capture_history=history,
+                                      capture_history=history, questions=question_records,
                                       output_path=_rel(out, batch_root)))
         else:  # THIN, or a USABLE capture the QA gate quarantined (NEEDS_REVIEW)
             if qa_problems:
@@ -3494,7 +3507,7 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                                       posted_date=meta.get("posted_date"),
                                       updated_date=meta.get("updated_date"),
                                       posting_id=meta.get("posting_id"),
-                                      capture_history=history,
+                                      capture_history=history, questions=question_records,
                                       quarantine_path=_rel(out, batch_root)))
 
     # Soft-flag possible same company/title duplicates among usable posts (keep both).

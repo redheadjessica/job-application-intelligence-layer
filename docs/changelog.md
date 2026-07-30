@@ -11,6 +11,28 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-31 — Release-validation fix: substantive questions no longer mislabeled logistical
+
+The final question-workflow validation caught two clearly-substantive live questions classified
+logistical ("How DOES BetterUp's mission align…", "…What IS the most meaningful customer
+outcome…"). Two-layer cause, two-layer fix:
+
+- **The wording regex lacked common verb forms** — `does`, `is/was/are`, `has/will`, `motivates`,
+  and the `which … do you` shape are now covered. Precision holds because classification order is
+  standard → catch-all → substantive: "What is your desired salary?" and "What is your phone
+  number?" are caught by the exclusion vocabulary before the wording regex is consulted (pinned as
+  anti-fixtures). The metro/cadence office question stays logistical (pinned).
+- **Draft time no longer re-guesses from bare text.** The capture format deliberately strips
+  internal types, so wording-only re-classification at draft time could disagree with what the
+  fetcher knew (a LongText is substantive whatever its wording). Kept questions' fetch-time classes
+  now persist in the MANIFEST (the machine mirror — its job; the frozen capture format is unchanged,
+  no new sub-line), and `question_drafts.py` reads them from the manifest beside the capture,
+  falling back to wording only for a detached capture. Pinned end-to-end with a
+  wording-looks-logistical LongText: manifest class wins, fallback still functions, and the CLI
+  wires the lookup itself.
+
+Suite: 679 → 683 green.
+
 ## 2026-07-30 — Canary findings closed: sentence comp labels, connective fusion, HTML in context lines
 
 The Tranche-3 live canary's three findings, each fixed from the exact observed shape:
