@@ -3831,3 +3831,198 @@ def test_a_failing_employer_name_lookup_never_fails_the_capture(tmp_path):
     entry = manifest["entries"][0]
     assert entry["status"] == pc.USABLE
     assert entry["company"] == "Helpscout"   # honest token fallback, capture intact
+
+
+# ===========================================================================
+# Registry-authoritative re-render (2026-07-30). A staging worker writes into an
+# ISOLATED (empty) shard, so its captures render their OWN fetch as ORIGINAL with
+# no LATEST — the artifact claims today's fetch is the original and drops the true
+# history even though the global registry is correct. The re-render fixes the
+# artifact WITHOUT being a capture event.
+# ===========================================================================
+_STAGED_URL = "https://boards.greenhouse.io/asana/jobs/7392230"
+_STAGED_KEY = "greenhouse:asana:7392230"
+
+
+def _staged_capture(tmp_path, url=_STAGED_URL, captured="2026-07-30T14:24:00+00:00"):
+    """A capture as a staging worker writes it: its own fetch as ORIGINAL, no LATEST."""
+    src = _batch_source(tmp_path)
+    body = _SYNTH_BODY
+    text = pc.build_output_text(
+        url, "Senior Product Manager", "Asana", body,
+        meta={"title": "Senior Product Manager", "source": "greenhouse-boards-api",
+              "structured_source": True, "compensation": "USD 200,000-250,000",
+              "working_location": "Remote", "posting_id": "7392230",
+              "apply_url": "https://boards.greenhouse.io/asana/jobs/7392230"},
+        methods_tried=["ats"], captured=captured)
+    path = src / "asana__senior-product-manager.txt"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def _registry_with_history(tmp_path, key=_STAGED_KEY,
+                           original="2026-07-29T18:56:12+00:00",
+                           latest="2026-07-30T14:24:00+00:00"):
+    reg_path = tmp_path / "global-registry.json"
+    posting = {
+        "history": [
+            {"fetched_at": original, "url": _STAGED_URL, "method": "ats",
+             "source": "greenhouse-boards-api", "posting_id": "7392230", "ok": True},
+            {"fetched_at": "2026-07-29T22:43:43+00:00", "url": _STAGED_URL, "method": "ats",
+             "source": "greenhouse-boards-api", "posting_id": "7392230", "ok": True},
+        ],
+        "original_capture": {"fetched_at": original, "url": _STAGED_URL, "method": "ats",
+                             "source": "greenhouse-boards-api", "posting_id": "7392230",
+                             "ok": True},
+        "original_source": "backfill-earliest-known",
+    }
+    if latest:
+        posting["latest_capture"] = {"fetched_at": latest, "url": _STAGED_URL,
+                                     "method": "ats", "source": "greenhouse-boards-api",
+                                     "posting_id": "7392230", "ok": True}
+        posting["history"].append(dict(posting["latest_capture"]))
+    pc.save_capture_registry(reg_path, {"schema_version": 1, "postings": {key: posting}})
+    return reg_path
+
+
+def test_rerender_restores_the_true_original_from_the_registry(tmp_path):
+    path = _staged_capture(tmp_path)
+    before = path.read_text(encoding="utf-8")
+    assert "Captured At: July 30, 2026 at 10:24 AM ET" in before
+    assert "LATEST CAPTURE DETAILS" not in before      # the staged (wrong) shape
+    reg_path = _registry_with_history(tmp_path)
+    assert pc.apply_registry_history(path, reg_path) is True
+    after = path.read_text(encoding="utf-8")
+    # ORIGINAL now comes from the REGISTRY, not from the file's own fetch.
+    original_block = after.split("ORIGINAL CAPTURE DETAILS")[1].split("LATEST")[0]
+    assert "Captured At: July 29, 2026 at 2:56 PM ET" in original_block
+    # ...and the file's own fetch became LATEST.
+    latest_block = after.split("LATEST CAPTURE DETAILS")[1]
+    assert "Captured At: July 30, 2026 at 10:24 AM ET" in latest_block
+    assert after.index("ORIGINAL CAPTURE DETAILS") < after.index("LATEST CAPTURE DETAILS")
+
+
+def test_rerender_leaves_the_registry_byte_identical(tmp_path):
+    """A re-render is NOT a capture event: no history appended, no timestamp moved,
+    no write to the registry at all."""
+    path = _staged_capture(tmp_path)
+    reg_path = _registry_with_history(tmp_path)
+    before_bytes = reg_path.read_bytes()
+    before_reg = pc.load_capture_registry(reg_path)
+    assert pc.apply_registry_history(path, reg_path) is True
+    assert reg_path.read_bytes() == before_bytes
+    after_reg = pc.load_capture_registry(reg_path)
+    assert after_reg == before_reg
+    assert len(after_reg["postings"][_STAGED_KEY]["history"]) == 3
+    assert after_reg["postings"][_STAGED_KEY]["original_capture"]["fetched_at"] == \
+        "2026-07-29T18:56:12+00:00"
+    assert after_reg["postings"][_STAGED_KEY]["latest_capture"]["fetched_at"] == \
+        "2026-07-30T14:24:00+00:00"
+
+
+def test_rerender_preserves_everything_above_the_end_marker_byte_for_byte(tmp_path):
+    path = _staged_capture(tmp_path)
+    before = path.read_text(encoding="utf-8")
+    reg_path = _registry_with_history(tmp_path)
+    pc.apply_registry_history(path, reg_path)
+    after = path.read_text(encoding="utf-8")
+    marker = "--- JOB TEXT END ---"
+    assert before.split(marker)[0] == after.split(marker)[0]
+    assert pc.body_from_capture(after) == pc.body_from_capture(before) == _SYNTH_BODY
+    # Snapshot / work details / compensation / questions all untouched.
+    for section in ("JOB SNAPSHOT", "WORK DETAILS", "COMPENSATION",
+                    "APPLICATION QUESTIONS WORTH PREPARING"):
+        assert section in after
+
+
+def test_rerender_of_a_genuine_first_capture_emits_no_latest_section(tmp_path):
+    path = _staged_capture(tmp_path, captured="2026-07-29T18:56:12+00:00")
+    reg_path = _registry_with_history(tmp_path, original="2026-07-29T18:56:12+00:00",
+                                      latest="2026-07-29T18:56:12+00:00")
+    pc.apply_registry_history(path, reg_path)
+    after = path.read_text(encoding="utf-8")
+    assert "ORIGINAL CAPTURE DETAILS" in after
+    assert "LATEST CAPTURE DETAILS" not in after
+    assert "Captured At: July 29, 2026 at 2:56 PM ET" in after
+
+
+@pytest.mark.parametrize("url", [
+    "https://boards.greenhouse.io/asana/jobs/7392230",
+    "https://job-boards.greenhouse.io/asana/jobs/7392230?gh_src=x",
+    "https://asana.com/jobs/apply/7392230/senior-product-manager",
+    "https://www.asanacareers.com/jobs/?gh_jid=7392230",
+])
+def test_alias_url_forms_resolve_to_the_same_registry_key(tmp_path, url):
+    path = _staged_capture(tmp_path / url[-12:].replace("/", "_"), url=url)
+    text = path.read_text(encoding="utf-8")
+    key = pc.capture_identity_from_file(text)
+    assert key == _STAGED_KEY, url
+    reg_path = _registry_with_history(tmp_path)
+    assert pc.apply_registry_history(path, reg_path) is True
+    assert "Captured At: July 29, 2026 at 2:56 PM ET" in path.read_text(encoding="utf-8")
+
+
+def test_rerender_is_idempotent(tmp_path):
+    path = _staged_capture(tmp_path)
+    reg_path = _registry_with_history(tmp_path)
+    assert pc.apply_registry_history(path, reg_path) is True
+    once = path.read_text(encoding="utf-8")
+    assert pc.apply_registry_history(path, reg_path) is False   # nothing left to do
+    assert path.read_text(encoding="utf-8") == once
+    assert pc.apply_registry_history(path, reg_path) is False
+
+
+def test_a_capture_absent_from_the_registry_is_left_untouched(tmp_path):
+    path = _staged_capture(tmp_path)
+    before = path.read_text(encoding="utf-8")
+    empty = tmp_path / "empty-registry.json"
+    pc.save_capture_registry(empty, {"schema_version": 1, "postings": {}})
+    assert pc.apply_registry_history(path, empty) is False
+    assert path.read_text(encoding="utf-8") == before
+    # And the CLI reports it rather than failing.
+    import apply_registry_history as arh
+    msgs: list = []
+    counts = arh.run([path.parent], registry_path=empty, out=msgs.append)
+    assert counts["not_in_registry"] == 1 and counts["changed"] == 0
+    assert any("no registry record" in m for m in msgs)
+
+
+def test_rerender_preserves_an_existing_additional_notes_line(tmp_path):
+    """A comparison the capture already made is real information — keep it. A
+    re-render can't produce one (it reads no prior body), so it never invents one."""
+    path = _staged_capture(tmp_path)
+    text = path.read_text(encoding="utf-8")
+    reg_path = _registry_with_history(tmp_path)
+    pc.apply_registry_history(path, reg_path)
+    # Promoted a first-capture render: honest phrasing, never "no material changes".
+    after = path.read_text(encoding="utf-8")
+    assert "Additional Notes: Previous capture was not available for comparison." in after
+    assert "No material changes detected." not in after
+    # Now give the file a real notes line and re-render again: it survives.
+    edited = after.replace(
+        "Additional Notes: Previous capture was not available for comparison.",
+        "Additional Notes: Employer materially updated the posting.")
+    path.write_text(edited, encoding="utf-8")
+    reg2 = _registry_with_history(tmp_path, original="2026-07-28T17:46:53+00:00")
+    assert pc.apply_registry_history(path, reg2) is True
+    final = path.read_text(encoding="utf-8")
+    assert "Additional Notes: Employer materially updated the posting." in final
+    assert "Captured At: July 28, 2026 at 1:46 PM ET" in final
+
+
+def test_the_cli_runs_over_a_folder_and_reports(tmp_path):
+    import apply_registry_history as arh
+    path = _staged_capture(tmp_path)
+    reg_path = _registry_with_history(tmp_path)
+    msgs: list = []
+    # A dry run changes nothing on disk...
+    counts = arh.run([path.parent], registry_path=reg_path, dry_run=True, out=msgs.append)
+    assert counts["changed"] == 1
+    assert "LATEST CAPTURE DETAILS" not in path.read_text(encoding="utf-8")
+    assert any("dry run" in m for m in msgs)
+    # ...then the real run rewrites it, and a second run is a no-op.
+    counts = arh.run([path.parent], registry_path=reg_path, out=msgs.append)
+    assert counts == {"changed": 1, "unchanged": 0, "not_in_registry": 0, "unreadable": 0}
+    assert "LATEST CAPTURE DETAILS" in path.read_text(encoding="utf-8")
+    counts = arh.run([path.parent], registry_path=reg_path, out=msgs.append)
+    assert counts["changed"] == 0 and counts["unchanged"] == 1

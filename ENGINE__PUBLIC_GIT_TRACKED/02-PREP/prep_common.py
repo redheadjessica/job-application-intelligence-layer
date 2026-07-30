@@ -1924,7 +1924,8 @@ def _capture_details_lines(*, captured, apply_url, source, posting_id, methods, 
     return lines
 
 
-def _capture_update_lines(capture_update: dict, *, source, posting_id, methods, fs) -> list[str]:
+def _capture_update_lines(capture_update: dict, *, source, posting_id, methods, fs,
+                          verification: str | None = None) -> list[str]:
     """LATEST CAPTURE DETAILS — present only when at least one later successful
     fetch exists. Describes the NEW fetch (ORIGINAL CAPTURE DETAILS above keeps
     describing the earliest one), then the comparison notes."""
@@ -1933,10 +1934,160 @@ def _capture_update_lines(capture_update: dict, *, source, posting_id, methods, 
     lines.append(f"Source: {source}")
     lines.append(f"Posting ATS ID: {posting_id}")
     lines.append(f"Methods Checked: {methods}")
-    lines.append(_verification_line(fs))
+    lines.append(verification or _verification_line(fs))
     notes = capture_update.get("notes") or "Previous capture was not available for comparison."
     lines.append(f"Additional Notes: {notes}")
     return lines
+
+
+# --------------------------------------------------------------------------- #
+# Registry-authoritative re-render of the capture-history sections
+#
+# Why this exists: a staging/canary worker writes into an ISOLATED registry shard (that
+# isolation is the point — a rejected staging capture must never become the permanent
+# original). But an empty shard means the writer has no history to render from, so each
+# staged file wrote its OWN fetch as ORIGINAL CAPTURE DETAILS with no LATEST section —
+# the artifact then claims today's fetch is the original and silently drops the true
+# history, even though the global registry is correct. This re-render restores the
+# artifact to what the durable record says.
+#
+# It is NOT a capture event: it makes no request, appends no history, advances no
+# timestamp, and never writes the registry (opened read-only). Everything above
+# `--- JOB TEXT END ---` is preserved byte-for-byte; only the details tail is rewritten.
+# --------------------------------------------------------------------------- #
+_END_MARKER = "--- JOB TEXT END ---"
+_ORIGINAL_BANNER = "ORIGINAL CAPTURE DETAILS"
+_LATEST_BANNER = "LATEST CAPTURE DETAILS"
+
+
+def _detail_fields(tail: str) -> dict:
+    """The capture-detail field values already in a file, per section. Used to preserve
+    what the registry does not record (Application URL, the Verification line, and an
+    existing Additional Notes)."""
+    out: dict = {}
+    sections = re.split(rf"^({_ORIGINAL_BANNER}|{_LATEST_BANNER})$", tail, flags=re.M)
+    current = None
+    for chunk in sections:
+        if chunk in (_ORIGINAL_BANNER, _LATEST_BANNER):
+            current = "original" if chunk == _ORIGINAL_BANNER else "latest"
+            out[current] = {}
+            continue
+        if current is None:
+            continue
+        for label, key in (("Captured At", "captured_at"), ("Application URL", "apply_url"),
+                           ("Source", "source"), ("Posting ATS ID", "posting_id"),
+                           ("Methods Checked", "methods"), ("Additional Notes", "notes")):
+            m = re.search(rf"^{re.escape(label)}:\s*(.*)$", chunk, re.M)
+            if m and m.group(1).strip():
+                out[current][key] = m.group(1).strip()
+        m = re.search(r"^(Verification:.*)$", chunk, re.M)
+        if m:
+            out[current]["verification"] = m.group(1).strip()
+    return out
+
+
+def capture_identity_from_file(text: str) -> str | None:
+    """The canonical posting identity of a written capture, from its own JOB SNAPSHOT
+    URL plus the Application URL / Posting ATS ID in its details — so employer-domain
+    and alias URL forms resolve to the same registry key as the fetch did."""
+    head = text.split(_END_MARKER, 1)[0]
+    tail = text.split(_END_MARKER, 1)[1] if _END_MARKER in text else ""
+    m = re.search(r"^Job Posting URL:\s*(\S+)\s*$", head, re.M)
+    url = m.group(1) if m else None
+    fields = _detail_fields(tail)
+    detail = fields.get("original") or fields.get("latest") or {}
+    apply_url = detail.get("apply_url")
+    if apply_url in ("Not Available", ""):
+        apply_url = None
+    posting_id = detail.get("posting_id")
+    if posting_id in ("Not Available", ""):
+        posting_id = None
+    if not url:
+        return None
+    return canonical_capture_key(url, apply_url=apply_url, posting_id=posting_id)
+
+
+def _event_details(event: dict, fallback: dict) -> dict:
+    """Render one registry event's detail fields, falling back to what the file already
+    carries for anything the registry does not record (Application URL, Verification)."""
+    event = event or {}
+    source = event.get("source") or event.get("method")
+    return {
+        "captured": event.get("fetched_at"),
+        "apply_url": fallback.get("apply_url") or "Not Available",
+        "source": _human_source(source) if source else (fallback.get("source") or "Not Available"),
+        "posting_id": (str(event.get("posting_id")) if event.get("posting_id")
+                       else (fallback.get("posting_id") or "Not Available")),
+        "methods": (_human_method(event.get("method")) if event.get("method")
+                    else (fallback.get("methods") or "Not Recorded")),
+        "verification": fallback.get("verification"),
+    }
+
+
+def render_capture_history(text: str, posting: dict) -> str:
+    """The capture text with its ORIGINAL/LATEST sections rebuilt from a registry
+    posting record. Everything through `--- JOB TEXT END ---` is untouched."""
+    if _END_MARKER not in text:
+        return text
+    head, tail = text.split(_END_MARKER, 1)
+    head = head + _END_MARKER
+    fields = _detail_fields(tail)
+    file_original = fields.get("original") or {}
+    file_latest = fields.get("latest") or {}
+
+    original_event = posting.get("original_capture") or {}
+    latest_event = posting.get("latest_capture") or {}
+    orig = _event_details(original_event, file_original)
+    lines = ["", ""]
+    lines += _capture_details_lines(
+        captured=orig["captured"], apply_url=orig["apply_url"], source=orig["source"],
+        posting_id=orig["posting_id"], methods=orig["methods"], fs={},
+        verification=orig["verification"] or _verification_line({}))
+
+    same = (not latest_event
+            or (latest_event.get("fetched_at") or "") == (original_event.get("fetched_at") or ""))
+    if not same:
+        # The file's own details describe the fetch that produced it — the best available
+        # fallback for the LATEST section, whose fields the registry only partly records.
+        latest_fallback = file_latest or file_original
+        latest = _event_details(latest_event, latest_fallback)
+        # Preserve a comparison the file already made; never invent one a re-render
+        # cannot perform (it reads no prior body).
+        notes = file_latest.get("notes") or "Previous capture was not available for comparison."
+        lines.append("")
+        lines += _capture_update_lines(
+            {"re_captured": latest["captured"], "notes": notes},
+            source=latest["source"], posting_id=latest["posting_id"],
+            methods=latest["methods"], fs={},
+            verification=latest["verification"] or _verification_line({}))
+    return head + "\n".join(lines) + "\n"
+
+
+def apply_registry_history(capture_path, registry_path=None) -> bool:
+    """Rewrite one capture's ORIGINAL/LATEST CAPTURE DETAILS from the durable registry.
+
+    Returns True when the file changed. False when it was already correct, when the
+    posting has no registry record (left untouched), or when the file has no body
+    markers. NEVER writes the registry and never makes a request: a re-render is not a
+    capture event, so no history is appended and no timestamp moves.
+    """
+    path = Path(capture_path)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    key = capture_identity_from_file(text)
+    if not key:
+        return False
+    registry = load_capture_registry(resolve_registry_path(registry_path))
+    posting = (registry.get("postings") or {}).get(key)
+    if not posting or not posting.get("original_capture"):
+        return False
+    rendered = render_capture_history(text, posting)
+    if rendered == text:
+        return False
+    atomic_write_text(path, rendered)
+    return True
 
 
 # --------------------------------------------------------------------------- #

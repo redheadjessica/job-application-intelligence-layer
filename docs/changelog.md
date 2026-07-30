@@ -62,6 +62,36 @@ Groundwork for a parallel refresh, where several workers touch the same durable 
   cover-letter workflows keep working against an unmigrated file instead of silently writing
   nothing. The cover-letter marker is now the literal `Yes` (was `Y`) per the column semantics.
 
+## 2026-07-30 — Registry-authoritative re-render: staged captures no longer claim to be the original
+
+Refreshing a whole batch through parallel STAGED workers exposed an artifact-level violation of the
+immutable-original rule. Registry isolation is required (a rejected staging capture must never become
+the permanent original), but an isolated shard is EMPTY — so at render time each capture had no
+history to draw on and wrote its own fetch as `ORIGINAL CAPTURE DETAILS` with no `LATEST` section.
+The file then claimed today's fetch was the original and silently dropped the true history, even
+though the global registry was correct.
+
+- **`apply_registry_history(capture_path, registry_path) -> bool`** rebuilds a capture's
+  ORIGINAL/LATEST sections from the durable registry: identity resolved from the file's own
+  JOB SNAPSHOT URL plus its Application URL / Posting ATS ID (so employer-domain and alias URL forms
+  land on the same key the fetch used), ORIGINAL from the immutable `original_capture`, LATEST from
+  `latest_capture`, and no LATEST at all when the two are the same genuine first capture. Fields the
+  registry does not record (Application URL, the Verification line) are preserved from the file.
+- **A re-render is explicitly not a capture event**: it makes no request, appends no history,
+  advances no timestamp, and opens the registry READ-ONLY — pinned by a test asserting the registry
+  file is byte-identical before and after. Everything above `--- JOB TEXT END ---` (snapshot, work
+  details, compensation, questions, and the job text) is byte-identical too; only the details tail
+  is rewritten. Running it twice reports no change.
+- **Honesty about what a re-render can know.** An `Additional Notes:` comparison already in the file
+  is preserved; when promoting a staged first-capture render into a LATEST section, the notes say
+  `Previous capture was not available for comparison.` rather than claiming no material changes — a
+  re-render reads no prior body and cannot make that comparison.
+- **CLI** (`ENGINE__PUBLIC_GIT_TRACKED/02-PREP/apply_registry_history.py`) runs it over files or
+  folders, with `--dry-run` and `--registry`, and reports per file: rewritten / already correct /
+  no registry record (left untouched) / unreadable.
+
+Suite: 500 → 512 green.
+
 ## 2026-07-30 — Canary pass 3: the two prep CLIs had diverged, and an enrichment shipped in only one
 
 The employer-declared-name lookup was correct and unit-tested, and the live capture still said
