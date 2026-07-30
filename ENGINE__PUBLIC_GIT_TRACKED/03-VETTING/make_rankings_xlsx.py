@@ -109,20 +109,9 @@ def load_meta(csv_path) -> dict:
     return merged
 
 # ---- Status vocabulary: the 12 dropdown values (vet-jobs statusFor outputs are a subset). ----
-STATUS_VALUES = [
-    "**Currently In Talks**",
-    "Applied: Awaiting Response",
-    "Apply Again??",
-    "Apply ASAP: High Prio",
-    "Apply Eventually: Apply If Time",
-    "Apply Eventually: Backup Lane",
-    "Apply Eventually: On Ice (Applied to Another Position at this Company)",
-    "Apply Eventually: Or Skip It",
-    "Declined (Applied, Rejected)",
-    "Down (Applied, No Response)",
-    "Down: Closed Before Applying",
-    "Interviewed: Rejected",
-]
+# Defined ONCE in norm_contracts, alongside the repair function — a second copy here would be a
+# place for the two to drift, and a status that drifts loses its dropdown match and its color.
+STATUS_VALUES = norm_contracts.STATUS_VALUES
 
 # Section legend labels -> (fill, font) for the merged bars. Vivid palette matching the reference
 # workbook; Interviewed is brown to read distinct from the Closed/Down red.
@@ -517,6 +506,12 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
             # Lane taxonomy repair ("Work Tools - X" -> "Work - X"); Lane Fit is
             # candidate data and is deliberately NOT touched.
             rec[H_LANE] = norm_contracts.normalize_lane(rec.get(H_LANE))
+        # Status spelling drift ("Apply if Time" -> "Apply If Time"). A near-miss silently costs the
+        # cell its dropdown match, its lifecycle fill and its filter grouping, so repair it here too
+        # — but only the spelling. The NEEDS_REFETCH sentinel is deliberately not a tracker value and
+        # is left alone by normalize_status (it warns, never rewrites, an unrecognized value).
+        if H_STATUS in rec and (rec.get(H_STATUS) or "").strip() != NEEDS_REFETCH_STATUS:
+            rec[H_STATUS] = norm_contracts.normalize_status(rec.get(H_STATUS))
     # Posted column (the employer's own publication date): present in CSVs written by current
     # vet-jobs.js and filled by the norm_contracts pass. For OLDER CSVs, insert the header after
     # Comp Range and read each row's captured "Posted:" provenance line, so regenerating any batch

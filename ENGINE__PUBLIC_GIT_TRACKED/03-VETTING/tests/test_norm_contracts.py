@@ -606,6 +606,50 @@ def test_posted_is_read_out_of_the_capture_provenance_line(tmp_path):
     assert norm_contracts.posted_date_from_capture("", base_dir=rankings) == ""
 
 
+def test_status_spelling_drift_is_repaired_to_the_dropdown_value():
+    """The real defect: three rows read "Apply if Time" (lowercase "if"), which is not one of the
+    12 tracker values, so those cells lost their dropdown match and their lifecycle fill."""
+    canon = "Apply Eventually: Apply If Time"
+    for drift in ("Apply Eventually: Apply if Time",
+                  "apply eventually: apply if time",
+                  "  Apply Eventually:  Apply If Time  ",
+                  "Apply Eventually - Apply If Time"):
+        assert norm_contracts.normalize_status(drift) == canon
+    # Every canonical value is a fixed point, so a repair pass can never churn a correct sheet.
+    for v in norm_contracts.STATUS_VALUES:
+        assert norm_contracts.normalize_status(v) == v
+    # Blank stays blank; a value outside the vocabulary is warned about, never rewritten.
+    assert norm_contracts.normalize_status("") == ""
+    warnings = []
+    assert norm_contracts.normalize_status("Ghosted after 3 rounds",
+                                           warn=warnings.append) == "Ghosted after 3 rounds"
+    assert warnings and "not one of" in warnings[0]
+
+
+def test_cli_pass_repairs_a_drifted_status_cell(tmp_path):
+    """End to end through the CSV the user actually opens: the miscased value is rewritten and the
+    row's own status MEANING is untouched (this pass never reassigns a status)."""
+    csv_path = tmp_path / "rankings.csv"
+    write_csv(csv_path, [
+        make_row(company="Acme", status="Apply Eventually: Apply if Time"),
+        make_row(company="Notesco", status="Apply ASAP: High Prio"),
+    ])
+    norm_contracts.normalize_rankings_csv(csv_path, {}, out=lambda *_: None)
+    rows = list(csv.DictReader(open(csv_path, encoding="utf-8")))
+    assert rows[0]["Status? [You Change]"] == "Apply Eventually: Apply If Time"
+    assert rows[1]["Status? [You Change]"] == "Apply ASAP: High Prio"
+    # Idempotent: a second pass reports nothing left to repair.
+    assert norm_contracts.normalize_rankings_csv(csv_path, {}, out=lambda *_: None) == 0
+
+
+def test_status_vocabulary_has_exactly_one_definition():
+    """A second copy of the list is a place for the dropdown and the repair map to drift apart."""
+    import make_rankings_xlsx
+    assert make_rankings_xlsx.STATUS_VALUES is norm_contracts.STATUS_VALUES
+    # Every value that gets a lifecycle color must be a real dropdown value, and vice versa.
+    assert set(make_rankings_xlsx.STATUS_COLORS) == set(norm_contracts.STATUS_VALUES)
+
+
 def test_capture_search_never_escapes_its_own_batch(tmp_path):
     """A row must never bind to a same-named capture belonging to a DIFFERENT batch. The
     last-resort filename search may step up to its own batch root, but no further."""

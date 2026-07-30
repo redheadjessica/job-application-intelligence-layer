@@ -11,6 +11,34 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Status joins the mechanically-enforced contracts (spelling drift silently unstyled cells)
+
+Found by a user reading her own sheet. Three rows held `Apply Eventually: Apply if Time` — lowercase
+"if" — which is not one of the 12 tracker values. The cost of a one-letter miss is entirely invisible:
+the cell loses its dropdown match, its lifecycle fill, and its filter grouping, so it reads as a
+legitimate status while behaving like an unrecognized one. `run-batch.js` also compares the skip-band
+status by string equality, so a drifted value there would silently stop excluding a job from tailoring.
+
+The generator was never the culprit — `vet-jobs.js statusFor()` emits correct casing. These rows were
+hand-authored during a rescore, which is the general case worth defending against: any writer (an agent,
+a script, a paste) can put text in that column, so the vocabulary has to be enforced where the artifact
+is written rather than trusted at each call site. This is the same lesson as the location grammar.
+
+- **`norm_contracts.normalize_status()`** repairs case / spacing / punctuation drift to the exact
+  canonical value. A value matching nothing is left **exactly as written** and warned about instead —
+  the column belongs to the candidate, and silently rewriting a status they typed on purpose would be a
+  worse failure than flagging it. Blank stays blank.
+- **`STATUS_VALUES` now has one definition** (in `norm_contracts`); `make_rankings_xlsx` imports it for
+  the dropdown and its color maps. A second copy was a place for the validation list and the repair map
+  to drift apart. A test asserts the two are the same object *and* that the color map's keys match the
+  vocabulary exactly.
+- Wired into both enforcement points, like every other contract: the post-scoring CLI pass over the CSV,
+  and `make_rankings_xlsx` on read, so regenerating an older batch repairs it too. The Status column
+  header is matched by prefix (it carries a `? [You Change]` suffix that has drifted before).
+- The `NEEDS RE-FETCH` sentinel is deliberately not a tracker value and is skipped rather than warned on.
+
+Repair only ever touches spelling — it never reassigns a status, which stays the candidate's call.
+
 ## 2026-07-29 — Capture lookup can no longer bind a row to a *different* batch's job post
 
 Found while reviewing the notes-column work, not by a failing run — which is the concerning part. The

@@ -523,6 +523,67 @@ def canonical_application_name(company, role):
 
 
 # --------------------------------------------------------------------------- #
+# Status — the tracker's lifecycle vocabulary.
+# --------------------------------------------------------------------------- #
+# The 12 dropdown values, verbatim. This is the ONE definition; make_rankings_xlsx imports it for
+# the data-validation list and its color maps, and vet-jobs' generated values are a subset. A cell
+# holding anything outside this list silently loses its dropdown match, its lifecycle color, and
+# its filter grouping — which is how three rows ended up reading "Apply if Time" (lowercase "if")
+# and rendering unfilled.
+STATUS_VALUES = [
+    "**Currently In Talks**",
+    "Applied: Awaiting Response",
+    "Apply Again??",
+    "Apply ASAP: High Prio",
+    "Apply Eventually: Apply If Time",
+    "Apply Eventually: Backup Lane",
+    "Apply Eventually: On Ice (Applied to Another Position at this Company)",
+    "Apply Eventually: Or Skip It",
+    "Declined (Applied, Rejected)",
+    "Down (Applied, No Response)",
+    "Down: Closed Before Applying",
+    "Interviewed: Rejected",
+]
+
+
+def _status_column(headers):
+    """The Status header, matched by prefix — it carries a user-facing suffix
+    ("Status? [You Change]") that has drifted before and may again."""
+    for h in headers:
+        if str(h or "").strip().lower().startswith("status"):
+            return h
+    return None
+
+
+def _status_key(text):
+    """Collapse a status to a comparison key: case-, whitespace- and punctuation-insensitive."""
+    return re.sub(r"[^a-z0-9]+", "", str(text or "").lower())
+
+
+_STATUS_BY_KEY = {_status_key(v): v for v in STATUS_VALUES}
+
+
+def normalize_status(text, warn=_warn):
+    """Repair a Status cell to its exact canonical spelling.
+
+    Case, spacing and punctuation drift all repair silently — they carry no meaning and a
+    near-miss is never intentional. A value that matches nothing is left EXACTLY as written and
+    warned about instead: the column is the candidate's own, and mangling a status they typed
+    deliberately would be worse than flagging it. Blank stays blank (an unscored/user row)."""
+    raw = str(text or "").strip()
+    if not raw or raw in _STATUS_BY_KEY.values():
+        return raw
+    hit = _STATUS_BY_KEY.get(_status_key(raw))
+    if hit:
+        return hit
+    warn(
+        f'Status "{raw}" is not one of the {len(STATUS_VALUES)} tracker values — left as written, '
+        "but it will have no dropdown match, no lifecycle color and no filter grouping."
+    )
+    return raw
+
+
+# --------------------------------------------------------------------------- #
 # CLI — normalize a rankings CSV in place (invoked by vet-jobs.js post-scoring,
 # before the XLSX build). Prints every repair it makes.
 # --------------------------------------------------------------------------- #
@@ -694,6 +755,12 @@ def normalize_rankings_csv(csv_path, cfg, out=print):
                     H_COMPFIT, n)
         if H_LANE in idx and idx[H_LANE] < len(row):
             fix(row, H_LANE, normalize_lane(row[idx[H_LANE]]), H_LANE, n)
+        # Status is the candidate's OWN column, so this only ever repairs spelling drift back to a
+        # canonical value — it never reassigns a status. An unrecognized value is warned, not
+        # rewritten (see normalize_status).
+        status_col = _status_column(headers)
+        if status_col and status_col in idx and idx[status_col] < len(row):
+            fix(row, status_col, normalize_status(row[idx[status_col]]), status_col, n)
         # Posted is not model output — it is read back out of the capture's provenance line.
         # Only ever FILLED IN, never overwritten (a date already in the sheet stays put).
         if H_POSTED in idx and idx[H_POSTED] < len(row) and not row[idx[H_POSTED]].strip():
