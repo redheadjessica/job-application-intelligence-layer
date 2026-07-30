@@ -138,6 +138,12 @@ Proposed order, scope, and acceptance criteria. All generic engine work; synthet
 | B11 | **SHIPPED 2026-07-30** — Application-question answer drafting in the tailor step | ~half day | The tailoring agent reads the capture's APPLICATION QUESTIONS WORTH PREPARING section and appends an `## Application Question Drafts` section to `application_resume_output…md`: exact question preserved above each answer; answers drawn only from the candidate's profile/approved evidence/voice canon; unknown facts flagged for confirmation rather than invented; `None Found` when empty; simplest reliable chain (no cover-letter eval pipeline); positive tests with BetterUp/Bloomerang-style thoughtful questions, negative tests with standard fields; fully generic (candidate data from config/profile, never hardcoded) |
 | B12 | **SHIPPED 2026-07-30** — Envelope-vs-scorer comp rule | ~1h | The scorer's "applicable band" judgment is advisory; the tracker's Comp Range is set deterministically as min(applicable lows)-max(applicable highs) per the standing rule — twice now the scorer chose the home-metro band and had to be overridden by hand |
 
+**Canary findings (Tranche 4, all SHIPPED 2026-07-30):** the Tranche-3 live canary surfaced three
+real shapes beyond the backlog — a sentence-shaped comp label with doubled colon and bare amounts
+(B10 residual), no-colon conjunction fusion present in the ATS's own rendered question text
+(converter space-repair + writer source-repair + gate check), and raw HTML in question context
+lines (now stripped/unescaped at the writer). Each landed with fixtures from the exact live shape.
+
 ## 4. QA pass results (2026-07-30, post-delivery)
 
 Cross-artifact audit of the 55-job tracker (rows↔captures↔registry): one malformed row

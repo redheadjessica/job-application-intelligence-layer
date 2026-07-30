@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo
 
 from ats_fetchers import (
     ATS_HOST_KEYWORDS,
+    _html_to_text,
     MENTIONED_NO_DETAILS,
     employer_declared_name,
     fetch_employer_declared_name,
@@ -39,6 +40,7 @@ from ats_fetchers import (
     _prettify_slug,
     mine_benefits_equity,
     parse_office_cadence,
+    repair_conjunction_fusion,
     question_provides_employer_comp,
     question_provides_working_location,
     recover_embedded_greenhouse,
@@ -1384,6 +1386,16 @@ def _mine_office_expectation(body: str) -> str | None:
     return _format_cadence(body[m.start():m.start() + 160])
 
 
+def _clean_inline_html(text: str) -> str:
+    """Question labels/help arrive from rendered pages and ATS APIs, sometimes as
+    raw HTML (`<p><em>Share how…</em></p>`). Strip tags, unescape entities, and
+    collapse to one line before anything enters the capture."""
+    s = str(text or "")
+    if "<" in s and ">" in s:
+        s = _html_to_text(s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
 def _oxford_join(items: list[str]) -> str:
     items = [i for i in items if i]
     if not items:
@@ -1816,17 +1828,45 @@ _LEADING_CODE_RE = re.compile(r"(?i)^(?:USD|US\$)\s*")
 _COMMA_AMOUNT_RE = re.compile(r"(?<![\d$.,])(\d{1,3}(?:,\d{3})+(?:\.\d+)?)")
 
 
+# A SENTENCE-shaped comp label (live Airtable shape): "For work locations in the
+# San Francisco Bay Area, Seattle, New York City, and Los Angeles, the base salary
+# range for this role is:: 195,000–260,000". The geography list is extracted and
+# canonicalized; the sentence noise and doubled colons go.
+_SENTENCE_COMP_LABEL_RE = re.compile(
+    r"(?i)^for\s+(?:work\s+|employees?\s+|those\s+)?(?:locations?\s+)?(?:in|based\s+in)\s+"
+    r"(?P<geos>.+?),?\s+the\s+(?:base\s+)?(?:salary|pay|compensation)\s+range\s+"
+    r"(?:for\s+this\s+(?:role|position)\s+)?is\s*:*\s*")
+
+
+def _sentence_label_to_geo(seg: str) -> str:
+    m = _SENTENCE_COMP_LABEL_RE.match(seg)
+    if not m:
+        return seg
+    parts = []
+    for raw in re.split(r",\s*", m.group("geos")):
+        place = re.sub(r"(?i)^(?:and\s+)?(?:the\s+)?", "", raw).strip()
+        if place:
+            parts.append(_short_metro(place))
+    label = _oxford_join(list(dict.fromkeys(parts)))
+    rest = seg[m.end():].strip()
+    return f"{label}: {rest}" if label else rest
+
+
 def _normalize_salary_band(seg: str) -> str:
     """One band rendered canonically: generic label stripped, a leading currency
     code folded into `$…–$… USD` shape (`Pay Range: USD 232,000–282,000` ->
     `$232,000–$282,000 USD`), dollar signs on both endpoints, spaceless en dash."""
-    seg = _GENERIC_COMP_LABEL_RE.sub("", str(seg or "").strip()).strip()
+    seg = str(seg or "").strip()
+    seg = _sentence_label_to_geo(seg)
+    seg = _GENERIC_COMP_LABEL_RE.sub("", seg).strip()
     # A geo-prefixed presentation label keeps its geography, drops the label noise.
     seg = _GEO_COMP_LABEL_RE.sub(lambda m: f"{m.group('geo').strip()}: ", seg)
     if _LEADING_CODE_RE.match(seg):
         seg = _LEADING_CODE_RE.sub("", seg).strip()
-        if "$" not in seg:
-            seg = _COMMA_AMOUNT_RE.sub(lambda m: f"${m.group(1)}", seg)
+    if "$" not in seg and not _NON_USD_CODE_RE.search(seg):
+        # Bare comma-grouped amounts in a Base Salary band ("195,000–260,000")
+        # get their dollar signs — this field only ever holds pay figures.
+        seg = _COMMA_AMOUNT_RE.sub(lambda m: f"${m.group(1)}", seg)
     seg = _expand_dollar_amounts(seg)
     seg = _RANGE_SEP_RE.sub(
         lambda m: f"{m.group(1)}–{m.group(2) if m.group(2).startswith('$') else '$' + m.group(2)}",
@@ -2499,9 +2539,14 @@ def build_output_text(url: str, title: str, company: str, body_text: str, *,
         for i, q in enumerate(questions, 1):
             req = "[Required]" if q.get("required") else "[Optional]"
             label = _strip_wrapping_quotes(q.get("label", "").strip())
+            # The ATS's own rendered text sometimes arrives fused ("…Area orNew
+            # York…") or as raw HTML — repair and clean before it enters the capture.
+            label = repair_conjunction_fusion(_clean_inline_html(label))
             lines.append(f"{i}. {label} {req}")
             if q.get("help"):
-                lines.append(f"   [Context: {q['help']}]")
+                help_text = repair_conjunction_fusion(_clean_inline_html(q["help"]))
+                if help_text:
+                    lines.append(f"   [Context: {help_text}]")
             opts = [str(o) for o in (q.get("options") or [])]
             if opts:
                 lines.append("   [Options: " + " / ".join(f'"{o}"' for o in opts) + "]")

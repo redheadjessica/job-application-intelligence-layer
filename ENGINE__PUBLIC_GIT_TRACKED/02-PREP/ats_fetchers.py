@@ -2536,6 +2536,19 @@ def fetch_employer_declared_name(url: str, timeout: int = 15) -> Optional[str]:
         return None
 
 
+# A connective word glued to a capitalized word in SOURCE text the ATS itself
+# rendered fused ("San Francisco Bay Area orNew York City"). Standalone-word
+# anchored: \b(or|and|of) requires the connective to BE a word, so "vendor" +
+# "Management" fused as "vendorManagement" (no boundary before "or") and camel
+# brands are untouched.
+_CONJUNCTION_FUSION_RE = re.compile(r"\b(or|and|of)(?=[A-Z][a-z])")
+
+
+def repair_conjunction_fusion(text: str) -> str:
+    """Insert the missing space in `…Area orNew York…`-shaped source fusion."""
+    return _CONJUNCTION_FUSION_RE.sub(r"\1 ", str(text or ""))
+
+
 def _prettify_slug(slug: str) -> str:
     s = re.sub(r"[-_]+", " ", slug).strip()
     # Title-case but keep existing capitalization for already-cased words.
@@ -2637,8 +2650,9 @@ def _render_html_list(tag, depth: int) -> str:
                     else:
                         # Same reason as in `_html_blocks`: recurse so a nested <br>
                         # or block element inside an inline wrapper is still seen.
-                        if _boundary_needs_break(inline_buf, c):
-                            inline_buf.append(_BR_SENTINEL)
+                        sep = _boundary_separator(inline_buf, c)
+                        if sep:
+                            inline_buf.append(sep)
                         walk(c)
 
         walk(li)
@@ -2665,21 +2679,41 @@ def _render_html_list(tag, depth: int) -> str:
 # rendered as `You will:Growth Systems & Product Ownership`. Only an ELEMENT boundary is
 # considered, so ordinary prose inside ONE text node ("Note: details vary") is untouched.
 _BOUNDARY_END = (":", ".", "!", "?")
+# A lowercase connective glued to a capitalized next element ("…Bay Area or" +
+# "New York City" -> "orNew") gets a SPACE at the boundary. Anchored on the element
+# boundary AND a standalone connective word, so intra-word capitals (McDonald,
+# iPhone) and camelCase product names inside one text node are never "repaired".
+_CONNECTIVE_END_RE = re.compile(r"(?:^|[\s(])(?:or|and|of|in|at|to|the|a|an|for|with)$",
+                                re.I)
 
 
-def _boundary_needs_break(inline_buf: list, child) -> bool:
+def _boundary_separator(inline_buf: list, child):
+    """The separator owed at an inline-element boundary: the break sentinel after a
+    sentence/label ending, a single space after a bare connective word, else None."""
     tail = "".join(inline_buf).replace(_BR_SENTINEL, "\n")
     left = tail.rstrip()
-    if not left or not left.endswith(_BOUNDARY_END):
-        return False
-    # Already separated by a line break or blank space at the boundary? Nothing to do.
+    if not left:
+        return None
+    # Already separated by whitespace at the boundary? Nothing to do.
     if tail != left and tail[len(left):].strip("\t ") != "":
-        return False
+        return None
+    if tail != left:
+        return None
     try:
         nxt = child.get_text(" ").strip()
     except Exception:
-        return False
-    return bool(nxt) and nxt[:1].isupper()
+        return None
+    if not nxt or not nxt[:1].isupper():
+        return None
+    if left.endswith(_BOUNDARY_END):
+        return _BR_SENTINEL
+    if _CONNECTIVE_END_RE.search(left):
+        return " "
+    return None
+
+
+def _boundary_needs_break(inline_buf: list, child) -> bool:
+    return _boundary_separator(inline_buf, child) == _BR_SENTINEL
 
 
 def _html_blocks(node, depth: int = 0) -> list[str]:
@@ -2723,8 +2757,9 @@ def _html_blocks(node, depth: int = 0) -> list[str]:
                     # `get_text()`, so a <br> or a block element NESTED inside it is
                     # still seen. Flattening the subtree instead is how LinkedIn's
                     # `<strong>`/`<span>`-heavy markup lost its separators.
-                    if _boundary_needs_break(inline_buf, c):
-                        inline_buf.append(_BR_SENTINEL)
+                    sep = _boundary_separator(inline_buf, c)
+                    if sep:
+                        inline_buf.append(sep)
                     walk_inline(c)
 
     walk_inline(node)

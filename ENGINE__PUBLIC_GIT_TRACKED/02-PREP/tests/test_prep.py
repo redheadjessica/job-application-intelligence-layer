@@ -4737,3 +4737,111 @@ def test_all_caps_body_styling_is_layout_not_brand_casing():
     body = ("ABOUT OPENLOOPHEALTH\nOPENLOOPHEALTH IS HIRING.\n"
             "Responsibilities include shipping product.\n" + ("x " * 60))
     assert af.brand_casing_from_body("openloophealth", body) is None
+
+
+# ===========================================================================
+# Tranche-4 canary findings: sentence-shaped comp labels, no-colon conjunction
+# fusion in ATS source text, and raw HTML in question context lines.
+# ===========================================================================
+def test_sentence_shaped_comp_label_extracts_the_geography_list():
+    """The exact live Airtable shape: a full-sentence label, doubled colon, and a
+    bare range with no dollar signs."""
+    raw = ("For work locations in the San Francisco Bay Area, Seattle, New York City, "
+           "and Los Angeles, the base salary range for this role is:: 195,000–260,000")
+    assert pc._base_salary_bands(raw, {"compensation_prose_all": []}, {}) == \
+        ["SF Bay Area, Seattle, NYC, and LA: $195-260K"]
+    # Variants: single geo, no doubled colon, role/position wording.
+    assert pc._base_salary_bands(
+        "For employees based in New York City, the salary range for this position "
+        "is: $150,000 - $180,000", {"compensation_prose_all": []}, {}) == \
+        ["NYC: $150-180K"]
+    # A non-sentence band is untouched by the sentence path.
+    assert pc._base_salary_bands("Zone A: SF Bay Area / NYC $236K – $296K",
+                                 {"compensation_prose_all": []}, {}) == \
+        ["Zone A: SF Bay Area / NYC $236-296K"]
+
+
+def test_bare_amounts_in_a_base_salary_band_gain_their_dollar_signs():
+    assert pc._base_salary_bands("195,000–260,000", {"compensation_prose_all": []}, {}) == \
+        ["$195-260K"]
+    # Non-USD codes stay explicit and un-dollared.
+    out = pc._base_salary_bands("CAD 120,000–150,000", {"compensation_prose_all": []}, {})
+    assert "CAD" in out[0] and "$" not in out[0]
+
+
+def test_no_colon_conjunction_fusion_repairs_at_the_element_boundary():
+    """(2a): the converter inserts a SPACE when a bare connective ends one inline
+    element and the next starts capitalized."""
+    html = ("<p><span>Are you based in San Francisco Bay Area or</span>"
+            "<span>New York City and willing to come in 2-3x per week?</span></p>")
+    text = af._html_to_text(html)
+    assert "orNew" not in text
+    assert "Bay Area or New York City" in text
+    # Intra-word capitals and camelCase in ONE text node are never "repaired"...
+    assert af._html_to_text("<p>McDonald builds iPhone apps with ClassDojo.</p>") == \
+        "McDonald builds iPhone apps with ClassDojo."
+    # ...and mid-word inline markup still joins tightly.
+    assert af._html_to_text("<p>This is <strong>bold</strong>face text.</p>") == \
+        "This is boldface text."
+
+
+def test_source_fused_question_labels_are_repaired_at_the_writer():
+    """(2b): the fusion existed in the ATS's OWN rendered label text — the writer
+    repairs it before it enters the capture."""
+    assert af.repair_conjunction_fusion(
+        "Are you currently based in San Francisco Bay Area orNew York City?") == \
+        "Are you currently based in San Francisco Bay Area or New York City?"
+    # Word-boundary anchored: no false repairs.
+    for untouched in ("vendorManagement pipeline", "McDonald and iPhone",
+                      "Sandbox andOr...", "iHeartMedia"):
+        pass
+    assert af.repair_conjunction_fusion("vendorManagement") == "vendorManagement"
+    assert af.repair_conjunction_fusion("McDonald") == "McDonald"
+    q = {"label": "Are you based in San Francisco Bay Area orNew York City and "
+                  "willing to come into the office 2-3x per week?",
+         "type": "select", "required": True, "name": "q", "names": ["q"],
+         "options": ["Yes", "No"]}
+    out = pc.build_output_text("http://x", "PM", "Acme", _SYNTH_BODY,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 200,000",
+                                     "working_location": "Remote"},
+                               questions=[q], methods_tried=["ats"])
+    assert "orNew" not in out
+    assert "Bay Area or New York City" in out
+    # (2c): the gate catches the shape if a writer regression ever reintroduces it.
+    import qa_captures
+    fused_capture = out.replace("Bay Area or New York City", "Bay Area orNew York City")
+    assert any("fused connective" in p
+               for p in qa_captures.validate_capture(fused_capture, filename="acme__pm.txt"))
+    # And camel brands in the head never trip the gate.
+    branded = out.replace("Company: Acme", "Company: iHeartMedia")
+    assert not any("fused connective" in p
+                   for p in qa_captures.validate_capture(branded, filename="acme__pm.txt"))
+
+
+def test_html_in_question_context_lines_is_stripped_and_unescaped():
+    """(3): help/context text runs through HTML-to-text before entering the capture
+    — nested tags gone, entities unescaped, single line."""
+    q = {"label": "How are you using AI today in your current role?",
+         "type": "textarea", "required": True, "name": "q", "names": ["q"],
+         "options": [],
+         "help": "<p><em>Share how you currently use AI &amp; automation in your "
+                 "work. If you have a <strong>project</strong> to showcase, include "
+                 "a link.</em></p>"}
+    out = pc.build_output_text("http://x", "PM", "Acme", _SYNTH_BODY,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 200,000",
+                                     "working_location": "Remote"},
+                               questions=[q], methods_tried=["ats"])
+    ctx = next(l for l in out.splitlines() if "[Context:" in l)
+    assert ctx == ("   [Context: Share how you currently use AI & automation in your "
+                   "work. If you have a project to showcase, include a link.]")
+    assert "<p>" not in out and "<em>" not in out and "&amp;" not in out
+    # An HTML-shaped LABEL cleans too.
+    q2 = dict(q, label="<p>Describe your <em>favorite</em> launch.</p>", help=None)
+    out2 = pc.build_output_text("http://x", "PM", "Acme", _SYNTH_BODY,
+                                meta={"title": "PM", "structured_source": True,
+                                      "compensation": "USD 200,000",
+                                      "working_location": "Remote"},
+                                questions=[q2], methods_tried=["ats"])
+    assert "1. Describe your favorite launch. [Required]" in out2

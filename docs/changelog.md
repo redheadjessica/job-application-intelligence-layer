@@ -11,6 +11,28 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — Canary findings closed: sentence comp labels, connective fusion, HTML in context lines
+
+The Tranche-3 live canary's three findings, each fixed from the exact observed shape:
+
+- **Sentence-shaped comp labels** ("For work locations in the San Francisco Bay Area, Seattle, New
+  York City, and Los Angeles, the base salary range for this role is:: 195,000–260,000") now extract
+  and canonicalize the geography list — `SF Bay Area, Seattle, NYC, and LA: $195-260K` — with the
+  sentence noise and doubled colons gone. Bare comma-grouped amounts in a Base Salary band gain
+  their dollar signs (the field only ever holds pay figures; non-USD codes stay explicit and
+  un-dollared).
+- **No-colon connective fusion**, in three layers: (a) the converter inserts a SPACE at an inline
+  element boundary when a bare connective ends the left side and the right starts capitalized —
+  anchored on the boundary + a standalone connective word, so McDonald/iPhone/camelCase names are
+  never "repaired" (and this exposed+fixed a latent colon-boundary bug: a trailing space now counts
+  as already-separated); (b) `repair_conjunction_fusion` fixes the shape in SOURCE text the ATS
+  itself rendered fused, applied to question labels and help at the writer; (c) the QA gate catches
+  `\b(or|and|of)(?=[A-Z][a-z])` in the head region, where employer prose can't collide.
+- **Raw HTML in question context lines**: labels and help text now run through the HTML-to-text
+  conversion (tags stripped, entities unescaped, collapsed to one line) before entering the capture.
+
+Suite: 674 → 679 green.
+
 ## 2026-07-30 — B9: brand casing recovered from the employer's own words, never guessed
 
 An ATS-hosted posting whose only company signal is a board token got a capitalize-first guess

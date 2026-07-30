@@ -65,6 +65,11 @@ LEGACY_MARKERS = (
 # The specific fusion shapes hit live, plus the generic boundary guard.
 FUSION_SHAPES = ("Role Details:Employment", "ExemptThis", "will:Growth")
 _FUSION_RE = re.compile(r"[a-z]{3}:[A-Z][a-z]{3}")
+# The no-colon class from the live canary ("…Bay Area orNew York City…"): a
+# standalone connective glued to a capitalized word. Word-boundary anchored so
+# McDonald / iPhone / camelCase product names never match; applied to the HEAD
+# region (snapshot + questions + details), where employer prose can't collide.
+_CONJUNCTION_FUSION_RE = re.compile(r"\b(?:or|and|of)(?=[A-Z][a-z])")
 _URL_SCHEME_RE = re.compile(r"(?i)(?:https?|mailto|ftp|tel):")
 
 # Standard/demographic field labels that must never appear as captured questions.
@@ -279,6 +284,10 @@ def validate_capture(text: str, filename: str | None = None) -> list[str]:
         problems.append(f"fused block boundary (no separator): "
                         f"{text[max(0, m.start() - 20):m.end() + 20].strip()!r}")
         break  # one report per file is enough
+    m = _CONJUNCTION_FUSION_RE.search(head)
+    if m:
+        problems.append(f"fused connective (missing space) in the header/questions: "
+                        f"{head[max(0, m.start() - 20):m.end() + 20].strip()!r}")
 
     # ---- body length + JD structure ------------------------------------------- #
     if START_MARKER in text:
