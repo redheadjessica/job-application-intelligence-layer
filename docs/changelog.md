@@ -11,6 +11,27 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Capture lookup can no longer bind a row to a *different* batch's job post
+
+Found while reviewing the notes-column work, not by a failing run — which is the concerning part. The
+last-resort filename search in `norm_contracts._resolve_capture_path()` (used to read a capture's
+`Posted:` line from a rankings row's `Job File` value) walked `base_dir` **and its parent
+unconditionally**. When `base_dir` is a batch root, that parent is the reviews root holding every other
+batch, so a row whose capture was missing could silently resolve to a same-named capture belonging to a
+neighbouring batch — and report that job's posting date as its own. Exactly the class of silent
+mis-mapping that makes a whole sheet untrustworthy: no error, no warning, just a plausible wrong value.
+
+Now the search steps up to the parent only when that parent is demonstrably this batch's root (it holds
+the standard `3 - Source Material` subdir). Breadth is bounded; depth is unchanged, so every legitimate
+layout still resolves.
+
+Worth recording how the test went, because the first version of it was useless: written with `base_dir`
+pointing at `1 - Rankings`, it passed against the *unfixed* code — that path's parent is the batch root,
+so it never reached a neighbour and proved nothing. The bug only reproduces when `base_dir` is the batch
+root itself. The committed test is pinned both ways: it fails on the old code and passes on the new, and
+it also asserts that stepping up from `1 - Rankings` to the batch root is still allowed. A regression test
+that never fails against the defect it names is worse than no test — it manufactures confidence.
+
 ## 2026-07-29 — The Practicality rationale finally gets a column of its own (`Comp + Lifestyle Fit Notes`)
 
 Real-use defect, and the root cause was a missing column rather than a bad normalizer. Once `Comp Fit`

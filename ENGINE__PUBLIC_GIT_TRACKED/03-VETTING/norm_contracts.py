@@ -574,8 +574,20 @@ def _resolve_capture_path(job_file, base_dir=None):
                 return c
         except OSError:
             continue
+    # Last resort: a name search — but STRICTLY bounded to this batch. Searching the parent
+    # unconditionally would escape into the reviews root, where a same-named capture belonging to
+    # a *different* batch is a plausible hit; silently binding a row to another batch's job post is
+    # exactly the class of mis-mapping that makes the whole sheet untrustworthy. Only step up when
+    # the parent is demonstrably this batch's root (it holds the standard capture subdir).
     if base_dir:
-        for root in (Path(base_dir), Path(base_dir).parent):
+        b = Path(base_dir)
+        roots = [b]
+        try:
+            if b.parent.joinpath(_CAPTURE_SUBDIR[0]).is_dir():
+                roots.append(b.parent)
+        except OSError:
+            pass
+        for root in roots:
             try:
                 hit = next((h for h in root.rglob(p.name) if h.is_file()), None)
             except OSError:

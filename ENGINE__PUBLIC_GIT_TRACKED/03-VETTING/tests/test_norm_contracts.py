@@ -606,6 +606,25 @@ def test_posted_is_read_out_of_the_capture_provenance_line(tmp_path):
     assert norm_contracts.posted_date_from_capture("", base_dir=rankings) == ""
 
 
+def test_capture_search_never_escapes_its_own_batch(tmp_path):
+    """A row must never bind to a same-named capture belonging to a DIFFERENT batch. The
+    last-resort filename search may step up to its own batch root, but no further."""
+    reviews = tmp_path / "__READY_TO_REVIEW__"
+    ours, theirs = reviews / "07-29-26", reviews / "06-02-26"
+    write_capture(theirs, "Acme", posted="Posted: 1999-01-01")
+    ours.mkdir(parents=True)
+    # base_dir is the BATCH ROOT here, so its parent is the reviews root holding every other
+    # batch. Our batch has no such capture; the neighbour's must NOT be picked up.
+    assert norm_contracts.posted_date_from_capture("acme.txt", base_dir=ours) == ""
+    # Once it exists in OUR batch, the same lookup resolves — the bound is on breadth, not depth.
+    write_capture(ours, "Acme", posted="Posted: 2026-07-29")
+    assert norm_contracts.posted_date_from_capture("acme.txt", base_dir=ours) == "2026-07-29"
+    # And from the rankings subfolder, stepping up to the batch root is still allowed.
+    rankings = ours / "1 - Rankings"
+    rankings.mkdir()
+    assert norm_contracts.posted_date_from_capture("acme.txt", base_dir=rankings) == "2026-07-29"
+
+
 def test_cli_pass_fills_the_posted_column_from_the_captures(tmp_path):
     write_capture(tmp_path, "Acme")
     write_capture(tmp_path, "NoDate", posted="")
