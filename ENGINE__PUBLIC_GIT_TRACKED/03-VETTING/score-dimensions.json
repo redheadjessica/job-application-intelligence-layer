@@ -18,13 +18,13 @@
     "definition": "Estimates how competitive and legible you may appear to this employer before tailoring, based on the canonical summary profile available during vetting and the job posting. It does not use the newly tailored resume. A preference for the company, mission, or lane is not evidence that the employer will see you as qualified."
   },
   "style": {
-    "label": "Culture Fit",
+    "label": "Culture Fit Score",
     "schema_key": "company_style_score",
     "default_weight": 20,
     "definition": "Estimates how well the company's apparent working style, values, product culture, and environment may suit you, based on the evidence actually available. Job postings provide incomplete culture evidence. When little reliable information is available, this score should remain closer to neutral and should be treated as lower-confidence."
   },
   "practicality": {
-    "label": "Comp + Lifestyle Fit",
+    "label": "Comp + Lifestyle Fit Score",
     "schema_key": "practicality_score",
     "default_weight": 15,
     "definition": "Estimates how well compensation, location, work arrangement, travel, schedule, and other practical considerations fit your stated preferences. A lower score reduces the opportunity's priority but is not automatically a veto."

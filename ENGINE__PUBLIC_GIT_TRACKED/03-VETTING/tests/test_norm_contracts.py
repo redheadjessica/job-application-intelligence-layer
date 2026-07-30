@@ -356,7 +356,25 @@ def test_application_name_survives_the_real_filesystem_layer(tmp_path):
 # --------------------------------------------------------------------------- #
 # CSV CLI pass
 # --------------------------------------------------------------------------- #
-HEADERS = [
+# THE 27-COLUMN CONTRACT (order authoritative, approved 2026-07-30). Sourced from the engine so a
+# contract change can never drift silently past these tests.
+HEADERS = list(norm_contracts.resolve_contract_headers())
+
+EXPECTED_CONTRACT = [
+    "Applied Date? [You Fill In]", "Status? [You Change]", "Lane", "Company",
+    "Job Post Title + Link", "Working Location", "Comp Range",
+    "Have Intro? [You Add]", "Your Notes? [You Add]", "Decline/Down Date? [You Add]",
+    "FINAL Weighted Score", "How They May See Your Profile", "Your Desire Score",
+    "Culture Fit Score", "Comp + Lifestyle Fit Score", "Job Posted Date",
+    "Top Reasons Notes", "Top Concerns Notes", "Profile Score Notes",
+    "Your Desire Score Notes", "Comp + Lifestyle Fit Notes",
+    "Lane Fit", "Comp Fit", "Data Completeness", "Job File",
+    "Tailored? (Base Resume)", "Cover Letter Drafted?",
+]
+
+# The REAL legacy rescore shape verified on disk: 27 columns, WITH `Location Fit`, WITHOUT
+# `Data Completeness`, old score/notes/tailor names, `Posted` before the editable block.
+LEGACY_CSV_HEADERS = [
     "Applied Date? [You Fill In]", "Status? [You Change]", "Lane", "Company",
     "Job Post Title + Link", "Working Location", "Comp Range", "Posted",
     "Have Intro? [You Add]", "Your Notes? [You Add]", "Decline/Down Date? [You Add]",
@@ -364,29 +382,62 @@ HEADERS = [
     "Culture Fit", "Comp + Lifestyle Fit", "Comp + Lifestyle Fit Notes",
     "Mission Fit Notes", "Scope Fit Notes", "Top Reasons Notes", "Top Concerns",
     "Job File", "Base Resume Used", "Lane Fit", "Location Fit", "Comp Fit",
-    "Data Completeness", "Cover Letter?",
+    "Cover Letter?",
 ]
+# The 28-column legacy XLSX shape (same, plus Data Completeness).
+LEGACY_XLSX_HEADERS = (LEGACY_CSV_HEADERS[:-1] + ["Data Completeness"]
+                       + LEGACY_CSV_HEADERS[-1:])
 
 
-def write_csv(path, rows):
+def test_the_contract_is_exactly_the_approved_27_columns():
+    """The order is authoritative: this test is the tripwire for an accidental reorder,
+    rename, or added column anywhere in the engine."""
+    assert HEADERS == EXPECTED_CONTRACT
+    assert len(HEADERS) == 27
+    assert "Location Fit" not in HEADERS      # removed as redundant with Working Location
+    assert norm_contracts.H_POSTED == "Job Posted Date"
+
+
+def row_values(company="Acme", location="Remote", comp="190-210", lane="Health - Mental Health",
+               lane_fit="Mental Health (high)", loc_fit="Remote", comp_fit="Meets/above target",
+               status="Apply ASAP: High Prio", completeness="✓ complete", posted=""):
+    """One job row as a header->value MAPPING, so both the current and the legacy row builders
+    below place every value by NAME. No test hardcodes a column index."""
+    notes = "Cash 26/40 (midpoint ~$188K) | Location 30/30 (fully remote) | Equity 19/20"
+    return {
+        "Status? [You Change]": status, "Lane": lane, "Company": company,
+        "Job Post Title + Link": f"Senior PM | https://example.com/{company.lower()}",
+        "Working Location": location, "Comp Range": comp,
+        "FINAL Weighted Score": "80", "How They May See Your Profile": "80",
+        "Your Desire Score": "80", "Culture Fit Score": "80", "Culture Fit": "80",
+        "Comp + Lifestyle Fit Score": "80", "Comp + Lifestyle Fit": "80",
+        "Job Posted Date": posted, "Posted": posted,
+        "Top Reasons Notes": "r", "Top Concerns Notes": "c", "Top Concerns": "c",
+        "Profile Score Notes": "s", "Scope Fit Notes": "s",
+        "Your Desire Score Notes": "m", "Mission Fit Notes": "m",
+        "Comp + Lifestyle Fit Notes": notes,
+        "Lane Fit": lane_fit, "Location Fit": loc_fit, "Comp Fit": comp_fit,
+        "Data Completeness": completeness, "Job File": f"{company.lower()}.txt",
+        "Tailored? (Base Resume)": "", "Base Resume Used": "",
+        "Cover Letter Drafted?": "", "Cover Letter?": "",
+    }
+
+
+def row_for(headers, **kw):
+    vals = row_values(**kw)
+    return [vals.get(h, "") for h in headers]
+
+
+def make_row(**kw):
+    return row_for(HEADERS, **kw)
+
+
+def write_csv(path, rows, headers=None):
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(HEADERS)
+        w.writerow(headers or HEADERS)
         for r in rows:
             w.writerow(r)
-
-
-def make_row(company="Acme", location="Remote", comp="190-210", lane="Health - Mental Health",
-             lane_fit="Mental Health (high)", loc_fit="Remote", comp_fit="Meets/above target",
-             status="Apply ASAP: High Prio"):
-    return [
-        "", status, lane, company, f"Senior PM | https://example.com/{company.lower()}",
-        location, comp, "", "", "", "",
-        "80", "80", "80", "80", "80",
-        "Cash 26/40 (midpoint ~$188K) | Location 30/30 (fully remote) | Equity 19/20",
-        "m", "s", "r", "c",
-        f"{company.lower()}.txt", "", lane_fit, loc_fit, comp_fit, "✓ complete", "",
-    ]
 
 
 def test_cli_normalizes_csv_in_place_and_reports_repairs(tmp_path, capsys):
@@ -397,7 +448,8 @@ def test_cli_normalizes_csv_in_place_and_reports_repairs(tmp_path, capsys):
     ])
     changed = norm_contracts.normalize_rankings_csv(str(csv_path), CFG)
     out = capsys.readouterr().out
-    assert changed == 1
+    # 1 location repair + the two rows' Job Posted Date placeholders (blank -> `Unknown`).
+    assert changed == 3
     assert "RepairMe" in out and "'NYC/SF - 3 days'" in out and "'IRL NYC/SF - 3 days'" in out
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
@@ -449,11 +501,10 @@ def test_xlsx_written_cells_carry_the_exact_spec_hexes(tmp_path):
     ws = wb["Job Rankings"]
     headers = [c.value for c in ws[1]]
     wl_col = headers.index("Working Location") + 1
-    lf_col = headers.index("Location Fit") + 1
+    assert "Location Fit" not in headers   # removed from the contract
     for i, (loc, expected) in enumerate(cases):
         r = i + 2
         assert cell_hex(ws.cell(r, wl_col)) == expected, f"Working Location fill for {loc!r}"
-        assert cell_hex(ws.cell(r, lf_col)) == expected, f"Location Fit fill for {loc!r}"
         # black text, no white-font override on these cells
         color = ws.cell(r, wl_col).font.color
         assert color is None or str(color.rgb).endswith("000000")
@@ -483,13 +534,13 @@ def test_whole_matrix_reaches_the_spreadsheet_with_the_right_fill_and_text(tmp_p
     wb = load_workbook(str(xlsx_path))
     ws = wb["Job Rankings"]
     headers = [c.value for c in ws[1]]
-    wl_col, lf_col = headers.index("Working Location") + 1, headers.index("Location Fit") + 1
+    wl_col = headers.index("Working Location") + 1
+    assert "Location Fit" not in headers   # removed from the contract
     seen = {}
     for i, (raw, canonical, expected) in enumerate(WL_MATRIX):
         r = i + 2
         assert ws.cell(r, wl_col).value == canonical, f"written text for {raw!r}"
         assert cell_hex(ws.cell(r, wl_col)) == expected, f"Working Location fill for {raw!r}"
-        assert cell_hex(ws.cell(r, lf_col)) == expected, f"Location Fit fill for {raw!r}"
         seen[canonical] = cell_hex(ws.cell(r, wl_col))
     assert set(seen.values()) == {WL_GREEN, WL_YELLOW, WL_ORANGE, WL_RED}
     assert not (set(seen.values()) & OLD_PALETTE)
@@ -784,9 +835,10 @@ def test_cli_pass_fills_the_posted_column_from_the_captures(tmp_path):
     norm_contracts.normalize_rankings_csv(str(csv_path), CFG)
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
-    pi = HEADERS.index("Posted")
+    pi = HEADERS.index("Job Posted Date")
     assert rows[1][pi] == "2026-06-13"
-    assert rows[2][pi] == ""          # employer published no date -> stays blank
+    # No verified employer date -> the literal `Unknown`, never a blank cell.
+    assert rows[2][pi] == "Unknown"
     # It is a static date: no age/"days open" value is ever written.
     assert "days" not in rows[1][pi]
 
@@ -797,29 +849,29 @@ def test_a_posted_value_already_in_the_sheet_is_never_overwritten(tmp_path):
     rankings.mkdir()
     csv_path = rankings / "b-rankings.csv"
     row = make_row(company="Acme")
-    row[HEADERS.index("Posted")] = "2020-01-01"
+    row[HEADERS.index("Job Posted Date")] = "2020-01-01"
     write_csv(csv_path, [row])
     norm_contracts.normalize_rankings_csv(str(csv_path), CFG)
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
-    assert rows[1][HEADERS.index("Posted")] == "2020-01-01"
+    assert rows[1][HEADERS.index("Job Posted Date")] == "2020-01-01"
 
 
-LEGACY_HEADERS = [h for h in HEADERS if h != "Posted"]
+# The real legacy shape (27 cols, `Location Fit`, no `Data Completeness`, old names).
+LEGACY_HEADERS = list(LEGACY_CSV_HEADERS)
 
 
-def write_legacy_csv(path, rows):
+def write_legacy_csv(path, rows, headers=None):
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(LEGACY_HEADERS)
+        w.writerow(headers or LEGACY_HEADERS)
         for r in rows:
             w.writerow(r)
 
 
 def legacy_row(**kw):
-    row = make_row(**kw)
-    del row[HEADERS.index("Posted")]
-    return row
+    kw.setdefault("completeness", "")   # the legacy CSV had no Data Completeness column
+    return row_for(LEGACY_HEADERS, **kw)
 
 
 def test_an_old_csv_without_the_column_gets_it_inserted_and_filled(tmp_path):
@@ -834,9 +886,9 @@ def test_an_old_csv_without_the_column_gets_it_inserted_and_filled(tmp_path):
     # Inserted right after Comp Range, ahead of the editable columns; every other column
     # keeps its meaning.
     assert rows[0] == HEADERS
-    assert rows[0][rows[0].index("Comp Range") + 1] == "Posted"
-    assert rows[0].index("Posted") < rows[0].index("Have Intro? [You Add]")
-    assert rows[1][HEADERS.index("Posted")] == "2026-06-13"
+    assert rows[0].index("Job Posted Date") == 15
+    assert rows[0].index("Comp Range") < rows[0].index("Have Intro? [You Add]")
+    assert rows[1][HEADERS.index("Job Posted Date")] == "2026-06-13"
     assert rows[1][HEADERS.index("Comp Range")] == "190-210"
     assert rows[1][HEADERS.index("Job File")] == "acme.txt"
 
@@ -856,8 +908,8 @@ def test_posted_column_reaches_the_written_spreadsheet(tmp_path):
     wb = load_workbook(str(xlsx_path))
     ws = wb["Job Rankings"]
     headers = [c.value for c in ws[1]]
-    assert headers[headers.index("Comp Range") + 1] == "Posted"
-    col = headers.index("Posted") + 1
+    assert headers[15] == "Job Posted Date"
+    col = headers.index("Job Posted Date") + 1
     assert ws.cell(2, col).value == "2026-06-13"
     assert ws.cell(2, col).alignment.horizontal == "left"
     assert ws.column_dimensions[ws.cell(1, col).column_letter].width == 12
@@ -874,22 +926,21 @@ def test_posted_column_reaches_the_written_spreadsheet(tmp_path):
 H_PN = "Comp + Lifestyle Fit Notes"
 PROSE = ("Cash 26/40 (midpoint ~$188K) | Location 30/30 (fully remote) "
          "| Equity+bonus+401k 19/20 (equity stated; bonus stated; 401k stated)")
-NO_PN_HEADERS = [h for h in HEADERS if h != H_PN]
+NO_PN_HEADERS = [h for h in LEGACY_CSV_HEADERS if h != H_PN]
 
 
-def write_no_pn_csv(path, rows):
-    """A CSV from before the notes column existed (everything else current)."""
+def write_no_pn_csv(path, rows, headers=None):
+    """A CSV from before the notes column existed (legacy names otherwise)."""
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(NO_PN_HEADERS)
+        w.writerow(headers or NO_PN_HEADERS)
         for r in rows:
             w.writerow(r)
 
 
 def no_pn_row(**kw):
-    row = make_row(**kw)
-    del row[HEADERS.index(H_PN)]
-    return row
+    kw.setdefault("completeness", "")
+    return row_for(NO_PN_HEADERS, **kw)
 
 
 def by_name(header_row, data_row):
@@ -904,46 +955,66 @@ def test_legacy_csv_gets_the_notes_column_inserted_in_position_with_nothing_shif
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
     hdr = rows[0]
-    assert hdr == HEADERS
-    # Immediately after the score it annotates, at the head of the notes block.
-    assert hdr[hdr.index("Comp + Lifestyle Fit") + 1] == H_PN
-    assert hdr.index(H_PN) < hdr.index("Mission Fit Notes")
+    assert hdr == HEADERS               # migrated to the full 27-column contract
+    # Immediately after the score block's notes head, before the desire notes.
+    assert hdr.index(H_PN) > hdr.index("Comp + Lifestyle Fit Score")
+    assert hdr.index(H_PN) > hdr.index("Your Desire Score Notes")
     got = by_name(hdr, rows[1])
     assert got[H_PN] == ""          # model rationale can't be re-derived — empty, not shifted data
-    # Every other column keeps its OWN value (assert by name, never by index).
+    # Every other column keeps its OWN value under its NEW name (assert by name, never by index).
     assert got["Company"] == "Notesco"
     assert got["Comp Range"] == "190-210"
-    assert got["Comp + Lifestyle Fit"] == "80"
-    assert got["Mission Fit Notes"] == "m"
-    assert got["Scope Fit Notes"] == "s"
+    assert got["Comp + Lifestyle Fit Score"] == "80"
+    assert got["Your Desire Score Notes"] == "m"
+    assert got["Profile Score Notes"] == "s"
     assert got["Top Reasons Notes"] == "r"
-    assert got["Top Concerns"] == "c"
+    assert got["Top Concerns Notes"] == "c"
     assert got["Job File"] == "notesco.txt"
     assert got["Lane Fit"] == "Mental Health (high)"
     assert got["Comp Fit"] == "Meets/above target"
-    assert got["Data Completeness"] == "✓ complete"
+    assert got["Data Completeness"] == "✓ complete"   # back-filled by the shared helper
 
 
-def test_a_relabelled_score_column_still_anchors_the_insert(tmp_path):
-    # A candidate whose scoring card renamed the dimension: the static "Mission Fit Notes"
-    # anchor puts the notes column in the same slot.
+def test_a_relabelled_score_column_is_recognized_when_the_writer_declares_it(tmp_path):
+    """A candidate whose scoring card renamed a dimension: the writer tells the normalizer
+    which labels it wrote (vet-jobs.js passes --score-labels), so the relabelled column is
+    placed in its contract slot instead of being treated as an unknown extra."""
     renamed = ["Pay + Life" if h == "Comp + Lifestyle Fit" else h for h in NO_PN_HEADERS]
     csv_path = tmp_path / "relabelled-rankings.csv"
+    row = row_for(renamed, company="Notesco")
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(renamed)
-        w.writerow(no_pn_row(company="Notesco"))
-    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+        w.writerow(row)
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None,
+                                          score_labels={"practicality": "Pay + Life"})
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
     hdr = rows[0]
-    assert hdr[hdr.index("Pay + Life") + 1] == H_PN
-    assert by_name(hdr, rows[1])["Mission Fit Notes"] == "m"
+    # The relabelled score sits in slot 15 (where Comp + Lifestyle Fit Score belongs).
+    assert hdr[14] == "Pay + Life"
+    assert hdr.index(H_PN) == 20
+    assert by_name(hdr, rows[1])["Your Desire Score Notes"] == "m"
+
+
+def test_an_unrecognized_extra_column_is_never_dropped(tmp_path):
+    """A column the person added to their own tracker (or a relabel the writer did not
+    declare) keeps its data — parked after the contract columns, never deleted."""
+    headers = list(HEADERS) + ["My Own Column"]
+    csv_path = tmp_path / "extra-rankings.csv"
+    row = make_row(company="Acme") + ["keep me"]
+    write_csv(csv_path, [row], headers=headers)
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    assert rows[0][:27] == HEADERS
+    assert rows[0][27] == "My Own Column"
+    assert by_name(rows[0], rows[1])["My Own Column"] == "keep me"
 
 
 def test_a_csv_that_already_has_the_notes_column_round_trips_unchanged(tmp_path):
     csv_path = tmp_path / "b-rankings.csv"
-    row = make_row(company="Notesco", comp="190-210")
+    row = make_row(company="Notesco", comp="190-210", posted="2026-06-13")
     row[HEADERS.index(H_PN)] = PROSE
     write_csv(csv_path, [row])
     before = csv_path.read_text(encoding="utf-8")
@@ -980,7 +1051,7 @@ def test_notes_column_reaches_the_spreadsheet_wide_wrapped_and_left_aligned(tmp_
     make_rankings_xlsx.build(str(csv_path), str(xlsx_path), config_path=str(cfg_path))
     ws = load_workbook(str(xlsx_path))["Job Rankings"]
     headers = [c.value for c in ws[1]]
-    assert headers[headers.index("Comp + Lifestyle Fit") + 1] == H_PN
+    assert headers.index(H_PN) > headers.index("Comp + Lifestyle Fit Score")
     col = headers.index(H_PN) + 1
     assert ws.cell(2, col).value == PROSE
     assert ws.cell(2, col).alignment.horizontal == "left"
@@ -997,10 +1068,10 @@ def test_a_legacy_csv_regenerates_to_xlsx_with_the_column_inserted_not_shifted(t
     make_rankings_xlsx.build(str(csv_path), str(xlsx_path), config_path=str(cfg_path))
     ws = load_workbook(str(xlsx_path))["Job Rankings"]
     headers = [c.value for c in ws[1]]
-    assert headers[headers.index("Comp + Lifestyle Fit") + 1] == H_PN
+    assert headers.index(H_PN) > headers.index("Comp + Lifestyle Fit Score")
     got = by_name(headers, [c.value for c in ws[2]])
     assert (got[H_PN] or "") == ""
-    assert got["Mission Fit Notes"] == "m"
-    assert got["Top Concerns"] == "c"
+    assert got["Your Desire Score Notes"] == "m"
+    assert got["Top Concerns Notes"] == "c"
     assert got["Job File"] == "notesco.txt"
     assert got["Data Completeness"] == "✓ complete"

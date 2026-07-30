@@ -11,6 +11,39 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — Phase A: the 27-column rankings contract, locked and migrated at the writer
+
+- **The final 27-column contract** (order authoritative) now has ONE definition,
+  `norm_contracts.CONTRACT_TEMPLATE` + `resolve_contract_headers()`, shared by the CSV migration
+  pass and the XLSX build; `vet-jobs.js` writes the same order. Renames: Culture Fit → Culture Fit
+  Score, Comp + Lifestyle Fit → Comp + Lifestyle Fit Score, Scope Fit Notes → Profile Score Notes,
+  Mission Fit Notes → Your Desire Score Notes, Base Resume Used → Tailored? (Base Resume), Cover
+  Letter? → Cover Letter Drafted?, Posted → Job Posted Date, Top Concerns → Top Concerns Notes.
+  `Job Posted Date` moves after the score block. A tripwire test asserts the exact 27 so a column
+  can never be added, renamed, or reordered silently.
+- **`Location Fit` removed entirely** — the column, its labeler, and its XLSX fill. It restated what
+  the canonical `Working Location` grammar already encodes, shared that column's exact 4-hex fill,
+  and was one more derived label to keep in sync. `Working Location` keeps the four hexes unchanged.
+- **Legacy migration happens at the WRITER, not the reader.** `normalize_rankings_csv` now migrates
+  ANY older rankings CSV in place: rename → drop → insert → reorder, joined by header NAME so no
+  column's data can shift. The XLSX build shares the same migration helper, so for a migrated CSV
+  its own insert paths are no-ops while a hand-made CSV still regenerates correctly — current and
+  legacy inputs yield identical 27-column CSV and XLSX schemas. Unrecognized columns are NEVER
+  dropped: a column someone added to their own tracker keeps its data, parked after the contract.
+  A relabelled score column is recognized when the writer declares it (`--score-labels`, which
+  vet-jobs.js now passes).
+- **`Data Completeness` back-fill has ONE implementation** (`norm_contracts.fallback_completeness`);
+  the XLSX build imports it instead of keeping a second copy.
+- **`Job Posted Date` is never blank** — the literal `Unknown` when no verified employer date
+  exists, at the vet writer and in the back-fill path alike. Never the JAIL capture date, never
+  inferred from a URL, job id, or search-result age; a real date already in the sheet is never
+  overwritten.
+- **Unused model output dropped** (`mission_fit_detail` / `scope_fit_detail`): removed from
+  SCORE_SCHEMA, the scoring prompt, and the Markdown summary. Resolution: a repo-wide grep found no
+  consumer — the fields were emitted, written into the Markdown only, and never read by any
+  downstream step. The Strategic Career Leverage instruction now keeps its level+evidence in the one
+  `Your Desire Score Notes` clause instead of pointing at a detail field.
+
 ## 2026-07-29 — Fifth live-run review: `<br />` semantics in the HTML converter
 
 Ground-truthed against the employer's real markup shape: a single `<br />` now renders as a LINE

@@ -13,7 +13,7 @@ This script STYLES that data and adds tracker affordances:
   rows only),
 - auto-filter on the job rows so "Sort A->Z" is one click (the legend below is outside its range),
 - lifecycle/stoplight fills for Status / Lane / Comp Fit, plus the fixed 4-hex Working Location
-  palette applied to BOTH the Working Location and Location Fit cells,
+  palette applied to the Working Location cells,
 - Final Score / sub-score color ramps,
 - a SEPARATE section-color legend block below the jobs (merged A:J bars) — a palette you can copy a
   bar from if you sort and want visual breaks; it is NOT mixed into the sortable data,
@@ -61,10 +61,10 @@ H_COMPANY = "Company"
 H_TITLE = "Job Post Title + Link"
 H_WORKLOC = "Working Location"
 H_COMPRANGE = "Comp Range"
-H_POSTED = "Posted"           # the EMPLOYER's publication date (static ISO date; no age math)
+H_POSTED = norm_contracts.H_POSTED   # "Job Posted Date" — the EMPLOYER's publication date
+                                     # (static date or the literal `Unknown`; never age math)
 H_JOBFILE = "Job File"
 H_LANEFIT = "Lane Fit"
-H_LOCFIT = "Location Fit"
 H_COMPFIT = "Comp Fit"
 H_DATACOMPLETE = "Data Completeness"  # per-job comp/location capture quality (green/amber/red)
 H_PRACTNOTES = norm_contracts.H_PRACTNOTES  # "Comp + Lifestyle Fit Notes" — prose companion to the
@@ -84,9 +84,9 @@ DEFAULT_METADATA = {
                "definition": "Estimates how much you'd likely want the role if hired and if logistics were workable. May consider mission, product, users, problems, scope, career direction, and personal interests. Should not primarily measure compensation, location, or whether the employer is likely to hire you."},
     "market": {"label": "How They May See Your Profile", "weight_pct": 30,
                "definition": "Estimates how competitive and legible you may appear to this employer before tailoring, based on the canonical summary profile available during vetting and the job posting. It does not use the newly tailored resume. A preference for the company, mission, or lane is not evidence that the employer will see you as qualified."},
-    "style": {"label": "Culture Fit", "weight_pct": 20,
+    "style": {"label": "Culture Fit Score", "weight_pct": 20,
               "definition": "Estimates how well the company's apparent working style, values, product culture, and environment may suit you, based on the evidence actually available. Job postings provide incomplete culture evidence. When little reliable information is available, this score should remain closer to neutral and should be treated as lower-confidence."},
-    "practicality": {"label": "Comp + Lifestyle Fit", "weight_pct": 15,
+    "practicality": {"label": "Comp + Lifestyle Fit Score", "weight_pct": 15,
                      "definition": "Estimates how well compensation, location, work arrangement, travel, schedule, and other practical considerations fit your stated preferences. A lower score reduces the opportunity's priority but is not automatically a veto."},
 }
 
@@ -167,9 +167,11 @@ COMP_LABEL_COLORS = {
 WIDTHS = {
     "Applied Date? [You Fill In]": 16, H_STATUS: 30, H_LANE: 22, H_COMPANY: 18, H_TITLE: 46,
     H_WORKLOC: 22, H_COMPRANGE: 12, H_POSTED: 12, "Have Intro? [You Add]": 14, "Your Notes? [You Add]": 26,
-    "Decline/Down Date? [You Add]": 16, H_PRACTNOTES: 46, "Mission Fit Notes": 40, "Scope Fit Notes": 40,
-    "Top Reasons Notes": 46, "Top Concerns": 46, "Job File": 28, "Base Resume Used": 26,
-    H_LANEFIT: 22, H_LOCFIT: 18, H_COMPFIT: 16, H_DATACOMPLETE: 24, "Cover Letter?": 12,
+    "Decline/Down Date? [You Add]": 16, H_PRACTNOTES: 46, "Your Desire Score Notes": 40,
+    "Profile Score Notes": 40,
+    "Top Reasons Notes": 46, "Top Concerns Notes": 46, "Job File": 28,
+    "Tailored? (Base Resume)": 26,
+    H_LANEFIT: 22, H_COMPFIT: 16, H_DATACOMPLETE: 24, "Cover Letter Drafted?": 12,
 }
 # Score-column widths, keyed by dimension (not by the dynamic label string) — applied at runtime
 # once the effective labels are resolved, since the label text itself may change per-run.
@@ -222,21 +224,9 @@ def comp_color(label) -> str:
 COMPLETE_GREEN, COMPLETE_AMBER, COMPLETE_RED = GREEN, YELLOW, RED
 
 
-def fallback_completeness(comp_range, working_location) -> str:
-    """Derive the completeness label from a row's own comp/location text (no manifest field_status).
-    Mirrors vet-jobs.js fallbackCompleteness: a missing field can't be told apart from 'not posted'
-    here, so it is treated as could-not-verify."""
-    comp = (comp_range or "").strip()
-    loc = (working_location or "").strip()
-    comp_missing = (not comp) or ("?" in comp)
-    loc_missing = (not loc) or (loc.lower() == "unknown")
-    if not comp_missing and not loc_missing:
-        return "✓ complete"
-    if comp_missing and loc_missing:
-        return "⚠ comp+location not verified"
-    if comp_missing:
-        return "⚠ comp not verified"
-    return "⚠ location unknown"
+# ONE implementation, in norm_contracts — the CSV migration pass back-fills the column with the
+# same helper this build uses on read, so a legacy CSV and a current one land identically.
+fallback_completeness = norm_contracts.fallback_completeness
 
 
 def completeness_category(value):
@@ -278,7 +268,7 @@ def completeness_summary(records):
 
 
 def loc_color(workloc, cfg) -> str:
-    """Color Working Location AND Location Fit from the canonical Working Location text — a thin
+    """Color Working Location from the canonical Working Location text — a thin
     call into norm_contracts.working_location_color(), the ONE deterministic mapper (authoritative
     spec, 2026-07-29). Returns exactly one of the 4 spec hexes (42FF35 / FDFF43 / FA9C31 / F82C1F,
     black text): remote -> green; acceptable home-metro office at exactly 1-3 days -> yellow;
@@ -512,38 +502,26 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         # is left alone by normalize_status (it warns, never rewrites, an unrecognized value).
         if H_STATUS in rec and (rec.get(H_STATUS) or "").strip() != NEEDS_REFETCH_STATUS:
             rec[H_STATUS] = norm_contracts.normalize_status(rec.get(H_STATUS))
-    # Posted column (the employer's own publication date): present in CSVs written by current
-    # vet-jobs.js and filled by the norm_contracts pass. For OLDER CSVs, insert the header after
-    # Comp Range and read each row's captured "Posted:" provenance line, so regenerating any batch
-    # picks the date up. Blank stays blank — a posting whose ATS published no date is never guessed.
-    if H_POSTED not in headers:
-        insert_at = (headers.index(H_COMPRANGE) + 1) if H_COMPRANGE in headers else len(headers)
-        headers.insert(insert_at, H_POSTED)
+    # ---- Migrate to the 27-column contract, then back-fill the derived columns ----
+    # The CSV migration pass (norm_contracts.normalize_rankings_csv, which vet-jobs.js runs right
+    # after scoring) normally leaves nothing to do here — for a migrated CSV this is a no-op. It
+    # stays for a HAND-MADE or never-normalized CSV, which must still regenerate a correct
+    # workbook: same renames, same drop, same inserts, same order, ONE shared definition.
+    table = [list(headers)] + [[rec.get(h, "") for h in headers] for rec in records]
+    if norm_contracts.migrate_rankings_headers(
+            table, score_labels={k: label_of.get(k) for k in norm_contracts.SCORE_SLOTS}):
+        headers = [str(h).strip() for h in table[0]]
+        records = [dict(zip(headers, row)) for row in table[1:]]
     base_dir = Path(input_csv).resolve().parent
     for rec in records:
-        if not (rec.get(H_POSTED) or "").strip():
-            rec[H_POSTED] = norm_contracts.posted_date_from_capture(
-                rec.get(H_JOBFILE), base_dir=base_dir)
-    # Comp + Lifestyle Fit Notes: present in CSVs written by current vet-jobs.js. For OLDER CSVs,
-    # insert the header immediately after the practicality score (ahead of Mission Fit Notes) with an
-    # EMPTY value — the rationale is model output and cannot be re-derived, so the only thing to
-    # preserve here is position: every later column keeps its own data instead of shifting one over.
-    if H_PRACTNOTES not in headers:
-        headers.insert(norm_contracts.practicality_notes_insert_at(headers), H_PRACTNOTES)
-        for rec in records:
-            rec.setdefault(H_PRACTNOTES, "")
-    # Data Completeness column: present in CSVs written by current vet-jobs.js. For OLDER CSVs (pre-
-    # column), synthesize it here — insert the header after Comp Fit and derive each value from the
-    # row's own comp/location text — so regenerating any batch still gets the column + coloring + flag.
-    if H_DATACOMPLETE not in headers:
-        insert_at = (headers.index(H_COMPFIT) + 1) if H_COMPFIT in headers else len(headers)
-        headers.insert(insert_at, H_DATACOMPLETE)
-        for rec in records:
+        # Never blank: a verified employer date from the capture, else the `Unknown` placeholder.
+        if (rec.get(H_POSTED) or "").strip() in ("", norm_contracts.UNKNOWN_POSTED_DATE):
+            rec[H_POSTED] = (norm_contracts.posted_date_from_capture(
+                rec.get(H_JOBFILE), base_dir=base_dir) or norm_contracts.UNKNOWN_POSTED_DATE)
+        # Every row colored: back-fill a blank completeness cell with the shared helper.
+        if not (rec.get(H_DATACOMPLETE) or "").strip():
             rec[H_DATACOMPLETE] = fallback_completeness(rec.get(H_COMPRANGE), rec.get(H_WORKLOC))
-    else:
-        for rec in records:  # backfill any blank cell so every row is colored
-            if not (rec.get(H_DATACOMPLETE) or "").strip():
-                rec[H_DATACOMPLETE] = fallback_completeness(rec.get(H_COMPRANGE), rec.get(H_WORKLOC))
+        rec.setdefault(H_PRACTNOTES, "")
     ncols = len(headers)
     letter = {h: get_column_letter(i + 1) for i, h in enumerate(headers)}
     legend_letter = get_column_letter(LEGEND_MERGE_TO)
@@ -566,8 +544,9 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
     LEFT_ALIGN_HEADERS = {
         H_LANE, H_COMPANY, H_TITLE, H_WORKLOC, H_POSTED,
         "Have Intro? [You Add]", "Your Notes? [You Add]", "Decline/Down Date? [You Add]",
-        H_PRACTNOTES, "Mission Fit Notes", "Scope Fit Notes", "Top Reasons Notes", "Top Concerns",
-        "Job File", "Base Resume Used", H_LANEFIT, H_LOCFIT, H_COMPFIT,
+        H_PRACTNOTES, "Your Desire Score Notes", "Profile Score Notes", "Top Reasons Notes",
+        "Top Concerns Notes",
+        "Job File", "Tailored? (Base Resume)", H_LANEFIT, H_COMPFIT,
     }
     base_font = Font(name=FONT, size=10, color="000000")
     link_font = Font(name=FONT, size=10, color="0563C1", underline="single")
@@ -588,7 +567,7 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         notes.append(f"Prep quarantined {quarantined} thin/failed post(s); they were NOT ranked. See '0 - Prep Report/'.")
     if not config_complete_enough(cfg):
         notes.append("Candidate preferences (jail.config.json comp/location) are missing or empty, so Comp Fit is "
-                     "neutral and Working Location / Location Fit cannot recognize your home metro (out-of-metro "
+                     "neutral and Working Location cannot recognize your home metro (out-of-metro "
                      "offices show orange instead of red). Run /intake or fill jail.config.json.")
     if notes:
         ws[f"{letter[H_STATUS]}1"].comment = Comment("\n".join(notes), "JAIL")
@@ -630,7 +609,6 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         ws[f"{letter[H_COMPFIT]}{r}"].fill = solid(cc)
         loc = loc_color(rec.get(H_WORKLOC, ""), cfg)
         ws[f"{letter[H_WORKLOC]}{r}"].fill = solid(loc)
-        ws[f"{letter[H_LOCFIT]}{r}"].fill = solid(loc)
         dcc = completeness_color(rec.get(H_DATACOMPLETE, ""))
         if dcc:
             ws[f"{letter[H_DATACOMPLETE]}{r}"].fill = solid(dcc)

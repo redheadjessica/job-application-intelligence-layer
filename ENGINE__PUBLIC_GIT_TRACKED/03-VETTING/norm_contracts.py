@@ -593,13 +593,122 @@ H_LANE = "Lane"
 H_COMPRANGE = "Comp Range"
 H_COMPFIT = "Comp Fit"
 H_COMPANY = "Company"
-H_POSTED = "Posted"
+H_POSTED = "Job Posted Date"
 H_JOBFILE = "Job File"
+H_DATACOMPLETE = "Data Completeness"
+H_TITLE = "Job Post Title + Link"
+H_LANEFIT = "Lane Fit"
+H_LOCFIT_LEGACY = "Location Fit"   # removed from the contract; dropped on migration
+UNKNOWN_POSTED_DATE = "Unknown"    # never blank, never the capture date, never inferred
 # The practicality dimension's prose companion column. Static name (like "Mission Fit Notes") even
 # though the score label itself is candidate-relabelable, so both Python passes can find it.
 H_PRACTNOTES = "Comp + Lifestyle Fit Notes"
-H_PRACTSCORE_DEFAULT = "Comp + Lifestyle Fit"  # default label of the score it annotates
-H_MISSIONNOTES = "Mission Fit Notes"           # the column it must sit before
+H_PRACTSCORE_DEFAULT = "Comp + Lifestyle Fit Score"  # default label of the score it annotates
+H_MISSIONNOTES = "Your Desire Score Notes"           # the column it must sit before
+
+
+# --------------------------------------------------------------------------- #
+# THE 27-COLUMN CONTRACT (order authoritative, approved 2026-07-30)
+#
+# One definition, shared by the CSV migration pass and the XLSX build. `vet-jobs.js` writes this
+# same order; ANY older CSV is migrated to it in place (rename -> drop -> insert -> reorder),
+# joined by header NAME so no column's data can shift. The five SCORE labels are dynamic (a
+# candidate's scoring card may relabel a dimension), so they are slots resolved per file against
+# the defaults + their legacy spellings; everything else is a literal.
+#
+# `Location Fit` was REMOVED as redundant with `Working Location` (the canonical grammar already
+# encodes remote/metro/cadence, both cells shared one 4-hex fill, and a second derived label was
+# one more thing to keep in sync). It is dropped from any legacy file.
+# --------------------------------------------------------------------------- #
+_SCORE_SLOT = "\x00score:"          # internal marker inside the template below
+SCORE_SLOTS = ("final", "market", "desire", "style", "practicality")
+SCORE_DEFAULT_LABELS = {
+    "final": "FINAL Weighted Score",
+    "market": "How They May See Your Profile",
+    "desire": "Your Desire Score",
+    "style": "Culture Fit Score",
+    "practicality": "Comp + Lifestyle Fit Score",
+}
+# Older spellings of the same score column, checked when resolving a slot in an existing file.
+SCORE_LEGACY_LABELS = {
+    "style": ("Culture Fit",),
+    "practicality": ("Comp + Lifestyle Fit",),
+}
+CONTRACT_TEMPLATE = [
+    "Applied Date? [You Fill In]", "Status? [You Change]", H_LANE, H_COMPANY, H_TITLE,
+    H_WORKLOC, H_COMPRANGE,
+    "Have Intro? [You Add]", "Your Notes? [You Add]", "Decline/Down Date? [You Add]",
+    f"{_SCORE_SLOT}final", f"{_SCORE_SLOT}market", f"{_SCORE_SLOT}desire",
+    f"{_SCORE_SLOT}style", f"{_SCORE_SLOT}practicality",
+    H_POSTED,
+    "Top Reasons Notes", "Top Concerns Notes", "Profile Score Notes", H_MISSIONNOTES,
+    H_PRACTNOTES,
+    H_LANEFIT, H_COMPFIT, H_DATACOMPLETE, H_JOBFILE,
+    "Tailored? (Base Resume)", "Cover Letter Drafted?",
+]
+# Legacy header -> final header. EXACT matches only, so "Comp + Lifestyle Fit Notes" is never
+# caught by the "Comp + Lifestyle Fit" score rename.
+LEGACY_RENAMES = {
+    "Culture Fit": "Culture Fit Score",
+    "Comp + Lifestyle Fit": "Comp + Lifestyle Fit Score",
+    "Scope Fit Notes": "Profile Score Notes",
+    "Mission Fit Notes": "Your Desire Score Notes",
+    "Base Resume Used": "Tailored? (Base Resume)",
+    "Cover Letter?": "Cover Letter Drafted?",
+    "Posted": "Job Posted Date",
+    "Top Concerns": "Top Concerns Notes",
+    # An even older draft used a hyphen here; the SLASH form is correct.
+    "Decline-Down Date? [You Add]": "Decline/Down Date? [You Add]",
+}
+DROPPED_COLUMNS = (H_LOCFIT_LEGACY,)
+
+
+def resolve_contract_headers(existing_headers=None, score_labels=None):
+    """The exact 27 final headers for a given file: literals from the template, with each score
+    slot resolved to the label that file already uses (default or legacy spelling), else the
+    engine default. `score_labels` (from score-dimensions.json) overrides the defaults."""
+    existing = list(existing_headers or [])
+    labels = dict(SCORE_DEFAULT_LABELS)
+    for k, v in (score_labels or {}).items():
+        if k in labels and str(v or "").strip():
+            labels[k] = str(v).strip()
+    out = []
+    for entry in CONTRACT_TEMPLATE:
+        if not entry.startswith(_SCORE_SLOT):
+            out.append(entry)
+            continue
+        slot = entry[len(_SCORE_SLOT):]
+        chosen = labels[slot]
+        if chosen not in existing:
+            # Keep whatever spelling the file already carries (incl. a candidate relabel), so a
+            # reorder never silently renames a score column the user has been looking at.
+            for cand in (SCORE_DEFAULT_LABELS[slot],) + SCORE_LEGACY_LABELS.get(slot, ()):
+                if cand in existing:
+                    chosen = cand if cand not in LEGACY_RENAMES else LEGACY_RENAMES[cand]
+                    break
+        out.append(chosen)
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Data Completeness back-fill — ONE implementation (was duplicated in
+# make_rankings_xlsx.py, which now imports this).
+# --------------------------------------------------------------------------- #
+def fallback_completeness(comp_range, working_location) -> str:
+    """Derive the completeness label from a row's own comp/location text (no manifest
+    field_status). Mirrors vet-jobs.js fallbackCompleteness: a missing field can't be told apart
+    from 'not posted' here, so it is treated as could-not-verify."""
+    comp = (comp_range or "").strip()
+    loc = (working_location or "").strip()
+    comp_missing = (not comp) or ("?" in comp)
+    loc_missing = (not loc) or (loc.lower() == "unknown")
+    if not comp_missing and not loc_missing:
+        return "✓ complete"
+    if comp_missing and loc_missing:
+        return "⚠ comp+location not verified"
+    if comp_missing:
+        return "⚠ comp not verified"
+    return "⚠ location unknown"
 
 
 # --------------------------------------------------------------------------- #
@@ -755,37 +864,66 @@ def load_config(path):
         return {}
 
 
-def normalize_rankings_csv(csv_path, cfg, out=print):
-    """Rewrite the contract-governed columns of a rankings CSV in place,
-    printing every repair. Returns the number of cells changed."""
+def migrate_rankings_headers(rows, score_labels=None, out=None):
+    """Migrate a rankings table (list of rows, row 0 = headers) to the exact 27-column contract
+    IN PLACE, at the WRITER level so every downstream reader finds it already correct.
+
+    Order of operations: rename legacy headers -> drop removed columns -> insert missing ones ->
+    reorder to the contract. Every step joins by header NAME (never index), so no column's data
+    can shift onto a neighbour. Values are carried with their header; inserted columns start
+    blank and are back-filled by the caller (`Data Completeness` from `fallback_completeness`,
+    `Job Posted Date` from the capture). Returns True when anything changed.
+    """
+    if not rows:
+        return False
+    headers = [str(h).strip() for h in rows[0]]
+    # Row dicts keyed by (renamed) header — index-free from here on.
+    renamed = [LEGACY_RENAMES.get(h, h) for h in headers]
+    records = []
+    for row in rows[1:]:
+        rec = {}
+        for i, h in enumerate(renamed):
+            rec[h] = row[i] if i < len(row) else ""
+        records.append(rec)
+    target = resolve_contract_headers(renamed, score_labels)
+    # NEVER drop a column we don't recognize. Only the explicitly removed contract columns go;
+    # anything else a user (or a candidate's relabelled scoring card) added keeps its data, parked
+    # after the contract columns. Losing a column the person had been filling in by hand would be
+    # a far worse failure than an extra column on the right.
+    extras = [h for h in renamed
+              if h not in target and h not in DROPPED_COLUMNS and h.strip()]
+    target = target + list(dict.fromkeys(extras))
+    if renamed == target and all(len(r) == len(target) for r in rows[1:]):
+        return False
+    if out:
+        for legacy, final in LEGACY_RENAMES.items():
+            if legacy in headers:
+                out(f"[norm_contracts] migrate: renamed column {legacy!r} -> {final!r}")
+        for gone in DROPPED_COLUMNS:
+            if gone in renamed:
+                out(f"[norm_contracts] migrate: dropped column {gone!r} (removed from the contract)")
+        for added in target:
+            if added not in renamed:
+                out(f"[norm_contracts] migrate: inserted column {added!r}")
+        if [h for h in renamed if h in target] != [h for h in target if h in renamed]:
+            out("[norm_contracts] migrate: reordered columns to the 27-column contract")
+    rows[0] = list(target)
+    for i, rec in enumerate(records, start=1):
+        rows[i] = [rec.get(h, "") for h in target]
+    return True
+
+
+def normalize_rankings_csv(csv_path, cfg, out=print, score_labels=None):
+    """Migrate a rankings CSV to the 27-column contract and rewrite its contract-governed
+    columns in place, printing every repair. Returns the number of cells changed."""
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
     if not rows:
         return 0
-    headers = [h.strip() for h in rows[0]]
     changed = 0
-    def insert_column(name, at):
-        """Positional header insert + blank back-fill, so an OLDER CSV that predates a column
-        regenerates with it in the right slot instead of shifting every later column's data."""
-        headers.insert(at, name)
-        rows[0] = list(headers)
-        for row in rows[1:]:
-            while len(row) < len(headers) - 1:
-                row.append("")
-            row.insert(at, "")
-
-    # An OLDER CSV predates the Posted column — insert it (right after Comp Range, keeping
-    # the human-scannable block contiguous) so regenerating any batch back-fills the date.
-    if H_POSTED not in headers:
-        insert_column(H_POSTED,
-                      (headers.index(H_COMPRANGE) + 1) if H_COMPRANGE in headers else len(headers))
+    if migrate_rankings_headers(rows, score_labels=score_labels, out=out):
         changed += 1
-    # Likewise for the practicality dimension's notes column. Nothing can back-fill its VALUE
-    # (it is model rationale, not derivable), so the cell stays empty — the point of inserting it
-    # positionally is that no other column's data shifts.
-    if H_PRACTNOTES not in headers:
-        insert_column(H_PRACTNOTES, practicality_notes_insert_at(headers))
-        changed += 1
+    headers = [h.strip() for h in rows[0]]
     idx = {h: i for i, h in enumerate(headers)}
 
     def fix(row, col, new, label, rownum):
@@ -822,11 +960,22 @@ def normalize_rankings_csv(csv_path, cfg, out=print):
         status_col = _status_column(headers)
         if status_col and status_col in idx and idx[status_col] < len(row):
             fix(row, status_col, normalize_status(row[idx[status_col]]), status_col, n)
-        # Posted is not model output — it is read back out of the capture's provenance line.
-        # Only ever FILLED IN, never overwritten (a date already in the sheet stays put).
-        if H_POSTED in idx and idx[H_POSTED] < len(row) and not row[idx[H_POSTED]].strip():
+        # Data Completeness is back-filled for a legacy CSV that never had the column (ONE
+        # implementation, shared with the XLSX build). A value already present stays put.
+        if H_DATACOMPLETE in idx and idx[H_DATACOMPLETE] < len(row) \
+                and not row[idx[H_DATACOMPLETE]].strip():
+            comp = row[idx[H_COMPRANGE]] if H_COMPRANGE in idx and idx[H_COMPRANGE] < len(row) else ""
+            loc = row[idx[H_WORKLOC]] if H_WORKLOC in idx and idx[H_WORKLOC] < len(row) else ""
+            fix(row, H_DATACOMPLETE, fallback_completeness(comp, loc), H_DATACOMPLETE, n)
+        # Job Posted Date is not model output — it is read back out of the capture. Only ever
+        # FILLED IN over a blank or the `Unknown` placeholder (a real date already in the sheet
+        # stays put), and it NEVER ends up blank: with no verified employer date it reads
+        # `Unknown` rather than implying nobody looked.
+        if H_POSTED in idx and idx[H_POSTED] < len(row) \
+                and row[idx[H_POSTED]].strip() in ("", UNKNOWN_POSTED_DATE):
             job_file = row[idx[H_JOBFILE]] if H_JOBFILE in idx and idx[H_JOBFILE] < len(row) else ""
-            posted = posted_date_from_capture(job_file, base_dir=Path(csv_path).parent)
+            posted = (posted_date_from_capture(job_file, base_dir=Path(csv_path).parent)
+                      or UNKNOWN_POSTED_DATE)
             if posted:
                 fix(row, H_POSTED, posted, H_POSTED, n)
     if changed:
@@ -841,6 +990,10 @@ def main(argv):
     parser.add_argument("--normalize-rankings-csv", metavar="CSV",
                         help="rewrite the contract-governed columns of a rankings CSV in place")
     parser.add_argument("--config", default=None, help="path to jail.config.json")
+    parser.add_argument("--score-labels", default=None,
+                        help="JSON mapping of score slot -> column label as written "
+                             "(e.g. '{\"style\": \"Culture Fit Score\"}'), so a candidate's "
+                             "relabelled score column is recognized instead of treated as an extra")
     parser.add_argument("--application-name", action="store_true",
                         help="print the exact canonical 'Company - Role' string for a tailored "
                              "application (folder name, resume filename, cover-letter names); "
@@ -862,7 +1015,14 @@ def main(argv):
         return 0
     if args.normalize_rankings_csv:
         cfg = load_config(args.config)
-        normalize_rankings_csv(args.normalize_rankings_csv, cfg)
+        labels = None
+        if args.score_labels:
+            try:
+                parsed = json.loads(args.score_labels)
+                labels = parsed if isinstance(parsed, dict) else None
+            except Exception:
+                print("[norm_contracts] --score-labels is not valid JSON; using engine defaults.")
+        normalize_rankings_csv(args.normalize_rankings_csv, cfg, score_labels=labels)
         return 0
     parser.print_help()
     return 1

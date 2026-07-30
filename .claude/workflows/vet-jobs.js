@@ -90,8 +90,6 @@ const SCORE_SCHEMA = {
     comp_lifestyle_fit_notes: { type: 'string' },
     mission_fit_notes: { type: 'string' },
     scope_fit_notes: { type: 'string' },
-    mission_fit_detail: { type: ['string', 'null'] },
-    scope_fit_detail: { type: ['string', 'null'] },
     top_reasons: { type: 'string' },
     top_concerns: { type: 'string' },
   },
@@ -159,9 +157,9 @@ const FALLBACK_DIMS = {
     definition: "Estimates how much you'd likely want the role if hired and if logistics were workable. May consider mission, product, users, problems, scope, career direction, and personal interests. Should not primarily measure compensation, location, or whether the employer is likely to hire you." },
   market: { label: 'How They May See Your Profile', schema_key: 'market_perception_score', default_weight: 30,
     definition: 'Estimates how competitive and legible you may appear to this employer before tailoring, based on the canonical summary profile available during vetting and the job posting. It does not use the newly tailored resume. A preference for the company, mission, or lane is not evidence that the employer will see you as qualified.' },
-  style: { label: 'Culture Fit', schema_key: 'company_style_score', default_weight: 20,
+  style: { label: 'Culture Fit Score', schema_key: 'company_style_score', default_weight: 20,
     definition: "Estimates how well the company's apparent working style, values, product culture, and environment may suit you, based on the evidence actually available. Job postings provide incomplete culture evidence. When little reliable information is available, this score should remain closer to neutral and should be treated as lower-confidence." },
-  practicality: { label: 'Comp + Lifestyle Fit', schema_key: 'practicality_score', default_weight: 15,
+  practicality: { label: 'Comp + Lifestyle Fit Score', schema_key: 'practicality_score', default_weight: 15,
     definition: "Estimates how well compensation, location, work arrangement, travel, schedule, and other practical considerations fit your stated preferences. A lower score reduces the opportunity's priority but is not automatically a veto." },
 }
 let DIMS = FALLBACK_DIMS
@@ -204,14 +202,14 @@ ${refs.rubric}
 ${refs.profile}
 </profile>${prefsBlock}`
 
-// Parse the structured config once — used to write candidate-relative Comp Fit / Location Fit
-// LABELS into the CSV. Working Location/Location Fit COLORS are no longer label-driven: they come
+// Parse the structured config once — used to write the candidate-relative Comp Fit
+// LABEL into the CSV. Working Location COLORS are not label-driven: they come
 // from norm_contracts.working_location_color() (the canonical 4-hex mapper) inside make_rankings_xlsx.py.
 let CFG = {}
 try { CFG = (refs && refs.config && refs.config.trim()) ? JSON.parse(refs.config) : {} } catch (_) { CFG = {} }
 
 // ---- First-run completeness nudge ----
-// Comp Fit / Location Fit / Lane coloring all fall back to neutral/grey when these are missing —
+// Comp Fit / Lane coloring falls back to neutral/grey when these are missing —
 // silently, unless someone happens to open the xlsx and notice the Instructions-tab comment. Flag
 // it loudly up front instead, especially useful for a brand-new user's very first batch.
 {
@@ -222,7 +220,7 @@ try { CFG = (refs && refs.config && refs.config.trim()) ? JSON.parse(refs.config
   const hasLanes = Array.isArray(CFG && CFG.lanes) && CFG.lanes.length > 0
   if (!hasComp || !hasLoc || !hasLanes) {
     const missing = [!hasComp && 'comp target/floor', !hasLoc && 'location arrangement ratings', !hasLanes && 'lanes'].filter(Boolean).join(', ')
-    log(`⚠ jail.config.json is missing: ${missing}. Comp Fit / Lane coloring will be neutral, and Working Location / Location Fit coloring cannot recognize your home metro, until this is filled in — run /intake (or its update mode) to complete it.`)
+    log(`⚠ jail.config.json is missing: ${missing}. Comp Fit / Lane coloring will be neutral, and Working Location coloring cannot recognize your home metro, until this is filled in — run /intake (or its update mode) to complete it.`)
   }
 }
 
@@ -248,7 +246,7 @@ content_verified is true, set content_issue to null and proceed normally.
 
 Scoring rules:
 - Four scores, each an INTEGER 0-100: desire_score, market_perception_score, company_style_score, practicality_score.
-  - desire_score: how much the candidate would want this role — mission fit, role excitement, domain alignment, personal pull. Compute the scoring card's five Desire sub-factors, THEN apply the card's "⭐ Strategic Career Leverage" rule: a bounded uplift (None/Some/Strong/Exceptional) for a role whose actual mandate would build the specific missing evidence named in the candidate profile's "Target Career Direction / Primary Strategic Gaps / High-Leverage Bridge Work" fields — all three of the card's tests (named-gap, ownership, future-legibility) must hold, it's capped at 85, it can't rescue disliked work, and it NEVER touches Profile/Style/Practicality. If the profile has no target-direction/gaps fields, apply no leverage. When it materially moves the score, note it in one clause of mission_fit_notes and the level+evidence in mission_fit_detail.
+  - desire_score: how much the candidate would want this role — mission fit, role excitement, domain alignment, personal pull. Compute the scoring card's five Desire sub-factors, THEN apply the card's "⭐ Strategic Career Leverage" rule: a bounded uplift (None/Some/Strong/Exceptional) for a role whose actual mandate would build the specific missing evidence named in the candidate profile's "Target Career Direction / Primary Strategic Gaps / High-Leverage Bridge Work" fields — all three of the card's tests (named-gap, ownership, future-legibility) must hold, it's capped at 85, it can't rescue disliked work, and it NEVER touches Profile/Style/Practicality. If the profile has no target-direction/gaps fields, apply no leverage. When it materially moves the score, note it in one clause of mission_fit_notes (the `Your Desire Score Notes` column) — naming the level and the evidence in that same clause.
   - market_perception_score: how strong a candidate they would appear to this employer — experience match, credibility, likely recruiter reaction.
   - company_style_score: how well the company culture, stage, and working style fit the candidate.
   - practicality_score: how livable/practical the job is — comp relative to the candidate's targets, location/remote fit, logistics, quality of life. Use the <preferences> block (comp target/floor, location arrangement ratings) when present to sharpen this; if preferences are absent, fall back to the profile prose. Preferences inform — they do not override the full rubric/profile.
@@ -260,7 +258,7 @@ Scoring rules:
 - lane: the job's category as "<Bucket> - <Descriptor>", in the job's OWN terms — NOT mapped to the candidate's lanes. Bucket = closest fit from Health / Consumer / Work / Other (exactly "Work", NEVER "Work Tools"; add a new bucket only if truly none fit — keep this set small and reusable). Descriptor = a short 1-2 word phrase, e.g. "Health - DTC Supplements", "Health - Provider Tools", "Health - Consumer Wellness", "Consumer - Home Sharing", "Work - Collaboration", "Work - Productivity", "Work - Project Management", "Work - Legal", "Work - Consumer Research", "Other - Fintech". Reuse an existing descriptor for the same kind of job rather than inventing near-duplicate wording — consistency across jobs matters more than precision on any one job. Mental/behavioral health jobs MUST use the exact string "Health - Mental Health" — no extra qualifier words appended.
 - lane_fit: how that job-lane maps to the CANDIDATE's priority lanes — candidate-relative and honest. { primary_lane: EXACTLY one of the candidate's priority-lane names (verbatim from the profile), or "Outside lanes" if it fits none; secondary_lane (or null); confidence ("high"/"medium"/"low"); note (one short phrase) }. If the role is not one of the candidate's lanes, primary_lane = "Outside lanes" (even when the domain sounds related). Do NOT inflate — it is surfaced for the candidate, not added to the score.
 - comp_lifestyle_fit_notes: the RATIONALE BREAKDOWN behind practicality_score — the prose companion to that score, exactly like mission_fit_notes is to the mission judgment. Terse pipe-separated parts in the order cash | location | equity+bonus+benefits, each naming the sub-points it earned and the one-phrase reason, e.g. \`Cash 26/40 (midpoint ~$188K) | Location 30/30 (fully remote) | Equity+bonus+401k 19/20 (equity stated; bonus stated; 401k stated)\`. Use whatever sub-factor names and point totals the candidate's scoring card actually defines for this dimension; if the card defines no sub-factors, write the same three-part breakdown in plain phrases without point math. This is the ONLY field where that breakdown belongs. Two columns it must NEVER be written into: **comp_range** stays the mechanical \`N-N\` (or \`??\`) value described above — never prose, never a note; and the **Comp Fit** column is MACHINE-DERIVED downstream from the normalized comp range by norm_contracts.comp_fit_label() — you do not produce it at all, and anything prose-like aimed at it is destroyed on the next normalization pass.
-- mission_fit_notes / scope_fit_notes: ONE plain-English sentence each, written the way you'd say it out loud — no sub-factor math, no "=", "/", or "+" notation, no "Mission 27/30 + Role 16/30..." breakdowns. If you want the detailed reasoning preserved for later auditing, put THAT in mission_fit_detail / scope_fit_detail instead (optional, null if not needed) — never in the human-facing notes fields.
+- mission_fit_notes / scope_fit_notes: ONE plain-English sentence each, written the way you'd say it out loud — no sub-factor math, no "=", "/", or "+" notation, no "Mission 27/30 + Role 16/30..." breakdowns. They land in the `Your Desire Score Notes` and `Profile Score Notes` columns. Keep the reasoning in that one sentence; there is no separate detail field.
 - top_reasons / top_concerns: semicolon-separated phrases, concise and concrete.
 - If PDF extraction is imperfect, make a best effort and note it in scope_fit_notes; do not fail.`,
     { phase: 'Score', model: 'sonnet', schema: SCORE_SCHEMA, label: job.file }
@@ -310,34 +308,14 @@ function compFitLabel(text, cfg) {
   if (target != null) return (lo + hi) / 2 >= target ? 'Meets/above target' : 'Near target'
   return 'Above floor'
 }
-function locationFitLabel(text, cfg) {
-  const loc = (text || '').trim().toLowerCase()
-  const locp = (cfg && cfg.location) || {}
-  const aliases = ((locp.home_metro_aliases) || []).filter(Boolean).map((a) => a.toLowerCase())
-  const home = (locp.home_metro || '').trim().toLowerCase()
-  if (home) aliases.push(home)
-  // Check IRL/onsite/hybrid BEFORE the "unknown"/"unclear" bail-out — a value like
-  // "IRL NYC - unknown days" has a real, known city with only the day-count missing, and must not
-  // be short-circuited to Unclear just because the substring "unknown" appears in "unknown days".
-  if (!loc) return 'Unclear'
-  if (loc.includes('remote')) return loc.includes('state') ? 'Remote (state-restricted)' : 'Remote'
-  // A bare "<City> - N days" (no "IRL"/"hybrid"/"onsite" keyword) is still a real in-office signal —
-  // don't fall through to Unclear just because the agent skipped the "IRL" prefix. Detect it via the
-  // day-count pattern itself, or a recognized city name appearing without "remote".
-  const hasDayCount = /\d+\s*day/.test(loc)
-  const hasKnownCity = aliases.length && aliases.some((a) => loc.includes(a))
-  if (['irl', 'onsite', 'on-site', 'hybrid', 'in-office', 'in office'].some((k) => loc.includes(k)) || hasDayCount || hasKnownCity) {
-    const m = loc.match(/(\d+)\s*day/)
-    const days = m ? Number(m[1]) : null
-    const onsite = loc.includes('onsite') || loc.includes('on-site') || (days != null && days >= 5)
-    const mode = onsite ? 'onsite' : 'hybrid'
-    if (aliases.length && aliases.some((a) => loc.includes(a))) return `Home ${mode}`
-    if (aliases.length) return `Other ${mode}`
-    return `${mode.charAt(0).toUpperCase()}${mode.slice(1)} (home metro not set)`
-  }
-  if (loc.includes('unknown') || loc.includes('unclear')) return 'Unclear'
-  return 'Unclear'
-}
+// `Location Fit` was removed from the contract (2026-07-30): it restated what the canonical
+// `Working Location` grammar already encodes, shared its exact 4-hex fill, and was one more derived
+// label to keep in sync. Its labeler is gone with it — do not reintroduce one.
+
+// The literal placeholder for an unverified employer publication date. Never blank (a blank cell
+// reads as "nobody looked"), never the JAIL capture date, never inferred from a URL, job id, or
+// search-result age. norm_contracts replaces it only with a date the capture actually carries.
+const UNKNOWN_POSTED_DATE = 'Unknown'
 
 // ---- Per-job DATA COMPLETENESS (comp + working-location capture quality) ----
 // Surfaces, per row, whether the score was computed against complete comp/location data — so the
@@ -474,7 +452,6 @@ for (const r of rows) {
     r.status = statusFor(r.final_score)
   }
   r._comp_fit = compFitLabel(r.comp_range, CFG)
-  r._loc_fit = locationFitLabel(r.location, CFG)
   r._completeness = completenessFromFieldStatus(fsByFile[r.job_file]) || fallbackCompleteness(r.comp_range, r.location)
 }
 // Unverified rows float to the very top — impossible to miss, not buried at the bottom where a
@@ -506,23 +483,34 @@ const laneFitStr = (lf) => lf ? `${lf.primary_lane} (${lf.confidence})${lf.secon
 // too, and the Python side (norm_contracts.py / make_rankings_xlsx.py) has to locate this column
 // by an exact name that can't shift when a candidate's scoring card relabels the dimension.
 const PRACTICALITY_NOTES_HEADER = 'Comp + Lifestyle Fit Notes'
+// THE 27-COLUMN CONTRACT (order authoritative, approved 2026-07-30). CSV and XLSX share this exact
+// header set + order, and norm_contracts.normalize_rankings_csv MIGRATES any older CSV to it (rename
+// -> drop -> insert -> reorder, joined by header NAME so no column's data ever shifts).
+// `Location Fit` was REMOVED as redundant with `Working Location`: the canonical location grammar
+// already encodes remote/metro/cadence, both columns carried the same 4-hex fill, and a second
+// derived label was one more thing to keep in sync for no added signal.
+// The 5 score-column labels are DYNAMIC (resolved above from score-dimensions.json), so a candidate
+// who relabels a dimension relabels those headers with it; the defaults spell the contract exactly.
 const HEADERS = [
   'Applied Date? [You Fill In]', 'Status? [You Change]', 'Lane', 'Company', 'Job Post Title + Link',
-  'Working Location', 'Comp Range', 'Posted',
+  'Working Location', 'Comp Range',
   'Have Intro? [You Add]', 'Your Notes? [You Add]', 'Decline/Down Date? [You Add]',
   LABELS.final, LABELS.market, LABELS.desire, LABELS.style, LABELS.practicality,
-  // The practicality dimension's prose companion, sitting immediately after its score (the same
-  // score-then-notes pattern as Mission/Scope). It exists because that rationale used to be written
-  // into `Comp Fit` — a contract-owned, machine-derived column — where the norm_contracts pass
-  // correctly re-derived the label and destroyed the prose. Now it has a column of its own.
+  // The employer's own publication date, immediately after the score block (her spec). Written as
+  // `Unknown` here — never blank, never the JAIL capture date, never inferred — and the
+  // norm_contracts pass replaces that placeholder with a verified date when the capture carries one.
+  'Job Posted Date',
+  'Top Reasons Notes', 'Top Concerns Notes', 'Profile Score Notes', 'Your Desire Score Notes',
+  // The practicality dimension's prose companion. It exists because that rationale used to be
+  // written into `Comp Fit` — a contract-owned, machine-derived column — where the norm_contracts
+  // pass correctly re-derived the label and destroyed the prose. Now it has a column of its own.
   PRACTICALITY_NOTES_HEADER,
-  'Mission Fit Notes', 'Scope Fit Notes', 'Top Reasons Notes', 'Top Concerns',
-  'Job File', 'Base Resume Used', 'Lane Fit', 'Location Fit', 'Comp Fit', 'Data Completeness',
+  'Lane Fit', 'Comp Fit', 'Data Completeness', 'Job File',
   // Both blank at vet time and filled in later by the downstream steps, via
-  // 03-VETTING/update_rankings_row.py: 'Base Resume Used' by tailor-jobs, 'Cover Letter?' by the
-  // cover-letter workflow. (Before 7/16/26 'Base Resume Used' was written blank here and NOTHING
-  // ever filled it — the tailor agent's recommended_base was returned and silently discarded.)
-  'Cover Letter?',
+  // 03-VETTING/update_rankings_row.py: 'Tailored? (Base Resume)' by tailor-jobs (then the exact
+  // base-resume name), 'Cover Letter Drafted?' by the cover-letter workflow (then `Yes`). The `?`
+  // in these two headers is NOT a human-managed marker — only [You Fill In]/[You Change]/[You Add].
+  'Tailored? (Base Resume)', 'Cover Letter Drafted?',
 ]
 // The CSV is CLEAN DATA ONLY — header + one row per job, in final-score order. No section-divider
 // rows and no pre-grouping: that keeps the data sortable (no merged cells) and lets a user paste
@@ -531,12 +519,15 @@ const HEADERS = [
 function dataCells(r) {
   return [
     '', r.status, r.lane, r.company, r.title_and_link,
-    r.location, r.comp_range, '',
+    r.location, r.comp_range,
     '', '', '',
     r.final_score, r.market_perception_score, r.desire_score, r.company_style_score, r.practicality_score,
+    // Never blank, never the capture date, never inferred: the placeholder the
+    // norm_contracts pass overwrites only with a VERIFIED employer date.
+    UNKNOWN_POSTED_DATE,
+    r.top_reasons, r.top_concerns, r.scope_fit_notes, r.mission_fit_notes,
     r.comp_lifestyle_fit_notes,
-    r.mission_fit_notes, r.scope_fit_notes, r.top_reasons, r.top_concerns,
-    r.job_file, '', laneFitStr(r.lane_fit), r._loc_fit, r._comp_fit, r._completeness, '',
+    laneFitStr(r.lane_fit), r._comp_fit, r._completeness, r.job_file, '', '',
   ]
 }
 const csvLines = [HEADERS.map(csvCell).join(',')]
@@ -563,8 +554,8 @@ for (const r of rows) {
 - **Location:** ${r.location}  |  **Comp:** ${r.comp_range}
 - **Scores:** ${LABELS.desire} ${fmtScore(r.desire_score)} / ${LABELS.market} ${fmtScore(r.market_perception_score)} / ${LABELS.style} ${fmtScore(r.company_style_score)} / ${LABELS.practicality} ${fmtScore(r.practicality_score)} → **${LABELS.final} ${fmtScore(r.final_score)}**
 - **${LABELS.practicality} notes:** ${r.comp_lifestyle_fit_notes || '—'}
-- **Mission fit:** ${r.mission_fit_notes}${r.mission_fit_detail ? `\n  - *Detail:* ${r.mission_fit_detail}` : ''}
-- **Scope fit:** ${r.scope_fit_notes}${r.scope_fit_detail ? `\n  - *Detail:* ${r.scope_fit_detail}` : ''}
+- **Mission fit:** ${r.mission_fit_notes}
+- **Scope fit:** ${r.scope_fit_notes}
 - **Top reasons:** ${r.top_reasons}
 - **Top concerns:** ${r.top_concerns}
 - **File:** ${r.job_file}
@@ -630,7 +621,7 @@ const NORM_SCHEMA = {
 const normRes = await agent(
   `Run this EXACT shell command from the project root (it uses the project venv if present, else python3):
 
-PY=".venv/bin/python"; [ -x "$PY" ] || PY="python3"; "$PY" ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py --normalize-rankings-csv "${csvPath}" --config jail.config.json
+PY=".venv/bin/python"; [ -x "$PY" ] || PY="python3"; "$PY" ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py --normalize-rankings-csv "${csvPath}" --config jail.config.json --score-labels ${JSON.stringify(JSON.stringify(LABELS))}
 
 Do not edit the script or the CSV yourself. Return ok:true if it exited without a Python traceback; put every "[norm_contracts]" repair/warning line it printed in "output" (or "" if none); on failure return ok:false with the error text in message.`,
   { phase: 'Assemble', model: 'haiku', schema: NORM_SCHEMA, label: 'normalize contract columns' }
