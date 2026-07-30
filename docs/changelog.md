@@ -11,6 +11,23 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — B3: the CSV and the workbook can no longer diverge
+
+The live class: the workbook showed a back-filled posted date the CSV lacked, because the XLSX build
+repaired on READ without writing back. `make_rankings_xlsx.build()` now runs the shared
+`normalize_rankings_csv` pass on the CSV ITSELF first — migration, WL/lane/comp/status
+normalization, posted-date and completeness back-fill all land in the CSV — and then builds the
+workbook from the repaired file. One canonical row collection, two renderings. (vet-jobs.js already
+runs the same pass right after scoring, so this is a no-op there; it does the work for standalone
+regeneration of an old or hand-made CSV.) The residual on-read normalizations remain as
+belt-and-suspenders no-ops.
+
+Regression tests compare EVERY corresponding cell (not counts or headers) between the written CSV
+and the built workbook on (a) a fresh current-contract write and (b) the legacy posted-date
+divergence shape, and pin that regenerating a legacy CSV's workbook repairs the CSV in place —
+migrated headers, normalized Working Location, back-filled posted date — with a second build a
+byte-stable no-op. Suite: 581 → 586 green.
+
 ## 2026-07-30 — B2: row-integrity validation at the rankings writer
 
 The live defect: one malformed row lost its Lane Fit and Job File and had a Comp-Fit-shaped value

@@ -515,11 +515,20 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
     for key in order:
         WIDTHS[label_of[key]] = SCORE_WIDTHS_BY_KEY.get(key, 14)
 
+    # ---- ONE canonical row collection (B3, divergence prevention) --------------- #
+    # Every repair the workbook needs — migration, WL/lane/comp/status normalization,
+    # posted-date + completeness back-fill — is applied to the CSV ITSELF first, via
+    # the shared normalize pass. The workbook is then built from the repaired CSV, so
+    # the two artifacts can never diverge: the class where the XLSX showed a repaired
+    # value (a back-filled posted date) that the CSV lacked is structurally gone.
+    # vet-jobs.js runs the same pass right after scoring, making this a no-op there;
+    # it does the work for a standalone regeneration of an old or hand-made CSV.
+    norm_contracts.normalize_rankings_csv(
+        str(input_csv), cfg,
+        score_labels={k: label_of.get(k) for k in norm_contracts.SCORE_SLOTS})
+
     headers, records = read_records(input_csv, SCORE_COLS)
-    # Output-contract normalization on read (norm_contracts is the single source): repair the
-    # Working Location text so regenerating an OLD CSV (or one an LLM wrote slightly off-grammar)
-    # still yields canonical cells + correct colors. vet-jobs.js runs the same normalizer over the
-    # CSV itself right after scoring; this is the belt-and-suspenders for standalone regeneration.
+    # Residual on-read normalization (belt-and-suspenders; a no-op after the pass above).
     for rec in records:
         if H_WORKLOC in rec:
             rec[H_WORKLOC] = norm_contracts.normalize_working_location(rec.get(H_WORKLOC), cfg)

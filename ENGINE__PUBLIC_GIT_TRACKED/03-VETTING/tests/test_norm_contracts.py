@@ -1514,3 +1514,102 @@ def test_completeness_vocabulary_recognizer():
         assert norm_contracts.is_valid_completeness(ok), ok
     for bad in ("Below floor", "Meets/above target", "great", ""):
         assert not norm_contracts.is_valid_completeness(bad), bad
+
+
+# ===========================================================================
+# B3 — CSV/XLSX divergence prevention. The live class: the workbook showed a
+# repaired value (a back-filled posted date) that the CSV lacked, because the
+# XLSX build repaired on READ without writing back. Both artifacts now derive
+# from ONE canonical row collection: build() runs the shared normalize pass on
+# the CSV itself first.
+# ===========================================================================
+def _xlsx_cells(xlsx_path):
+    ws = load_workbook(str(xlsx_path))["Job Rankings"]
+    headers = [c.value for c in ws[1]]
+    rows = []
+    r = 2
+    while ws.cell(r, 1).value is not None or ws.cell(r, 4).value is not None:
+        row = ["" if ws.cell(r, i + 1).value is None else str(ws.cell(r, i + 1).value)
+               for i in range(len(headers))]
+        if not any(c.strip() for c in row):
+            break
+        rows.append(row)
+        r += 1
+    return headers, rows
+
+
+def _csv_cells(csv_path):
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        table = list(csv.reader(f))
+    return table[0], [[str(c) for c in row] for row in table[1:] if any(c.strip() for c in row)]
+
+
+def _assert_every_cell_identical(csv_path, xlsx_path, context):
+    csv_headers, csv_rows = _csv_cells(csv_path)
+    xlsx_headers, xlsx_rows = _xlsx_cells(xlsx_path)
+    assert csv_headers == xlsx_headers, f"{context}: header rows differ"
+    assert len(csv_rows) == len(xlsx_rows), f"{context}: row counts differ"
+    for rn, (crow, xrow) in enumerate(zip(csv_rows, xlsx_rows), start=2):
+        for h, cv, xv in zip(csv_headers, crow, xrow):
+            # The title cell is written as a hyperlinked display TEXT in the workbook;
+            # everything else must match byte-for-byte.
+            if h == "Job Post Title + Link" and xv and xv in cv:
+                continue
+            assert cv == xv, f"{context}: row {rn} col {h!r}: CSV {cv!r} != XLSX {xv!r}"
+
+
+@pytest.mark.parametrize("shape", ["fresh", "legacy_posted_divergence"])
+def test_csv_and_xlsx_agree_cell_by_cell(tmp_path, shape):
+    """(a) a fresh current-contract write; (b) the Thesis/Headway shape — a legacy CSV
+    whose capture carries a posted date the CSV lacks. After the build, the CSV must
+    hold every repaired value the workbook shows."""
+    write_capture(tmp_path, "Acme")            # capture with Job Posted At: June 13, 2026
+    write_capture(tmp_path, "Nodate", posted="Job Posted At: Unknown")
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    cfg_path = tmp_path / "jail.config.json"
+    cfg_path.write_text(json.dumps(CFG), encoding="utf-8")
+    csv_path = rankings / "b-rankings.csv"
+    xlsx_path = rankings / "b-rankings.xlsx"
+    if shape == "fresh":
+        write_csv(csv_path, [make_row(company="Acme", posted="2026-06-13"),
+                             make_row(company="Nodate")])
+    else:
+        # Legacy headers, and NO posted value anywhere in the CSV — the divergence
+        # class: pre-B3, only the workbook would have shown the back-filled date.
+        write_legacy_csv(csv_path, [legacy_row(company="Acme"),
+                                    legacy_row(company="Nodate")])
+    make_rankings_xlsx.build(str(csv_path), str(xlsx_path), config_path=str(cfg_path))
+    _assert_every_cell_identical(csv_path, xlsx_path, shape)
+    # The repaired values are IN THE CSV, not just the workbook.
+    headers, rows = _csv_cells(csv_path)
+    got = dict(zip(headers, rows[0]))
+    assert got["Job Posted Date"] == "2026-06-13"
+    got2 = dict(zip(headers, rows[1]))
+    assert got2["Job Posted Date"] == "Unknown"
+    assert got["Data Completeness"]            # back-filled into the CSV too
+
+
+def test_regenerating_the_xlsx_writes_repairs_back_to_a_legacy_csv(tmp_path):
+    write_capture(tmp_path, "Acme")
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    cfg_path = tmp_path / "jail.config.json"
+    cfg_path.write_text(json.dumps(CFG), encoding="utf-8")
+    csv_path = rankings / "old-rankings.csv"
+    write_legacy_csv(csv_path, [legacy_row(company="Acme", location="NYC/SF - 3 days")])
+    before = csv_path.read_text(encoding="utf-8")
+    make_rankings_xlsx.build(str(csv_path), str(rankings / "old-rankings.xlsx"),
+                             config_path=str(cfg_path))
+    after = csv_path.read_text(encoding="utf-8")
+    assert after != before                      # the build REPAIRED the CSV in place
+    headers, rows = _csv_cells(csv_path)
+    assert headers == HEADERS                   # migrated to the 27-column contract
+    got = dict(zip(headers, rows[0]))
+    assert got["Working Location"] == "IRL NYC/SF - 3 days"   # normalized in the CSV
+    assert got["Job Posted Date"] == "2026-06-13"
+    # And a second build is a no-op on the CSV (single canonical collection, stable).
+    stable = csv_path.read_text(encoding="utf-8")
+    make_rankings_xlsx.build(str(csv_path), str(rankings / "old-rankings.xlsx"),
+                             config_path=str(cfg_path))
+    assert csv_path.read_text(encoding="utf-8") == stable
