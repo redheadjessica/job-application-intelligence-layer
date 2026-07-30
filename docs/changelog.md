@@ -11,6 +11,41 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — First live re-capture review: six content fixes to the JOB SNAPSHOT contract
+
+The first real re-capture through the new format rendered structurally correct output but failed the
+acceptance standard ("as complete as the sources permit") on content. Six fixes, all reproduced and
+pinned with synthetic fixtures:
+
+- **Whole benefits sections, not the first bullet.** The benefits miner treated a blank line as
+  end-of-section, so a labeled seven-bullet list ("Full Time Employee Benefits:") collapsed to its
+  first item. The miner now walks the whole bullet list (blank lines between bullets are formatting;
+  an intro paragraph followed by the section's own bullets is still the section), stopping at the next
+  heading or a post-list paragraph. The writer strips each bullet's `<Label>:` prefix and bullet
+  markers and renders period-separated sentences.
+- **Additional Compensation never emits bullet junk.** A raw benefits bullet
+  (`- Financial Wellness: 401(k) program and equity opportunities.`) had been surfaced verbatim as the
+  equity value. Now: bullets/label prefixes stripped; detail-free equity language collapses to clean
+  comp-only wording (`Equity Opportunities.`); 401(k) is a benefit and stays in the Benefits summary
+  (with equity language removed from that item); real grant descriptions still pass through cleaned.
+- **CAPTURE UPDATE DETAILS carries the new fetch's full identity** — Re-Captured, Source, Posting ATS
+  ID, Methods Checked, Verification, Additional Notes, in that order — while CAPTURE DETAILS keeps
+  describing the ORIGINAL capture (its source/ATS id/methods/verification recovered from the prior
+  file, both current and legacy formats, falling back to the prior manifest entry).
+- **Additional Notes diff the snapshot FIELDS, not only the body.** A re-capture that added the
+  posting date and corrected employment/cadence/benefits had reported "No Material Changes Detected."
+  The notes generator now parses the prior capture's labeled fields (legacy `== NORMALIZED ==` and
+  current labels both) and names what was added/corrected — with comparison normalization so pure
+  formatting drift (FullTime vs Full Time, long vs short metro names, ISO vs human dates) never reads
+  as a correction. "No Material Changes Detected." is reserved for genuinely unchanged fields + body.
+- **Working Location(s) renders human multi-city lists** as short-metro `NYC Or SF` style (small city
+  canon, deduped after canonicalization; unknown cities pass through verbatim).
+- **Base Salary bullets** use a spaceless en dash (`$182,000–$227,000`) and append `Annually` only
+  when the employer's own comp wording states the range is annual — never inferred, never on hourly
+  figures.
+
+Suite: 401 → 408 green.
+
 ## 2026-07-29 — The capture preamble becomes a human-readable contract (JOB SNAPSHOT format), migrated atomically
 
 The saved job-post `.txt` header spoke implementation language (`== NORMALIZED (for vetting) ==`,

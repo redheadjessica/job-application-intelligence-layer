@@ -1399,7 +1399,7 @@ def test_prose_derived_fields_populate_the_capture_when_structured_is_absent():
                                meta=meta, field_status=fs, methods_tried=["requests"])
     # The employer's own prose values fill the sections — never a blank/quoted-empty field.
     assert "Base Salary:" in out and "220,000" in out
-    assert "San Francisco, CA" in out.split("WORK DETAILS")[1].split("COMPENSATION")[0]
+    assert "SF Or NYC" in out.split("WORK DETAILS")[1].split("COMPENSATION")[0]
     # The prose states a "3 days per week" cadence — mined into Office Expectation.
     assert "Office Expectation: 3 Days Per Week" in out
     assert ': ""' not in out  # no empty quoted fields anywhere in the new contract
@@ -2085,8 +2085,8 @@ def test_base_salary_bullets_expand_k_amounts_to_full_dollars():
                      field_status={"compensation": pc.FOUND,
                                    "working_location": pc.FOUND,
                                    "description": pc.FOUND, "conflicts": []})
-    assert "  - Zone A: $236,000 – $296,000 USD" in out
-    assert "  - Zone B: $213,000 – $266,000 USD" in out
+    assert "  - Zone A: $236,000\u2013$296,000 USD" in out
+    assert "  - Zone B: $213,000\u2013$266,000 USD" in out
     assert "$236K" not in out
 
 
@@ -2172,7 +2172,7 @@ def test_best_field_merge_never_degrades_a_better_body(tmp_path):
     # The better existing body survives the degraded re-fetch, and the notes say so.
     assert pc.body_from_capture(out) == good
     assert "kept the prior job text" in entry["notes"]
-    assert "Prior Job Text Was Kept" in out
+    assert "prior job text was kept" in out
     # Posting dates verified earlier survive a re-fetch whose source lost them.
     src2 = _batch_source(tmp_path / "b2")
     url = "https://example.com/job/dates"
@@ -2181,6 +2181,241 @@ def test_best_field_merge_never_degrades_a_better_body(tmp_path):
     assert m2["entries"][0]["posted_date"] == "2026-06-13"
     out2 = (src2 / Path(m2["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
     assert "Job Posted At: June 13, 2026" in out2
+
+
+# ===========================================================================
+# Acceptance-standard fixes (2026-07-29 review of the first live re-capture).
+# All synthetic fixtures — no real capture data.
+# ===========================================================================
+_GROW_SHAPED_BENEFITS_BODY = (
+    "About the role\nResponsibilities include shipping product.\n"
+    "Qualifications: 5+ years of experience.\n\n"
+    "Full Time Employee Benefits:\n\n"
+    "- Comprehensive Health Coverage: Medical, dental, and vision insurance, plus life "
+    "and disability coverage.\n\n"
+    "- Parental Support: Up to 18 weeks of paid parental leave and a new-child stipend.\n\n"
+    "- Financial Wellness: 401(k) program and equity opportunities.\n\n"
+    "- Time Off: Flexible PTO, 12 paid holidays, and a winter break week.\n\n"
+    "- Stipends: Home-office, meal, development, and wellness stipends.\n\n"
+    "- Mental Health: No-cost therapy and wellness app memberships.\n\n"
+    "- Perks: Pet insurance discounts and commuter benefits.\n\n"
+    "How to apply:\nSend us your application.\n" + ("x " * 60))
+
+
+def test_whole_labeled_benefits_section_is_summarized_not_truncated():
+    """Defect 1: blank lines between bullets used to truncate a 7-bullet labeled
+    benefits section to its FIRST bullet. The whole section must be summarized as
+    period-separated sentences, label prefixes stripped, no bullet markers."""
+    benefits, _e = af.mine_benefits_equity(_GROW_SHAPED_BENEFITS_BODY)
+    out = pc.build_output_text("http://x", "PM", "Acme", _GROW_SHAPED_BENEFITS_BODY,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 150,000",
+                                     "working_location": "Remote"},
+                               methods_tried=["ats"])
+    line = next(l for l in out.splitlines() if l.startswith("Benefits:"))
+    # Every bullet's content is represented, not just the first.
+    for needle in ("Medical, dental, and vision insurance",
+                   "18 weeks of paid parental leave",
+                   "401(k) program",
+                   "Flexible PTO, 12 paid holidays",
+                   "wellness stipends",
+                   "No-cost therapy"):
+        assert needle in line, needle
+    # Label prefixes and bullet markers are stripped; sentences are period-separated.
+    for gone in ("Comprehensive Health Coverage:", "Parental Support:",
+                 "Financial Wellness:", "- "):
+        assert gone not in line, gone
+    assert line.count(". ") >= 4 and line.endswith(".")
+    # The next section's content never bleeds in.
+    assert "Send us your application" not in line
+
+
+def test_additional_compensation_never_emits_bullet_junk():
+    """Defect 2: `Additional Compensation: - Financial Wellness: 401(k) program and
+    equity opportunities.` — a raw benefits bullet. Required: clean comp-only
+    wording; 401(k) stays a benefit."""
+    out = pc.build_output_text("http://x", "PM", "Acme", _GROW_SHAPED_BENEFITS_BODY,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 150,000",
+                                     "working_location": "Remote"},
+                               methods_tried=["ats"])
+    line = next(l for l in out.splitlines() if l.startswith("Additional Compensation:"))
+    assert line == "Additional Compensation: Equity Opportunities."
+    # 401(k) belongs in Benefits (and equity is removed from that benefits item).
+    bline = next(l for l in out.splitlines() if l.startswith("Benefits:"))
+    assert "401(k) program" in bline and "equity" not in bline.lower()
+    # A real grant description still passes through, cleaned of bullets/labels.
+    body2 = ("About the role\nResponsibilities include shipping product.\n"
+             "- Equity: This role includes an equity grant of 4,000 restricted stock "
+             "units vesting over 4 years.\n" + ("x " * 60))
+    out2 = pc.build_output_text("http://x", "PM", "Acme", body2,
+                                meta={"title": "PM", "structured_source": True,
+                                      "compensation": "USD 150,000",
+                                      "working_location": "Remote"},
+                                methods_tried=["ats"])
+    line2 = next(l for l in out2.splitlines() if l.startswith("Additional Compensation:"))
+    assert "4,000 restricted stock units" in line2
+    assert ": -" not in line2 and "Equity: This" not in line2
+
+
+def test_capture_update_details_carries_the_new_fetch_fields(tmp_path):
+    """Defect 3: the UPDATE block must carry Re-Captured, Source, Posting ATS ID,
+    Methods Checked, Verification, Additional Notes — describing the NEW fetch —
+    while CAPTURE DETAILS keeps describing the ORIGINAL capture."""
+    src = _batch_source(tmp_path)
+    url = "https://example.com/job/update-fields"
+
+    def first(u):
+        return {"ok": True, "title": "PM", "company": "Acme", "body": _SYNTH_BODY,
+                "method": "ats", "error": None,
+                "meta": {"title": "PM", "source": "greenhouse-boards-api",
+                         "structured_source": True, "compensation": "USD 150,000",
+                         "working_location": "Remote", "posting_id": "gh-1"},
+                "questions": []}
+
+    def second(u):
+        return {"ok": True, "title": "PM", "company": "Acme", "body": _SYNTH_BODY,
+                "method": "ats", "error": None,
+                "meta": {"title": "PM", "source": "ashby-posting-api",
+                         "structured_source": True, "compensation": "USD 150,000",
+                         "working_location": "Remote", "posting_id": "ashby-2"},
+                "questions": []}
+
+    pc.process_urls([url], src, first)
+    manifest = pc.process_urls([url], src, second, force=True)
+    out = (src / Path(manifest["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
+    details, update = out.split("CAPTURE UPDATE DETAILS")
+    # Original capture's identity stays in CAPTURE DETAILS.
+    assert "Source: Greenhouse" in details and "Posting ATS ID: gh-1" in details
+    # The new fetch's identity lives in the UPDATE block, fields in spec order.
+    labels = ["Re-Captured:", "Source:", "Posting ATS ID:", "Methods Checked:",
+              "Verification:", "Additional Notes:"]
+    positions = [update.index(lbl) for lbl in labels]
+    assert positions == sorted(positions)
+    assert "Source: Ashby" in update and "Posting ATS ID: ashby-2" in update
+    assert "Verification: Job Description ✓" in update
+
+
+def test_additional_notes_compare_snapshot_fields_not_only_the_body(tmp_path):
+    """Defect 4: a re-capture that ADDED the posting date and CORRECTED employment /
+    cadence / benefits reported `No Material Changes Detected.` because only the
+    body was compared. The notes must diff the snapshot FIELDS too."""
+    src = _batch_source(tmp_path)
+    url = "https://example.com/job/field-notes"
+    thin_meta = {"title": "PM", "source": "requests/html", "structured_source": True,
+                 "compensation": "USD 182,000-227,000", "working_location": "Remote"}
+    rich_meta = {"title": "PM", "source": "ashby-posting-api", "structured_source": True,
+                 "compensation": "USD 182,000-227,000", "working_location": "Remote",
+                 "employment_type": "FullTime", "posted_date": "2026-06-13"}
+    body_rich = ("About the role\nResponsibilities include shipping product.\n"
+                 "Full Time, Exempt\n"
+                 "Onsite three days per week: Tuesday, Wednesday, Thursday.\n"
+                 + ("x " * 60))
+
+    def first(u):
+        return {"ok": True, "title": "PM", "company": "Acme",
+                "body": "About the role\nResponsibilities include shipping product.\n" + ("x " * 60),
+                "method": "requests", "error": None, "meta": dict(thin_meta), "questions": []}
+
+    def second(u):
+        return {"ok": True, "title": "PM", "company": "Acme", "body": body_rich,
+                "method": "ats", "error": None, "meta": dict(rich_meta), "questions": []}
+
+    pc.process_urls([url], src, first)
+    manifest = pc.process_urls([url], src, second, force=True)
+    out = (src / Path(manifest["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
+    notes = next(l for l in out.splitlines() if l.startswith("Additional Notes:"))
+    assert "No Material Changes Detected." not in notes
+    assert "Added the" in notes
+    assert "employer's posting date" in notes
+    assert "employment type" in notes
+    assert "office expectation" in notes
+
+
+def test_field_notes_read_a_legacy_format_prior_capture():
+    """The field diff must parse LEGACY `== NORMALIZED ==` labels too, so a
+    legacy-format prior capture compares faithfully — formatting drift alone
+    (FullTime vs Full Time, long vs short metro names) is NOT a correction."""
+    legacy_prior = (
+        "URL: https://example.com/job/1\n"
+        "Application URL: https://example.com/job/1\n"
+        "Company: Acme\nRole: PM\n"
+        "Source: ashby-posting-api · Posting ID: a1 · Captured: 2026-07-01 · Methods tried: ats\n\n"
+        "== NORMALIZED (for vetting) ==\n"
+        "Employment Type: FullTime\n"
+        "Workplace: Hybrid\n"
+        "Working Location: New York City; San Francisco   [found]\n"
+        "Compensation: USD 182,000-227,000   [found]\n"
+        "Benefits: Not posted\n"
+        "Equity: Not posted\n\n"
+        "--- JOB TEXT START ---\n\nAbout the role\nResponsibilities include shipping.\n\n"
+        "--- JOB TEXT END ---\n")
+    same_new = pc.build_output_text(
+        "https://example.com/job/1", "PM", "Acme",
+        "About the role\nResponsibilities include shipping.",
+        meta={"title": "PM", "structured_source": True, "employment_type": "FullTime",
+              "compensation": "USD 182,000-227,000", "workplace": "Hybrid",
+              "working_location": "New York City; San Francisco"},
+        methods_tried=["ats"])
+    # Identical content, different formatting -> no false "corrected".
+    notes = pc.capture_update_notes(legacy_prior, same_new)
+    assert "Corrected" not in notes
+    # A REAL employment correction against the legacy header is detected.
+    corrected_new = pc.build_output_text(
+        "https://example.com/job/1", "PM", "Acme",
+        "About the role\nResponsibilities include shipping.\nFull Time, Exempt\n",
+        meta={"title": "PM", "structured_source": True,
+              "compensation": "USD 182,000-227,000", "workplace": "Hybrid",
+              "working_location": "New York City; San Francisco"},
+        methods_tried=["ats"])
+    notes2 = pc.capture_update_notes(legacy_prior, corrected_new)
+    assert "Corrected the" in notes2 and "employment type" in notes2
+    # No prior text at all keeps the honest sentence.
+    assert pc.capture_update_notes(None, same_new) == \
+        "Previous Capture Was Not Available for Comparison."
+
+
+def test_working_locations_render_as_short_metro_or_list():
+    """Defect 5: multi-city lists render `NYC Or SF` style — short canon names,
+    Title Case Or, deduped after canonicalization."""
+    out = _synth_out(meta={"title": "PM", "structured_source": True,
+                           "compensation": "USD 150,000",
+                           "working_location": "New York City; San Francisco"})
+    assert "Working Location(s): NYC Or SF" in out
+    # Dedupe after canonicalization; unknown cities pass through verbatim.
+    assert pc._format_working_locations(
+        "New York, NY; New York City; Austin, TX") == "NYC Or Austin, TX"
+    # Single values (Remote / one city) stay simple.
+    assert pc._format_working_locations("Remote") == "Remote"
+    assert pc._format_working_locations("San Francisco, CA") == "SF"
+
+
+def test_base_salary_annual_range_renders_en_dash_and_annually():
+    """Defect 6: `$182,000–$227,000 USD Annually` — spaceless en dash, and
+    `Annually` only when the employer's own wording states the range is annual."""
+    out = _synth_out(meta={"title": "PM", "structured_source": True,
+                           "compensation": "$182,000 - $227,000",
+                           "compensation_raw": "The base salary range for this role is "
+                                               "$182,000 - $227,000 annually.",
+                           "working_location": "Remote"},
+                     field_status={"compensation": pc.FOUND, "working_location": pc.FOUND,
+                                   "description": pc.FOUND, "conflicts": []})
+    assert "  - $182,000–$227,000 USD Annually" in out
+    # No annual statement anywhere -> never inferred.
+    out2 = _synth_out(meta={"title": "PM", "structured_source": True,
+                            "compensation": "$182,000 - $227,000",
+                            "working_location": "Remote"},
+                      field_status={"compensation": pc.FOUND, "working_location": pc.FOUND,
+                                    "description": pc.FOUND, "conflicts": []})
+    assert "  - $182,000–$227,000 USD\n" in out2 and "Annually" not in out2
+    # An hourly figure never gains "Annually".
+    out3 = _synth_out(meta={"title": "PM", "structured_source": True,
+                            "compensation": "$27 - $44/hour",
+                            "compensation_raw": "annual reviews",
+                            "working_location": "Remote"},
+                      field_status={"compensation": pc.FOUND, "working_location": pc.FOUND,
+                                    "description": pc.FOUND, "conflicts": []})
+    assert "Annually" not in out3.split("COMPENSATION")[1].split("APPLICATION")[0]
 
 
 def test_a_genuine_employer_edit_does_replace_the_body(tmp_path):

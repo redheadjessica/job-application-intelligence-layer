@@ -23,6 +23,7 @@ from ats_fetchers import (
     ATS_HOST_KEYWORDS,
     MENTIONED_NO_DETAILS,
     UUID_RE,
+    _EQUITY_SPECIFICS_RE,
     _greenhouse_ids,
     _linkedin_job_id,
     _prettify_slug,
@@ -1286,6 +1287,46 @@ def _oxford_join(items: list[str]) -> str:
     return ", ".join(items[:-1]) + f", and {items[-1]}"
 
 
+# --------------------------------------------------------------------------- #
+# Working Location(s) rendering — short metro canon, `NYC Or SF` style
+# --------------------------------------------------------------------------- #
+_METRO_SHORT = {
+    "new york city": "NYC", "new york": "NYC", "new york, ny": "NYC",
+    "new york city, ny": "NYC", "new york city, new york": "NYC", "nyc": "NYC",
+    "san francisco": "SF", "san francisco, ca": "SF", "san francisco, california": "SF",
+    "sf": "SF",
+    "san francisco bay area": "SF Bay Area", "sf bay area": "SF Bay Area",
+    "los angeles": "LA", "los angeles, ca": "LA", "la": "LA",
+    "washington, d.c.": "DC", "washington d.c.": "DC", "washington dc": "DC",
+    "washington, dc": "DC", "dc": "DC", "d.c.": "DC",
+}
+
+
+def _short_metro(part: str) -> str:
+    """A city name rendered in its common short form when the canon knows it
+    (New York City -> NYC); anything unrecognized passes through verbatim."""
+    s = re.sub(r"\s+", " ", str(part or "").strip()).strip(" ,;")
+    key = s.lower()
+    for suffix in (", united states", ", usa", ", us"):
+        if key.endswith(suffix):
+            key = key[: -len(suffix)].strip(" ,")
+    return _METRO_SHORT.get(key, s)
+
+
+def _format_working_locations(value: str) -> str:
+    """A multi-city working-location list rendered for humans: short metro names
+    joined with ` Or ` (`New York City; San Francisco` -> `NYC Or SF`), deduped
+    after canonicalization. Non-list values (Remote, honest phrases) pass through."""
+    s = str(value or "").strip()
+    if not s:
+        return s
+    if ";" not in s:
+        return _short_metro(s)
+    parts = [p.strip() for p in s.split(";") if p.strip()]
+    shorts = list(dict.fromkeys(_short_metro(p) for p in parts))
+    return " Or ".join(shorts)
+
+
 # Eligibility/mention sentences that reference additional-compensation components.
 _ADDL_MENTION_RE = re.compile(
     r"(?i)\b(?:does\s+not\s+include|doesn'?t\s+include|not\s+include|excludes?|"
@@ -1314,21 +1355,45 @@ def _mine_additional_comp_mentions(body: str) -> list[str]:
     return out
 
 
+# A short `<Label>:` prefix on a mined bullet ("Financial Wellness: 401(k) program
+# and equity opportunities") is section formatting, not content.
+_LABEL_PREFIX_RE = re.compile(r"^([A-Z][A-Za-z&/()'’ \-]{0,40}):\s+(.+)$")
+
+
+def _strip_bullet_and_label(text: str) -> str:
+    s = re.sub(r"^[\s\-•*·]+", "", str(text or "")).strip()
+    m = _LABEL_PREFIX_RE.match(s)
+    if m and len(m.group(1).split()) <= 4:
+        s = m.group(2).strip()
+    return s
+
+
 def _additional_compensation_value(meta: dict, body: str) -> str:
     """The COMPENSATION `Additional Compensation:` value — bonus/commission/equity
-    eligibility, never merged into base salary. A real equity description passes
-    through verbatim; bare mentions collapse to the honest-distinction phrase."""
+    eligibility, never merged into base salary. A real equity description (a grant
+    size / vesting schedule / dollar value) passes through, cleaned of bullet
+    markers and label prefixes; detail-free equity language collapses to clean
+    comp-only wording (`Equity Opportunities.`) or the honest mention phrase.
+    401(k)/benefits language never lands here — those are benefits."""
     equity = meta.get("equity")
     if equity is None and body:
         _b, equity = mine_benefits_equity(body)
     parts: list[str] = []
     mentions = _mine_additional_comp_mentions(body or "")
     if equity and equity != MENTIONED_NO_DETAILS:
-        detail = str(equity).strip()
-        if detail and detail[-1] not in ".!?":
-            detail += "."
-        parts.append(detail)
-        mentions = [m for m in mentions if m != "Equity"]
+        detail = _strip_bullet_and_label(equity)
+        if _EQUITY_SPECIFICS_RE.search(detail):
+            if detail and detail[-1] not in ".!?":
+                detail += "."
+            parts.append(detail)
+            mentions = [m for m in mentions if m != "Equity"]
+        elif re.search(r"(?i)\bequity\s+opportunit", detail):
+            # "401(k) program and equity opportunities" — the 401(k) is a benefit;
+            # only the comp component belongs here, as clean wording.
+            parts.append("Equity Opportunities.")
+            mentions = [m for m in mentions if m != "Equity"]
+        elif "Equity" not in mentions:
+            mentions.append("Equity")
     elif equity == MENTIONED_NO_DETAILS and "Equity" not in mentions:
         mentions.append("Equity")
     if mentions:
@@ -1349,7 +1414,16 @@ def _benefits_value(meta: dict, body: str) -> str:
         return "Employer Did Not Mention Benefits."
     if benefits == MENTIONED_NO_DETAILS:
         return "Mentioned, but Details Were Not Provided."
-    items = [i.strip().rstrip(".") for i in str(benefits).split(";") if i.strip()]
+    items: list[str] = []
+    for raw in str(benefits).split(";"):
+        item = _strip_bullet_and_label(raw)
+        # Equity language belongs in Additional Compensation, not the benefits summary
+        # ("401(k) program and equity opportunities" keeps only the 401(k) part here).
+        item = re.sub(r"(?i)\s*(?:,\s*)?(?:and\s+|&\s*)?equity\s+"
+                      r"(?:opportunit(?:y|ies)|grants?|compensation)\b", "", item)
+        item = item.strip(" ,").rstrip(".")
+        if item:
+            items.append(item)
     if not items:
         return "Employer Did Not Mention Benefits."
     sentences = ". ".join(i[0].upper() + i[1:] if i else i for i in items)
@@ -1364,18 +1438,34 @@ def _expand_dollar_amounts(text: str) -> str:
     return _K_AMOUNT_RE.sub(lambda m: f"${int(round(float(m.group(1)) * 1000)):,}", text)
 
 
-def _base_salary_bullets(compensation, fs: dict) -> list[str]:
-    """One bullet per geo/level band, full dollar amounts, USD-tagged."""
+# A dollar range's separator renders as an en dash with no surrounding spaces.
+_RANGE_SEP_RE = re.compile(r"(\$[\d,]+(?:\.\d+)?)\s*(?:-|–|—|to|through)\s*(\$?[\d,]+(?:\.\d+)?)")
+_ANNUAL_MARKER_RE = re.compile(r"(?i)\b(annually|annual|per year|a year)\b|/y(?:ea)?r\b")
+_NON_ANNUAL_RE = re.compile(r"(?i)\bhour(ly)?\b|/hour|/hr\b|\bmonth(ly)?\b|/month|\bweek(ly)?\b")
+
+
+def _base_salary_bullets(compensation, fs: dict, meta: dict | None = None) -> list[str]:
+    """One bullet per geo/level band: full dollar amounts (`$236K` -> `$236,000`),
+    spaceless en-dash ranges, USD-tagged, with `Annually` appended when the
+    employer's own wording states the range is annual (never inferred)."""
+    meta = meta or {}
     segments: list[str] = []
     if compensation:
         segments = [p.strip() for p in re.split(r"\s*[·•]\s*", str(compensation)) if p.strip()]
     elif fs.get("compensation_prose_all"):
         segments = [str(v).strip() for v in fs["compensation_prose_all"] if str(v).strip()]
+    # Only the employer's own comp wording can testify the range is annual.
+    employer_wording = " ".join(str(x or "") for x in (
+        compensation, meta.get("compensation_raw"), fs.get("compensation_prose_verbatim")))
+    stated_annual = bool(_ANNUAL_MARKER_RE.search(employer_wording))
     out: list[str] = []
     for seg in segments:
         seg = _expand_dollar_amounts(seg)
+        seg = _RANGE_SEP_RE.sub(lambda m: f"{m.group(1)}–{m.group(2)}", seg)
         if "usd" not in seg.lower() and "$" in seg:
             seg = f"{seg} USD"
+        if stated_annual and not _ANNUAL_MARKER_RE.search(seg) and not _NON_ANNUAL_RE.search(seg):
+            seg = f"{seg} Annually"
         out.append(seg)
     return out
 
@@ -1397,20 +1487,27 @@ def _verification_line(fs: dict) -> str:
             f"Compensation {mark('compensation')} | Working Location {mark('working_location')}")
 
 
-def _capture_details_lines(*, captured, apply_url, source, posting_id, methods, fs) -> list[str]:
+def _capture_details_lines(*, captured, apply_url, source, posting_id, methods, fs,
+                           verification: str | None = None) -> list[str]:
     lines = _banner("CAPTURE DETAILS", "-")
     lines.append(f"Captured: {capture_timestamp(captured)}")
     lines.append(f"Application URL: {apply_url}")
     lines.append(f"Source: {source}")
     lines.append(f"Posting ATS ID: {posting_id}")
     lines.append(f"Methods Checked: {methods}")
-    lines.append(_verification_line(fs))
+    lines.append(verification or _verification_line(fs))
     return lines
 
 
-def _capture_update_lines(capture_update: dict) -> list[str]:
+def _capture_update_lines(capture_update: dict, *, source, posting_id, methods, fs) -> list[str]:
+    """The re-fetch record: the NEW fetch's source/methods/verification (CAPTURE
+    DETAILS above keeps describing the ORIGINAL capture), then the comparison notes."""
     lines = _banner("CAPTURE UPDATE DETAILS", "-")
     lines.append(f"Re-Captured: {capture_timestamp(capture_update.get('re_captured'))}")
+    lines.append(f"Source: {source}")
+    lines.append(f"Posting ATS ID: {posting_id}")
+    lines.append(f"Methods Checked: {methods}")
+    lines.append(_verification_line(fs))
     notes = capture_update.get("notes") or "Previous Capture Was Not Available for Comparison."
     lines.append(f"Additional Notes: {notes}")
     return lines
@@ -1488,6 +1585,183 @@ def body_would_degrade(old_body: str | None, new_body: str | None) -> bool:
     return False
 
 
+# --------------------------------------------------------------------------- #
+# Snapshot-field comparison for CAPTURE UPDATE DETAILS — the notes must name what a
+# re-capture ADDED or CORRECTED in the header fields, not only diff the body.
+# Reads BOTH the current labels and the legacy `== NORMALIZED ==` labels, so a
+# legacy-format prior capture compares faithfully.
+# --------------------------------------------------------------------------- #
+_FIELD_HUMAN = {
+    "posted_date": "employer's posting date", "updated_date": "employer's update date",
+    "employment": "employment type", "work_arrangement": "work arrangement",
+    "working_location": "working location", "office_expectation": "office expectation",
+    "base_salary": "base salary", "additional_compensation": "additional compensation",
+    "benefits": "benefits",
+}
+# Values that mean "the capture had nothing here" (either format's placeholders).
+_PLACEHOLDER_RE = re.compile(
+    r"(?i)^(unknown|n/a|not specified|not explicitly stated|not posted|"
+    r"could not verify\.?|not available|none)$|^employer did not mention")
+_MENTION_STATE_RE = re.compile(r"(?i)mentioned.*(no details|details were not provided)")
+
+
+def _grab_line(head: str, label: str) -> str | None:
+    m = re.search(rf"^{re.escape(label)}:\s*(.*)$", head, re.M)
+    return m.group(1).strip() if m else None
+
+
+def _capture_fields(text: str) -> dict:
+    """The snapshot fields of a written capture (either format), normalized to one
+    canonical key set. Placeholder values come back as None (nothing captured)."""
+    head = str(text or "").split("--- JOB TEXT START ---", 1)[0]
+    f: dict = {}
+    # Dates: current lines first, then the legacy provenance line.
+    posted = _grab_line(head, "Job Posted At")
+    updated = _grab_line(head, "Job Updated At")
+    if posted is None:
+        legacy = _grab_line(head, "Posted")
+        if legacy:
+            posted = legacy.split("·")[0].strip()
+            um = re.search(r"Updated:\s*(\S+)", legacy)
+            updated = um.group(1) if um else updated
+    f["posted_date"] = posted
+    f["updated_date"] = updated
+    f["employment"] = _grab_line(head, "Employment") or _grab_line(head, "Employment Type")
+    f["work_arrangement"] = _grab_line(head, "Work Arrangement") or _grab_line(head, "Workplace")
+    loc = _grab_line(head, "Working Location(s)") or _grab_line(head, "Working Location")
+    office = _grab_line(head, "Office Expectation")
+    if loc:
+        loc = re.sub(r"\s*\[[a-z _]+\]\s*$", "", loc).strip()  # legacy status tag
+        if office is None and "—" in loc:                        # legacy combined cadence
+            loc, _, cad = loc.rpartition("—")
+            loc, office = loc.strip(), cad.strip()
+    f["working_location"] = loc
+    f["office_expectation"] = office
+    base = _grab_line(head, "Base Salary") or _grab_line(head, "Compensation")
+    if not base:  # current-format bullet list
+        m = re.search(r"^Base Salary:\s*\n((?:\s+-\s+.*\n?)+)", head, re.M)
+        if m:
+            base = " · ".join(ln.strip().lstrip("- ").strip()
+                              for ln in m.group(1).splitlines() if ln.strip())
+    f["base_salary"] = base
+    f["additional_compensation"] = (_grab_line(head, "Additional Compensation")
+                                    or _grab_line(head, "Equity"))
+    f["benefits"] = _grab_line(head, "Benefits")
+    for k, v in list(f.items()):
+        v = re.sub(r"\s*\[[a-z _]+\]\s*$", "", (v or "")).strip()  # legacy status tags
+        if not v or _PLACEHOLDER_RE.match(v):
+            f[k] = None
+        else:
+            f[k] = v
+    return f
+
+
+def _norm_field_value(key: str, value: str | None) -> str | None:
+    """Comparison form of a field value: formatting drift (FullTime vs Full Time,
+    ISO vs human dates, long vs short metro names, `$182,000-…` vs `USD 182,000…`)
+    must NOT read as a correction — only content differences do."""
+    if value is None:
+        return None
+    v = re.sub(r"\s+", " ", str(value)).strip()
+    if _MENTION_STATE_RE.search(v):
+        return "mentioned-no-details"
+    if key in ("posted_date", "updated_date"):
+        m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", v)
+        if m:
+            return f"{m.group(1)}{m.group(2)}{m.group(3)}"
+        try:
+            return datetime.strptime(v, "%B %d, %Y").strftime("%Y%m%d")
+        except ValueError:
+            return re.sub(r"[^0-9]+", "", v) or None
+    if key == "base_salary":
+        return ",".join(re.findall(r"\d[\d,]*", v)).replace(",", "") or None
+    if key == "working_location":
+        parts = re.split(r";|\bor\b|\bOr\b", v)
+        toks = sorted({re.sub(r"[^a-z0-9]+", "", _short_metro(p).lower())
+                       for p in parts if p.strip()})
+        return "|".join(t for t in toks if t) or None
+    return re.sub(r"[^a-z0-9]+", "", v.lower()) or None
+
+
+def capture_update_notes(prior_text: str | None, new_text: str,
+                         *, kept_prior_body: bool = False) -> str:
+    """The `Additional Notes:` sentence for a re-capture: a FIELD-level diff of the
+    two captures' snapshot sections (what was added / corrected), plus the
+    normalized material-content body comparison. Only when both fields and material
+    body content are unchanged may it say `No Material Changes Detected.`"""
+    if prior_text is None:
+        return "Previous Capture Was Not Available for Comparison."
+    old_f, new_f = _capture_fields(prior_text), _capture_fields(new_text)
+    added: list[str] = []
+    corrected: list[str] = []
+    for key, human in _FIELD_HUMAN.items():
+        old_v = _norm_field_value(key, old_f.get(key))
+        new_v = _norm_field_value(key, new_f.get(key))
+        if new_v is None or old_v == new_v:
+            continue
+        (added if old_v is None else corrected).append(human)
+    old_body = body_from_capture(prior_text)
+    new_body = body_from_capture(new_text)
+    body_notes = material_change_notes(old_body, new_body)
+    body_changed = body_notes.startswith("Material Changes Detected")
+    parts: list[str] = []
+    if added and corrected:
+        parts.append(f"Added the {_oxford_join(added)} and corrected the "
+                     f"{_oxford_join(corrected)} that the original capture missed.")
+    elif added:
+        parts.append(f"Added the {_oxford_join(added)} that the original capture missed.")
+    elif corrected:
+        parts.append(f"Corrected the {_oxford_join(corrected)} from the original capture.")
+    if kept_prior_body:
+        parts.append("The new fetch's job text was degraded, so the prior job text was kept.")
+    elif body_changed:
+        parts.append(body_notes)
+    elif parts:
+        parts.append("Job text unchanged.")
+    if not parts:
+        return "No Material Changes Detected."
+    return " ".join(parts)
+
+
+def _original_capture_details(prior_text: str | None, prev_entry: dict | None) -> dict:
+    """The ORIGINAL capture's CAPTURE DETAILS field values, recovered from the prior
+    file (current format: the first CAPTURE DETAILS block after the END marker;
+    legacy: the provenance line), falling back to the prior manifest entry. These
+    keep describing the original capture when a re-fetch adds an UPDATE block."""
+    d: dict = {}
+    text = str(prior_text or "")
+    tail = text.split("--- JOB TEXT END ---", 1)[-1] if "--- JOB TEXT END ---" in text else ""
+    if "CAPTURE DETAILS" in tail:
+        for label, key in (("Application URL", "apply_url"), ("Source", "source"),
+                           ("Posting ATS ID", "posting_id"), ("Methods Checked", "methods")):
+            v = _grab_line(tail, label)
+            if v:
+                d[key] = v
+        m = re.search(r"^(Verification:.*)$", tail, re.M)
+        if m:
+            d["verification"] = m.group(1).strip()
+    else:
+        m = re.search(r"^Source:\s*(.+?)\s*·\s*Posting ID:\s*(.+?)\s*·\s*Captured:.*?"
+                      r"·\s*Methods tried:\s*(.+)$", text, re.M)
+        if m:
+            d["source"] = _human_source(m.group(1))
+            d["posting_id"] = m.group(2)
+            d["methods"] = ", ".join(dict.fromkeys(
+                _human_method(x.strip()) for x in m.group(3).split(",") if x.strip()))
+        v = _grab_line(text.split("--- JOB TEXT START ---", 1)[0], "Application URL")
+        if v:
+            d["apply_url"] = v
+    prev_entry = prev_entry or {}
+    if "verification" not in d and prev_entry.get("field_status"):
+        d["verification"] = _verification_line(prev_entry["field_status"])
+    if "posting_id" not in d and prev_entry.get("posting_id"):
+        d["posting_id"] = prev_entry["posting_id"]
+    if "methods" not in d and prev_entry.get("methods_tried"):
+        d["methods"] = ", ".join(dict.fromkeys(
+            _human_method(x) for x in prev_entry["methods_tried"] if x))
+    return d
+
+
 def build_output_text(url: str, title: str, company: str, body_text: str, *,
                       meta: dict | None = None, questions: list | None = None,
                       field_status: dict | None = None, methods_tried: list | None = None,
@@ -1551,14 +1825,17 @@ def build_output_text(url: str, title: str, company: str, body_text: str, *,
     lines.append(f"Work Arrangement: {workplace or 'Not Explicitly Stated'}")
     if fs.get("working_location") == CONFLICTING:
         loc_value = _conflict_phrase(fs.get("location_sources") or meta.get("location_sources"))
+    elif working_location:
+        loc_value = _format_working_locations(working_location)
     else:
-        loc_value = _honest(working_location, "working_location", "Working Location")
+        loc_value = _honest(None, "working_location", "Working Location")
     lines.append(f"Working Location(s): {loc_value}")
     office = _format_cadence(cadence) or _mine_office_expectation(body_text)
     lines.append(f"Office Expectation: {office or 'Not Specified'}")
     lines.append("")
     lines += _banner("COMPENSATION", "=")
-    bullets = [] if fs.get("compensation") == CONFLICTING else _base_salary_bullets(compensation, fs)
+    bullets = ([] if fs.get("compensation") == CONFLICTING
+               else _base_salary_bullets(compensation, fs, meta))
     if bullets:
         lines.append("Base Salary:")
         for b in bullets:
@@ -1597,12 +1874,20 @@ def build_output_text(url: str, title: str, company: str, body_text: str, *,
     lines.append("")
     lines.append("--- JOB TEXT END ---")
     lines.append("")
-    lines += _capture_details_lines(captured=original_captured, apply_url=apply_url,
-                                    source=source, posting_id=posting_id, methods=methods,
-                                    fs=fs)
+    # On a re-fetch, CAPTURE DETAILS keeps describing the ORIGINAL capture (its own
+    # source/methods/verification, recovered from the prior file); the new fetch's
+    # details live in CAPTURE UPDATE DETAILS below.
+    orig = (capture_update or {}).get("original") or {}
+    lines += _capture_details_lines(captured=original_captured,
+                                    apply_url=orig.get("apply_url") or apply_url,
+                                    source=orig.get("source") or source,
+                                    posting_id=orig.get("posting_id") or posting_id,
+                                    methods=orig.get("methods") or methods,
+                                    fs=fs, verification=orig.get("verification"))
     if capture_update:
         lines.append("")
-        lines += _capture_update_lines(capture_update)
+        lines += _capture_update_lines(capture_update, source=source,
+                                       posting_id=posting_id, methods=methods, fs=fs)
     return "\n".join(lines) + "\n"
 
 
@@ -1867,9 +2152,10 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
             entries.append(carried)
             continue
 
-        # Genuine re-fetch of a previously-manifested capture: preserve the prior body
-        # (best-verified merge + the CAPTURE UPDATE DETAILS content comparison need it)
-        # BEFORE removing the prior file so we never orphan/duplicate.
+        # Genuine re-fetch of a previously-manifested capture: preserve the prior file's
+        # full text (best-verified merge + the CAPTURE UPDATE DETAILS field-and-body
+        # comparison need it) BEFORE removing the prior file so we never orphan/duplicate.
+        prior_text = None
         prior_body = None
         if prev:
             for rel in (prev.get("output_path"), prev.get("quarantine_path")):
@@ -1878,8 +2164,8 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                 fp = batch_root / rel
                 try:
                     if fp.exists():
-                        prior_body = body_from_capture(fp.read_text(encoding="utf-8",
-                                                                    errors="replace"))
+                        prior_text = fp.read_text(encoding="utf-8", errors="replace")
+                        prior_body = body_from_capture(prior_text)
                         break
                 except OSError:
                     continue
@@ -1980,15 +2266,12 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                             "source": prev.get("method"),
                             "posting_id": prev.get("posting_id")})
             original_captured = (history[0].get("fetched_at") or prev.get("fetched_at"))
-            if prior_body is None:
-                notes = "Previous Capture Was Not Available for Comparison."
-            elif kept_prior_body:
-                notes = ("No Material Changes Detected. The New Fetch Was Degraded, so the "
-                         "Prior Job Text Was Kept.")
-            else:
-                notes = material_change_notes(prior_body, res.get("body") or "")
             capture_update = {"original_captured": original_captured,
-                              "re_captured": ts, "notes": notes}
+                              "re_captured": ts,
+                              "original": _original_capture_details(prior_text, prev),
+                              # Notes are computed AFTER the new capture's fields are
+                              # rendered (field-level diff needs both snapshots).
+                              "notes": None}
 
         if status == FAILED:
             fn = failed_filename(url, norm)
@@ -2030,6 +2313,17 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
 
         fn = unique_filename(company, title, norm, taken, url)
         taken[fn] = norm
+        if capture_update:
+            # Two-pass: render the new capture WITHOUT the update block, diff its
+            # snapshot fields + body against the prior file, then render for real.
+            if prior_text is None:
+                capture_update["notes"] = "Previous Capture Was Not Available for Comparison."
+            else:
+                provisional = build_output_text(
+                    url, title, company, body, meta=meta, questions=questions,
+                    field_status=field_status, methods_tried=methods_tried, captured=ts)
+                capture_update["notes"] = capture_update_notes(
+                    prior_text, provisional, kept_prior_body=kept_prior_body)
         out_text = build_output_text(url, title, company, body, meta=meta, questions=questions,
                                      field_status=field_status, methods_tried=methods_tried,
                                      captured=ts, capture_update=capture_update)

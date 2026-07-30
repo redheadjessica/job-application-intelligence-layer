@@ -392,22 +392,44 @@ def mine_benefits_equity(text: str) -> tuple[Optional[str], Optional[str]]:
     if m:
         tail = body[m.end():]
         items: list[str] = []
-        for raw in tail.splitlines():
-            line = raw.strip(" \t-•*·").strip()
+        # The WHOLE labeled section must be summarized (a blank line between bullets is
+        # normal formatting, not the end of the section — stopping at the first blank
+        # truncated a 7-bullet benefits list to its first item). A bullet list ends at
+        # the next heading-like line, or at a non-bullet paragraph after a blank once
+        # the section has shown itself to be bullet-shaped.
+        raws = tail.splitlines()
+        saw_bullet = False
+        prev_blank = False
+        for i, raw in enumerate(raws):
+            stripped = raw.strip()
+            is_bullet = bool(re.match(r"^[\-•*·]\s+", stripped))
+            line = stripped.lstrip("-•*· \t").strip()
             if not line:
-                if items:
-                    break
+                prev_blank = True
+                if items and not saw_bullet:
+                    # An intro paragraph followed by the section's bullet list is still
+                    # the same section — peek past the blank before calling it done.
+                    nxt = next((r.strip() for r in raws[i + 1:] if r.strip()), "")
+                    if re.match(r"^[\-•*·]\s+", nxt):
+                        continue
+                    break  # prose-style section: a blank ends it
                 continue
             # Stop at the next section heading (short Title-ish line ending in ':').
             if line.endswith(":") and len(line) < 40 and items:
                 break
+            # Left the bullet list: a non-bullet paragraph after a blank line.
+            if items and saw_bullet and not is_bullet and prev_blank:
+                break
+            prev_blank = False
+            if is_bullet:
+                saw_bullet = True
             items.append(line)
-            if len(items) >= 6:
+            if len(items) >= 8:
                 break
         if items:
             benefits = "; ".join(items)
-            if len(benefits) > 300:
-                benefits = benefits[:297].rstrip() + "…"
+            if len(benefits) > 600:
+                benefits = benefits[:597].rstrip() + "…"
     if not benefits:
         # No Benefits section to mine — but an eligibility/mention sentence naming benefits
         # still means the employer referenced them ("Mentioned", never "Not posted").
