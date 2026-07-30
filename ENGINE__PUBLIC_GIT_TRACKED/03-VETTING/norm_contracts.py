@@ -533,6 +533,11 @@ H_COMPFIT = "Comp Fit"
 H_COMPANY = "Company"
 H_POSTED = "Posted"
 H_JOBFILE = "Job File"
+# The practicality dimension's prose companion column. Static name (like "Mission Fit Notes") even
+# though the score label itself is candidate-relabelable, so both Python passes can find it.
+H_PRACTNOTES = "Comp + Lifestyle Fit Notes"
+H_PRACTSCORE_DEFAULT = "Comp + Lifestyle Fit"  # default label of the score it annotates
+H_MISSIONNOTES = "Mission Fit Notes"           # the column it must sit before
 
 
 # --------------------------------------------------------------------------- #
@@ -594,6 +599,18 @@ def posted_date_from_capture(job_file, base_dir=None):
     return m.group(1) if m else ""
 
 
+def practicality_notes_insert_at(headers):
+    """Where "Comp + Lifestyle Fit Notes" belongs in an existing header row: immediately AFTER the
+    practicality score column, i.e. at the head of the notes block. The score label is dynamic
+    (a candidate's scoring card may relabel it), so fall back to the static column the notes must
+    precede — "Mission Fit Notes" — which is the same slot; append only if neither anchor exists."""
+    if H_PRACTSCORE_DEFAULT in headers:
+        return headers.index(H_PRACTSCORE_DEFAULT) + 1
+    if H_MISSIONNOTES in headers:
+        return headers.index(H_MISSIONNOTES)
+    return len(headers)
+
+
 def load_config(path):
     if not path:
         return {}
@@ -613,16 +630,27 @@ def normalize_rankings_csv(csv_path, cfg, out=print):
         return 0
     headers = [h.strip() for h in rows[0]]
     changed = 0
-    # An OLDER CSV predates the Posted column — insert it (right after Comp Range, keeping
-    # the human-scannable block contiguous) so regenerating any batch back-fills the date.
-    if H_POSTED not in headers:
-        at = (headers.index(H_COMPRANGE) + 1) if H_COMPRANGE in headers else len(headers)
-        headers.insert(at, H_POSTED)
+    def insert_column(name, at):
+        """Positional header insert + blank back-fill, so an OLDER CSV that predates a column
+        regenerates with it in the right slot instead of shifting every later column's data."""
+        headers.insert(at, name)
         rows[0] = list(headers)
         for row in rows[1:]:
             while len(row) < len(headers) - 1:
                 row.append("")
             row.insert(at, "")
+
+    # An OLDER CSV predates the Posted column — insert it (right after Comp Range, keeping
+    # the human-scannable block contiguous) so regenerating any batch back-fills the date.
+    if H_POSTED not in headers:
+        insert_column(H_POSTED,
+                      (headers.index(H_COMPRANGE) + 1) if H_COMPRANGE in headers else len(headers))
+        changed += 1
+    # Likewise for the practicality dimension's notes column. Nothing can back-fill its VALUE
+    # (it is model rationale, not derivable), so the cell stays empty — the point of inserting it
+    # positionally is that no other column's data shifts.
+    if H_PRACTNOTES not in headers:
+        insert_column(H_PRACTNOTES, practicality_notes_insert_at(headers))
         changed += 1
     idx = {h: i for i, h in enumerate(headers)}
 

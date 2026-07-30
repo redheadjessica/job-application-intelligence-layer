@@ -67,6 +67,9 @@ H_LANEFIT = "Lane Fit"
 H_LOCFIT = "Location Fit"
 H_COMPFIT = "Comp Fit"
 H_DATACOMPLETE = "Data Completeness"  # per-job comp/location capture quality (green/amber/red)
+H_PRACTNOTES = norm_contracts.H_PRACTNOTES  # "Comp + Lifestyle Fit Notes" — prose companion to the
+# practicality score; sits immediately after it. Static name even though that score's label is
+# candidate-relabelable, exactly like "Mission Fit Notes".
 LEGEND_MERGE_TO = 10  # section bars merge A:J (columns 1..10 — the human-facing block)
 
 # ---- Score-column labels/weights/definitions are DYNAMIC (see load_meta / DEFAULT_METADATA below).
@@ -175,7 +178,7 @@ COMP_LABEL_COLORS = {
 WIDTHS = {
     "Applied Date? [You Fill In]": 16, H_STATUS: 30, H_LANE: 22, H_COMPANY: 18, H_TITLE: 46,
     H_WORKLOC: 22, H_COMPRANGE: 12, H_POSTED: 12, "Have Intro? [You Add]": 14, "Your Notes? [You Add]": 26,
-    "Decline/Down Date? [You Add]": 16, "Mission Fit Notes": 40, "Scope Fit Notes": 40,
+    "Decline/Down Date? [You Add]": 16, H_PRACTNOTES: 46, "Mission Fit Notes": 40, "Scope Fit Notes": 40,
     "Top Reasons Notes": 46, "Top Concerns": 46, "Job File": 28, "Base Resume Used": 26,
     H_LANEFIT: 22, H_LOCFIT: 18, H_COMPFIT: 16, H_DATACOMPLETE: 24, "Cover Letter?": 12,
 }
@@ -526,6 +529,14 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         if not (rec.get(H_POSTED) or "").strip():
             rec[H_POSTED] = norm_contracts.posted_date_from_capture(
                 rec.get(H_JOBFILE), base_dir=base_dir)
+    # Comp + Lifestyle Fit Notes: present in CSVs written by current vet-jobs.js. For OLDER CSVs,
+    # insert the header immediately after the practicality score (ahead of Mission Fit Notes) with an
+    # EMPTY value — the rationale is model output and cannot be re-derived, so the only thing to
+    # preserve here is position: every later column keeps its own data instead of shifting one over.
+    if H_PRACTNOTES not in headers:
+        headers.insert(norm_contracts.practicality_notes_insert_at(headers), H_PRACTNOTES)
+        for rec in records:
+            rec.setdefault(H_PRACTNOTES, "")
     # Data Completeness column: present in CSVs written by current vet-jobs.js. For OLDER CSVs (pre-
     # column), synthesize it here — insert the header after Comp Fit and derive each value from the
     # row's own comp/location text — so regenerating any batch still gets the column + coloring + flag.
@@ -560,7 +571,7 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
     LEFT_ALIGN_HEADERS = {
         H_LANE, H_COMPANY, H_TITLE, H_WORKLOC, H_POSTED,
         "Have Intro? [You Add]", "Your Notes? [You Add]", "Decline/Down Date? [You Add]",
-        "Mission Fit Notes", "Scope Fit Notes", "Top Reasons Notes", "Top Concerns",
+        H_PRACTNOTES, "Mission Fit Notes", "Scope Fit Notes", "Top Reasons Notes", "Top Concerns",
         "Job File", "Base Resume Used", H_LANEFIT, H_LOCFIT, H_COMPFIT,
     }
     base_font = Font(name=FONT, size=10, color="000000")

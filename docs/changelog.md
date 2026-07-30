@@ -11,6 +11,49 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — The Practicality rationale finally gets a column of its own (`Comp + Lifestyle Fit Notes`)
+
+Real-use defect, and the root cause was a missing column rather than a bad normalizer. Once `Comp Fit`
+became contract-owned (`norm_contracts.comp_fit_label()` re-derives the label from the normalized Comp
+Range by the midpoint rule, and that label drives the cell color), regenerating a batch destroyed rich
+Practicality rationale prose that had been living in that same cell — breakdowns of the shape
+`Cash NN/40 (midpoint ~$NNNK) | Location NN/30 (fully remote) | Equity+bonus+401k NN/20 (…)`. In one
+51-row batch, 26 rows lost it.
+
+The re-derivation is correct and stays. The actual bug: that rationale had nowhere to live. Every other
+dimension already has a prose companion (`Mission Fit Notes`, `Scope Fit Notes`, `Top Reasons Notes`,
+`Top Concerns`) — Practicality was the one score with no notes column, so the reasoning got smuggled into
+the nearest cell that looked related, which happened to be machine-owned.
+
+- **New column `Comp + Lifestyle Fit Notes`**, immediately after the `Comp + Lifestyle Fit` score, at the
+  head of the notes block, so no existing column's meaning shifts. Static header even though the score
+  label is candidate-relabelable (both Python passes locate it by name) — same as the other notes headers.
+- **Wired end to end:** new required `comp_lifestyle_fit_notes` in `vet-jobs.js`'s `SCORE_SCHEMA` with a
+  prompt rule telling the scorer to emit the cash/location/equity breakdown *here*; `HEADERS` +
+  `dataCells` + a Markdown line; `make_rankings_xlsx.py` width (46, wrapped, left-aligned like the other
+  notes columns) and header list.
+- **Legacy-CSV back-fill**, mirroring the `Posted` / `Data Completeness` convention exactly:
+  `norm_contracts.practicality_notes_insert_at()` inserts the header positionally (anchored on the score
+  column, falling back to `Mission Fit Notes` when a candidate has relabelled the dimension) with an
+  **empty** value. Model rationale can't be re-derived, so the only thing to preserve is position — an
+  old CSV regenerates with every other column's data intact instead of shifted one to the left. The
+  shared `insert_column()` helper in `normalize_rankings_csv` now serves both `Posted` and this column.
+- **Prompt now says so explicitly:** `comp_range` stays the mechanical `N-N`, and `Comp Fit` is
+  machine-derived and must never receive prose — anything narrative aimed at it is destroyed on the next
+  normalization pass.
+- 6 new tests (373 total, up from 367): legacy CSV → header inserted in the right slot with every other
+  column asserted **by header name, not index**; a relabelled score column still anchors the insert; a
+  CSV that already has the column round-trips byte-identical; `Comp Fit` re-derivation still wins over a
+  model-supplied value while the notes cell is left untouched; the column reaches the XLSX wide/wrapped/
+  left-aligned; a legacy CSV regenerates to XLSX with the column inserted, not shifted.
+- Docs: `03-VETTING/CLAUDE.md` gains a "every score gets a prose companion column — never write rationale
+  into a contract-owned cell" rule; the workflow doc's column enumeration updated.
+
+Incidental finding: the `Posted` back-fill's last-resort filename search walks the rankings folder's
+*parent*, which under pytest is the shared tmp root — so two tests using the same fixture company name
+can see each other's captures. Worked around with distinct fixture names; the search breadth itself is
+untouched and still worth a look.
+
 ## 2026-07-29 (retro-application) — `Remote (<detail>)` was being flattened, and "Fully remote" minted a city called "Fully"
 
 Retro-applying the contract normalizers to a real 51-job batch surfaced two more instances of the same

@@ -361,7 +361,7 @@ HEADERS = [
     "Job Post Title + Link", "Working Location", "Comp Range", "Posted",
     "Have Intro? [You Add]", "Your Notes? [You Add]", "Decline/Down Date? [You Add]",
     "FINAL Weighted Score", "How They May See Your Profile", "Your Desire Score",
-    "Culture Fit", "Comp + Lifestyle Fit",
+    "Culture Fit", "Comp + Lifestyle Fit", "Comp + Lifestyle Fit Notes",
     "Mission Fit Notes", "Scope Fit Notes", "Top Reasons Notes", "Top Concerns",
     "Job File", "Base Resume Used", "Lane Fit", "Location Fit", "Comp Fit",
     "Data Completeness", "Cover Letter?",
@@ -383,6 +383,7 @@ def make_row(company="Acme", location="Remote", comp="190-210", lane="Health - M
         "", status, lane, company, f"Senior PM | https://example.com/{company.lower()}",
         location, comp, "", "", "", "",
         "80", "80", "80", "80", "80",
+        "Cash 26/40 (midpoint ~$188K) | Location 30/30 (fully remote) | Equity 19/20",
         "m", "s", "r", "c",
         f"{company.lower()}.txt", "", lane_fit, loc_fit, comp_fit, "✓ complete", "",
     ]
@@ -692,3 +693,146 @@ def test_posted_column_reaches_the_written_spreadsheet(tmp_path):
     assert ws.cell(2, col).value == "2026-06-13"
     assert ws.cell(2, col).alignment.horizontal == "left"
     assert ws.column_dimensions[ws.cell(1, col).column_letter].width == 12
+
+
+# --------------------------------------------------------------------------- #
+# "Comp + Lifestyle Fit Notes" — the practicality dimension's prose companion.
+#
+# It exists because this rationale used to be written into `Comp Fit`, which is contract-owned:
+# the normalization pass correctly re-derives that label from the comp range and destroyed the
+# prose. These tests pin BOTH halves of the fix — the prose survives in its own column, and the
+# derived label still wins in Comp Fit.
+# --------------------------------------------------------------------------- #
+H_PN = "Comp + Lifestyle Fit Notes"
+PROSE = ("Cash 26/40 (midpoint ~$188K) | Location 30/30 (fully remote) "
+         "| Equity+bonus+401k 19/20 (equity stated; bonus stated; 401k stated)")
+NO_PN_HEADERS = [h for h in HEADERS if h != H_PN]
+
+
+def write_no_pn_csv(path, rows):
+    """A CSV from before the notes column existed (everything else current)."""
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(NO_PN_HEADERS)
+        for r in rows:
+            w.writerow(r)
+
+
+def no_pn_row(**kw):
+    row = make_row(**kw)
+    del row[HEADERS.index(H_PN)]
+    return row
+
+
+def by_name(header_row, data_row):
+    """Header-name -> value, so assertions never depend on a column index."""
+    return dict(zip(header_row, data_row))
+
+
+def test_legacy_csv_gets_the_notes_column_inserted_in_position_with_nothing_shifted(tmp_path):
+    csv_path = tmp_path / "old-rankings.csv"
+    write_no_pn_csv(csv_path, [no_pn_row(company="Notesco", comp="190-210")])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    hdr = rows[0]
+    assert hdr == HEADERS
+    # Immediately after the score it annotates, at the head of the notes block.
+    assert hdr[hdr.index("Comp + Lifestyle Fit") + 1] == H_PN
+    assert hdr.index(H_PN) < hdr.index("Mission Fit Notes")
+    got = by_name(hdr, rows[1])
+    assert got[H_PN] == ""          # model rationale can't be re-derived — empty, not shifted data
+    # Every other column keeps its OWN value (assert by name, never by index).
+    assert got["Company"] == "Notesco"
+    assert got["Comp Range"] == "190-210"
+    assert got["Comp + Lifestyle Fit"] == "80"
+    assert got["Mission Fit Notes"] == "m"
+    assert got["Scope Fit Notes"] == "s"
+    assert got["Top Reasons Notes"] == "r"
+    assert got["Top Concerns"] == "c"
+    assert got["Job File"] == "notesco.txt"
+    assert got["Lane Fit"] == "Mental Health (high)"
+    assert got["Comp Fit"] == "Meets/above target"
+    assert got["Data Completeness"] == "✓ complete"
+
+
+def test_a_relabelled_score_column_still_anchors_the_insert(tmp_path):
+    # A candidate whose scoring card renamed the dimension: the static "Mission Fit Notes"
+    # anchor puts the notes column in the same slot.
+    renamed = ["Pay + Life" if h == "Comp + Lifestyle Fit" else h for h in NO_PN_HEADERS]
+    csv_path = tmp_path / "relabelled-rankings.csv"
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(renamed)
+        w.writerow(no_pn_row(company="Notesco"))
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    hdr = rows[0]
+    assert hdr[hdr.index("Pay + Life") + 1] == H_PN
+    assert by_name(hdr, rows[1])["Mission Fit Notes"] == "m"
+
+
+def test_a_csv_that_already_has_the_notes_column_round_trips_unchanged(tmp_path):
+    csv_path = tmp_path / "b-rankings.csv"
+    row = make_row(company="Notesco", comp="190-210")
+    row[HEADERS.index(H_PN)] = PROSE
+    write_csv(csv_path, [row])
+    before = csv_path.read_text(encoding="utf-8")
+    changed = norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    assert changed == 0
+    assert csv_path.read_text(encoding="utf-8") == before
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    assert rows[0].count(H_PN) == 1
+    assert by_name(rows[0], rows[1])[H_PN] == PROSE   # pipes/slashes preserved verbatim
+
+
+def test_comp_fit_rederivation_still_wins_over_anything_supplied_in_that_column(tmp_path):
+    csv_path = tmp_path / "b-rankings.csv"
+    row = make_row(company="Notesco", comp="150-170", comp_fit=PROSE)  # prose smuggled into Comp Fit
+    row[HEADERS.index(H_PN)] = PROSE
+    write_csv(csv_path, [row])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    got = by_name(rows[0], rows[1])
+    assert got["Comp Fit"] == norm_contracts.comp_fit_label("150-170", CFG) == "Below floor"
+    assert got[H_PN] == PROSE   # ...and the real notes column is untouched by that re-derivation
+
+
+def test_notes_column_reaches_the_spreadsheet_wide_wrapped_and_left_aligned(tmp_path):
+    cfg_path = tmp_path / "jail.config.json"
+    cfg_path.write_text(json.dumps(CFG), encoding="utf-8")
+    csv_path = tmp_path / "batch-rankings.csv"
+    xlsx_path = tmp_path / "batch-rankings.xlsx"
+    row = make_row(company="Notesco")
+    row[HEADERS.index(H_PN)] = PROSE
+    write_csv(csv_path, [row])
+    make_rankings_xlsx.build(str(csv_path), str(xlsx_path), config_path=str(cfg_path))
+    ws = load_workbook(str(xlsx_path))["Job Rankings"]
+    headers = [c.value for c in ws[1]]
+    assert headers[headers.index("Comp + Lifestyle Fit") + 1] == H_PN
+    col = headers.index(H_PN) + 1
+    assert ws.cell(2, col).value == PROSE
+    assert ws.cell(2, col).alignment.horizontal == "left"
+    assert ws.cell(2, col).alignment.wrap_text is True
+    assert ws.column_dimensions[ws.cell(1, col).column_letter].width == 46
+
+
+def test_a_legacy_csv_regenerates_to_xlsx_with_the_column_inserted_not_shifted(tmp_path):
+    cfg_path = tmp_path / "jail.config.json"
+    cfg_path.write_text(json.dumps(CFG), encoding="utf-8")
+    csv_path = tmp_path / "batch-rankings.csv"
+    xlsx_path = tmp_path / "batch-rankings.xlsx"
+    write_no_pn_csv(csv_path, [no_pn_row(company="Notesco")])
+    make_rankings_xlsx.build(str(csv_path), str(xlsx_path), config_path=str(cfg_path))
+    ws = load_workbook(str(xlsx_path))["Job Rankings"]
+    headers = [c.value for c in ws[1]]
+    assert headers[headers.index("Comp + Lifestyle Fit") + 1] == H_PN
+    got = by_name(headers, [c.value for c in ws[2]])
+    assert (got[H_PN] or "") == ""
+    assert got["Mission Fit Notes"] == "m"
+    assert got["Top Concerns"] == "c"
+    assert got["Job File"] == "notesco.txt"
+    assert got["Data Completeness"] == "✓ complete"

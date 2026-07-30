@@ -62,6 +62,7 @@ const SCORE_SCHEMA = {
     'content_verified', 'content_issue',
     'company', 'title_and_link', 'location', 'comp_range', 'lane', 'lane_fit',
     'desire_score', 'market_perception_score', 'company_style_score', 'practicality_score',
+    'comp_lifestyle_fit_notes',
     'mission_fit_notes', 'scope_fit_notes', 'top_reasons', 'top_concerns',
   ],
   properties: {
@@ -86,6 +87,7 @@ const SCORE_SCHEMA = {
     market_perception_score: { type: 'integer', minimum: 0, maximum: 100 },
     company_style_score: { type: 'integer', minimum: 0, maximum: 100 },
     practicality_score: { type: 'integer', minimum: 0, maximum: 100 },
+    comp_lifestyle_fit_notes: { type: 'string' },
     mission_fit_notes: { type: 'string' },
     scope_fit_notes: { type: 'string' },
     mission_fit_detail: { type: ['string', 'null'] },
@@ -257,6 +259,7 @@ Scoring rules:
 - title_and_link: "Role Title | URL" if a URL is present, else just the title.
 - lane: the job's category as "<Bucket> - <Descriptor>", in the job's OWN terms — NOT mapped to the candidate's lanes. Bucket = closest fit from Health / Consumer / Work / Other (exactly "Work", NEVER "Work Tools"; add a new bucket only if truly none fit — keep this set small and reusable). Descriptor = a short 1-2 word phrase, e.g. "Health - DTC Supplements", "Health - Provider Tools", "Health - Consumer Wellness", "Consumer - Home Sharing", "Work - Collaboration", "Work - Productivity", "Work - Project Management", "Work - Legal", "Work - Consumer Research", "Other - Fintech". Reuse an existing descriptor for the same kind of job rather than inventing near-duplicate wording — consistency across jobs matters more than precision on any one job. Mental/behavioral health jobs MUST use the exact string "Health - Mental Health" — no extra qualifier words appended.
 - lane_fit: how that job-lane maps to the CANDIDATE's priority lanes — candidate-relative and honest. { primary_lane: EXACTLY one of the candidate's priority-lane names (verbatim from the profile), or "Outside lanes" if it fits none; secondary_lane (or null); confidence ("high"/"medium"/"low"); note (one short phrase) }. If the role is not one of the candidate's lanes, primary_lane = "Outside lanes" (even when the domain sounds related). Do NOT inflate — it is surfaced for the candidate, not added to the score.
+- comp_lifestyle_fit_notes: the RATIONALE BREAKDOWN behind practicality_score — the prose companion to that score, exactly like mission_fit_notes is to the mission judgment. Terse pipe-separated parts in the order cash | location | equity+bonus+benefits, each naming the sub-points it earned and the one-phrase reason, e.g. \`Cash 26/40 (midpoint ~$188K) | Location 30/30 (fully remote) | Equity+bonus+401k 19/20 (equity stated; bonus stated; 401k stated)\`. Use whatever sub-factor names and point totals the candidate's scoring card actually defines for this dimension; if the card defines no sub-factors, write the same three-part breakdown in plain phrases without point math. This is the ONLY field where that breakdown belongs. Two columns it must NEVER be written into: **comp_range** stays the mechanical \`N-N\` (or \`??\`) value described above — never prose, never a note; and the **Comp Fit** column is MACHINE-DERIVED downstream from the normalized comp range by norm_contracts.comp_fit_label() — you do not produce it at all, and anything prose-like aimed at it is destroyed on the next normalization pass.
 - mission_fit_notes / scope_fit_notes: ONE plain-English sentence each, written the way you'd say it out loud — no sub-factor math, no "=", "/", or "+" notation, no "Mission 27/30 + Role 16/30..." breakdowns. If you want the detailed reasoning preserved for later auditing, put THAT in mission_fit_detail / scope_fit_detail instead (optional, null if not needed) — never in the human-facing notes fields.
 - top_reasons / top_concerns: semicolon-separated phrases, concise and concrete.
 - If PDF extraction is imperfect, make a best effort and note it in scope_fit_notes; do not fail.`,
@@ -489,20 +492,30 @@ function csvCell(v) {
 }
 const laneFitStr = (lf) => lf ? `${lf.primary_lane} (${lf.confidence})${lf.secondary_lane ? ' · +' + lf.secondary_lane : ''}` : ''
 
-// 25-column tracker layout, exact order: essential job info (incl. `Posted`, the employer's own
+// 28-column tracker layout, exact order: essential job info (incl. `Posted`, the employer's own
 // publication date, right after Comp Range so the human-scannable block stays contiguous and ahead
 // of the editable columns) -> the 3 human-editable workflow columns -> the SCORE BLOCK (5 columns,
-// contiguous) -> notes -> Job File -> Base Resume Used (filled later by the tailor step; blank at
+// contiguous) -> notes (the practicality dimension's own notes column first, immediately after its
+// score, then the mission/scope/reasons/concerns notes) -> Job File -> Base Resume Used (filled later by the tailor step; blank at
 // vet time) -> AI fit detail. CSV and XLSX share this exact header set + order. The 5 score-column
 // labels are DYNAMIC — resolved above from score-dimensions.json (or the candidate's scoring card,
 // where it overrides weights).
 // `Posted` is written BLANK here on purpose: it is not model output. The norm_contracts pass below
 // fills it by reading each row's captured job file, which is also what back-fills an old CSV.
+// STATIC (not derived from LABELS.practicality) on purpose: the other notes headers are static
+// too, and the Python side (norm_contracts.py / make_rankings_xlsx.py) has to locate this column
+// by an exact name that can't shift when a candidate's scoring card relabels the dimension.
+const PRACTICALITY_NOTES_HEADER = 'Comp + Lifestyle Fit Notes'
 const HEADERS = [
   'Applied Date? [You Fill In]', 'Status? [You Change]', 'Lane', 'Company', 'Job Post Title + Link',
   'Working Location', 'Comp Range', 'Posted',
   'Have Intro? [You Add]', 'Your Notes? [You Add]', 'Decline/Down Date? [You Add]',
   LABELS.final, LABELS.market, LABELS.desire, LABELS.style, LABELS.practicality,
+  // The practicality dimension's prose companion, sitting immediately after its score (the same
+  // score-then-notes pattern as Mission/Scope). It exists because that rationale used to be written
+  // into `Comp Fit` — a contract-owned, machine-derived column — where the norm_contracts pass
+  // correctly re-derived the label and destroyed the prose. Now it has a column of its own.
+  PRACTICALITY_NOTES_HEADER,
   'Mission Fit Notes', 'Scope Fit Notes', 'Top Reasons Notes', 'Top Concerns',
   'Job File', 'Base Resume Used', 'Lane Fit', 'Location Fit', 'Comp Fit', 'Data Completeness',
   // Both blank at vet time and filled in later by the downstream steps, via
@@ -521,6 +534,7 @@ function dataCells(r) {
     r.location, r.comp_range, '',
     '', '', '',
     r.final_score, r.market_perception_score, r.desire_score, r.company_style_score, r.practicality_score,
+    r.comp_lifestyle_fit_notes,
     r.mission_fit_notes, r.scope_fit_notes, r.top_reasons, r.top_concerns,
     r.job_file, '', laneFitStr(r.lane_fit), r._loc_fit, r._comp_fit, r._completeness, '',
   ]
@@ -548,6 +562,7 @@ for (const r of rows) {
 - **Lane:** ${r.lane}  |  **Lane fit:** ${laneFitStr(r.lane_fit)}
 - **Location:** ${r.location}  |  **Comp:** ${r.comp_range}
 - **Scores:** ${LABELS.desire} ${fmtScore(r.desire_score)} / ${LABELS.market} ${fmtScore(r.market_perception_score)} / ${LABELS.style} ${fmtScore(r.company_style_score)} / ${LABELS.practicality} ${fmtScore(r.practicality_score)} → **${LABELS.final} ${fmtScore(r.final_score)}**
+- **${LABELS.practicality} notes:** ${r.comp_lifestyle_fit_notes || '—'}
 - **Mission fit:** ${r.mission_fit_notes}${r.mission_fit_detail ? `\n  - *Detail:* ${r.mission_fit_detail}` : ''}
 - **Scope fit:** ${r.scope_fit_notes}${r.scope_fit_detail ? `\n  - *Detail:* ${r.scope_fit_detail}` : ''}
 - **Top reasons:** ${r.top_reasons}
