@@ -11,6 +11,33 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Third live-run review: partial runs no longer wipe the batch manifest, plus two comp/location renderings
+
+The third live re-capture (a Greenhouse-path job) surfaced one REAL engine bug and two formatting
+defects, all reproduced with synthetic fixtures:
+
+- **ENGINE BUG — a partial prep run wiped every other job's manifest entry.** `process_urls` rebuilt
+  the manifest's `entries` from only THIS run's input URLs, so running prep over a subset of a batch
+  (e.g. a few newly-added URLs in their own input file) silently deleted the other jobs' entries —
+  history, field_status, posted dates, capture_history — and each wiped job's next re-fetch was then
+  treated as a FIRST capture (original `Captured` lost, no CAPTURE UPDATE DETAILS). Fixed: prior
+  entries whose normalized URL is not in this run's input are carried forward into the written
+  manifest untouched, and counts cover the whole batch. Pinned by a two-entry test: the untouched
+  entry survives byte-identical while the re-fetched one gets its UPDATE block, preserved original
+  Captured, and appended capture history.
+- **Base Salary bands strip raw ATS labels and normalize currency shape.** `Pay Range: USD
+  232,000–282,000` now renders `$232,000–$282,000 USD` — generic comp labels (Pay Range / Salary
+  Range / Base Pay / Compensation) strip, a leading currency code folds into dollar-signs-on-both-
+  endpoints + trailing `USD`, spaceless en dash. Geo/level band labels (Zone A, US Tier 1) are
+  meaningful and survive; `Annually` still appears only when the employer's wording says so. Golden
+  fixture unchanged (deliberately — zone bullets already rendered canonically).
+- **Flat comma-joined offices blobs render as the short-metro `Or`-join.** A Greenhouse offices
+  string (`San Francisco, CA, New York, NY`) now splits into `City, ST` pairs (only when ≥2 real
+  pairs exist) and renders `SF Or NYC` — employer order preserved (display-only, never re-sorted),
+  unknown cities verbatim, single `City, ST` untouched.
+
+Suite: 410 → 418 green.
+
 ## 2026-07-29 — Second live-run review: two Benefits-summary fixes (label stripping, sentence-bounded truncation)
 
 Five of the six previous fixes verified against a real re-capture; the Benefits summary still had two

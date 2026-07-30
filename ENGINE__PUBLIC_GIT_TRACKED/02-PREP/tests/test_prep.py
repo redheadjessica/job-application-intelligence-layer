@@ -2473,6 +2473,102 @@ def test_base_salary_annual_range_renders_en_dash_and_annually():
     assert "Annually" not in out3.split("COMPENSATION")[1].split("APPLICATION")[0]
 
 
+# ===========================================================================
+# Third live-run review (Greenhouse path): partial-run manifest preservation,
+# generic comp-label stripping, and flat city-blob rendering.
+# ===========================================================================
+def test_partial_run_carries_forward_untouched_manifest_entries(tmp_path):
+    """ENGINE BUG: process_urls rebuilt the manifest from only THIS run's input,
+    so prepping one job silently wiped every other job's entry — history,
+    field_status, posted dates, capture_history all lost, and the wiped job's
+    next re-fetch was treated as a FIRST capture. Entries whose URL is not in
+    this run's input must survive verbatim."""
+    src = _batch_source(tmp_path)
+    url_a = "https://example.com/job/alpha"
+    url_b = "https://example.com/job/beta"
+
+    def fetch_both(u):
+        name = "Alpha" if "alpha" in u else "Beta"
+        return {"ok": True, "title": f"PM {name}", "company": name, "body": _SYNTH_BODY,
+                "method": "ats", "error": None,
+                "meta": {"title": f"PM {name}", "source": "greenhouse-boards-api",
+                         "structured_source": True, "compensation": "USD 150,000",
+                         "working_location": "Remote", "posted_date": "2026-06-13",
+                         "posting_id": f"{name.lower()}-1"},
+                "questions": []}
+
+    manifest1 = pc.process_urls([url_a, url_b], src, fetch_both)
+    assert len(manifest1["entries"]) == 2
+    beta_before = next(e for e in manifest1["entries"] if e["original_url"] == url_b)
+    alpha_file = Path(next(e for e in manifest1["entries"]
+                           if e["original_url"] == url_a)["output_path"]).name
+    original_captured_line = next(
+        l for l in (src / alpha_file).read_text(encoding="utf-8").splitlines()
+        if l.startswith("Captured:"))
+
+    # A partial run over ONLY alpha (force -> genuine re-fetch).
+    manifest2 = pc.process_urls([url_a], src, fetch_both, force=True)
+    assert len(manifest2["entries"]) == 2, "beta's entry must not be wiped"
+    beta_after = next(e for e in manifest2["entries"] if e["original_url"] == url_b)
+    assert beta_after == beta_before, "the untouched entry must survive VERBATIM"
+    assert (src / Path(beta_after["output_path"]).name).exists()
+    # And alpha was treated as a RE-fetch: update block present, original Captured
+    # preserved, capture_history appended.
+    alpha_after = next(e for e in manifest2["entries"] if e["original_url"] == url_a)
+    assert alpha_after["capture_history"] and alpha_after["capture_history"][0]["fetched_at"]
+    out = (src / Path(alpha_after["output_path"]).name).read_text(encoding="utf-8")
+    assert "CAPTURE UPDATE DETAILS" in out
+    assert original_captured_line in out
+    # Counts cover the whole batch, not just this run's input.
+    assert manifest2["counts"][pc.USABLE] == 2
+
+
+@pytest.mark.parametrize("raw,expected", [
+    # The observed Airbnb defect: raw ATS label + bare currency-code range.
+    ("Pay Range: USD 232,000–282,000", "$232,000–$282,000 USD"),
+    ("Salary Range: USD $232,000 - $282,000", "$232,000–$282,000 USD"),
+    ("Compensation: $232,000 - 282,000", "$232,000–$282,000 USD"),
+    ("Base Pay: USD 232,000 to 282,000", "$232,000–$282,000 USD"),
+    # No label at all — still normalized.
+    ("USD 232,000-282,000", "$232,000–$282,000 USD"),
+])
+def test_base_salary_generic_labels_strip_and_currency_normalizes(raw, expected):
+    out = _synth_out(meta={"title": "PM", "structured_source": True,
+                           "compensation": raw, "working_location": "Remote"},
+                     field_status={"compensation": pc.FOUND, "working_location": pc.FOUND,
+                                   "description": pc.FOUND, "conflicts": []})
+    assert f"  - {expected}\n" in out, out.split("COMPENSATION")[1].split("Additional")[0]
+    assert "Pay Range:" not in out and "Annually" not in out  # never inferred annual
+
+
+def test_base_salary_geo_and_level_labels_survive():
+    """Only GENERIC comp labels strip — geo/level band labels are meaningful."""
+    out = _synth_out(meta={"title": "PM", "structured_source": True,
+                           "compensation": "Zone A: SF Bay Area / NYC $236K – $296K · "
+                                           "US Tier 1: $174,000 - $290,000",
+                           "working_location": "Remote"},
+                     field_status={"compensation": pc.FOUND, "working_location": pc.FOUND,
+                                   "description": pc.FOUND, "conflicts": []})
+    assert "  - Zone A: SF Bay Area / NYC $236,000–$296,000 USD" in out
+    assert "  - US Tier 1: $174,000–$290,000 USD" in out
+
+
+def test_flat_city_state_blob_renders_short_metro_or_join():
+    """Defect 3: a flat Greenhouse offices blob (`San Francisco, CA, New York, NY`)
+    must render `SF Or NYC` — employer order preserved, never re-sorted."""
+    out = _synth_out(meta={"title": "PM", "structured_source": True,
+                           "compensation": "USD 150,000",
+                           "working_location": "San Francisco, CA, New York, NY"})
+    assert "Working Location(s): SF Or NYC" in out
+    # Employer order is preserved (NYC-first stays NYC-first).
+    assert pc._format_working_locations("New York, NY, San Francisco, CA") == "NYC Or SF"
+    # Unknown cities in a blob pass through verbatim.
+    assert pc._format_working_locations(
+        "San Francisco, CA, Bozeman, MT") == "SF Or Bozeman, MT"
+    # A single City, ST is NOT a blob — unchanged behavior.
+    assert pc._format_working_locations("Austin, TX") == "Austin, TX"
+
+
 def test_a_genuine_employer_edit_does_replace_the_body(tmp_path):
     old = ("About the role\nResponsibilities include shipping product.\n"
            "The base salary range for this role is $150,000 - $180,000 annually.\n"

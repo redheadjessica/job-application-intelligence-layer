@@ -1313,16 +1313,41 @@ def _short_metro(part: str) -> str:
     return _METRO_SHORT.get(key, s)
 
 
+def _split_city_state_blob(s: str) -> list[str] | None:
+    """Split a flat comma-joined offices blob (`San Francisco, CA, New York, NY`)
+    into `City, ST` pairs — only when it actually contains two or more such pairs
+    (a single `Austin, TX` is not a blob). Employer order is preserved."""
+    tokens = [t.strip() for t in s.split(",") if t.strip()]
+    parts: list[str] = []
+    pairs = 0
+    i = 0
+    while i < len(tokens):
+        if i + 1 < len(tokens) and re.fullmatch(r"[A-Z]{2}", tokens[i + 1]):
+            parts.append(f"{tokens[i]}, {tokens[i + 1]}")
+            pairs += 1
+            i += 2
+        else:
+            parts.append(tokens[i])
+            i += 1
+    return parts if pairs >= 2 else None
+
+
 def _format_working_locations(value: str) -> str:
     """A multi-city working-location list rendered for humans: short metro names
     joined with ` Or ` (`New York City; San Francisco` -> `NYC Or SF`), deduped
-    after canonicalization. Non-list values (Remote, honest phrases) pass through."""
+    after canonicalization. Handles both `;`-separated lists and a flat
+    comma-joined `City, ST, City, ST` blob (Greenhouse offices strings). Display
+    only — the employer's own order is always preserved, never re-sorted.
+    Non-list values (Remote, honest phrases) pass through."""
     s = str(value or "").strip()
     if not s:
         return s
-    if ";" not in s:
-        return _short_metro(s)
-    parts = [p.strip() for p in s.split(";") if p.strip()]
+    if ";" in s:
+        parts = [p.strip() for p in s.split(";") if p.strip()]
+    else:
+        parts = _split_city_state_blob(s) or [s]
+    if len(parts) == 1:
+        return _short_metro(parts[0])
     shorts = list(dict.fromkeys(_short_metro(p) for p in parts))
     return " Or ".join(shorts)
 
@@ -1475,10 +1500,34 @@ def _expand_dollar_amounts(text: str) -> str:
     return _K_AMOUNT_RE.sub(lambda m: f"${int(round(float(m.group(1)) * 1000)):,}", text)
 
 
-# A dollar range's separator renders as an en dash with no surrounding spaces.
+# A dollar range's separator renders as an en dash with no surrounding spaces,
+# with the dollar sign on BOTH endpoints.
 _RANGE_SEP_RE = re.compile(r"(\$[\d,]+(?:\.\d+)?)\s*(?:-|–|—|to|through)\s*(\$?[\d,]+(?:\.\d+)?)")
 _ANNUAL_MARKER_RE = re.compile(r"(?i)\b(annually|annual|per year|a year)\b|/y(?:ea)?r\b")
 _NON_ANNUAL_RE = re.compile(r"(?i)\bhour(ly)?\b|/hour|/hr\b|\bmonth(ly)?\b|/month|\bweek(ly)?\b")
+# Generic comp labels an ATS prepends to a band ("Pay Range: USD 232,000–282,000") —
+# stripped. Geo/level labels (Zone A, US Tier 1, city names) are MEANINGFUL and survive.
+_GENERIC_COMP_LABEL_RE = re.compile(
+    r"(?i)^(?:pay(?:\s+range)?|salary(?:\s+range)?|base\s+pay(?:\s+range)?|"
+    r"base\s+salary(?:\s+range)?|compensation(?:\s+range)?|pay\s+rate)\s*:\s*")
+_LEADING_CODE_RE = re.compile(r"(?i)^(?:USD|US\$)\s*")
+_COMMA_AMOUNT_RE = re.compile(r"(?<![\d$.,])(\d{1,3}(?:,\d{3})+(?:\.\d+)?)")
+
+
+def _normalize_salary_band(seg: str) -> str:
+    """One band rendered canonically: generic label stripped, a leading currency
+    code folded into `$…–$… USD` shape (`Pay Range: USD 232,000–282,000` ->
+    `$232,000–$282,000 USD`), dollar signs on both endpoints, spaceless en dash."""
+    seg = _GENERIC_COMP_LABEL_RE.sub("", str(seg or "").strip()).strip()
+    if _LEADING_CODE_RE.match(seg):
+        seg = _LEADING_CODE_RE.sub("", seg).strip()
+        if "$" not in seg:
+            seg = _COMMA_AMOUNT_RE.sub(lambda m: f"${m.group(1)}", seg)
+    seg = _expand_dollar_amounts(seg)
+    seg = _RANGE_SEP_RE.sub(
+        lambda m: f"{m.group(1)}–{m.group(2) if m.group(2).startswith('$') else '$' + m.group(2)}",
+        seg)
+    return seg
 
 
 def _base_salary_bullets(compensation, fs: dict, meta: dict | None = None) -> list[str]:
@@ -1497,8 +1546,7 @@ def _base_salary_bullets(compensation, fs: dict, meta: dict | None = None) -> li
     stated_annual = bool(_ANNUAL_MARKER_RE.search(employer_wording))
     out: list[str] = []
     for seg in segments:
-        seg = _expand_dollar_amounts(seg)
-        seg = _RANGE_SEP_RE.sub(lambda m: f"{m.group(1)}–{m.group(2)}", seg)
+        seg = _normalize_salary_band(seg)
         if "usd" not in seg.lower() and "$" in seg:
             seg = f"{seg} USD"
         if stated_annual and not _ANNUAL_MARKER_RE.search(seg) and not _NON_ANNUAL_RE.search(seg):
@@ -2418,6 +2466,16 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
             for m in members:
                 m["possible_duplicate_group"] = f"g{gid}"
                 m["notes"] = (m["notes"] + "; possible same company/title duplicate — review").strip("; ")
+
+    # A PARTIAL run over an existing batch must never wipe the other jobs' history:
+    # every prior entry whose URL is NOT in this run's input is carried forward into
+    # the written manifest UNTOUCHED (field_status, posted dates, capture_history,
+    # fetched_at all preserved). Without this, prepping a few newly-added URLs
+    # silently deleted every other job's manifest entry — so its next re-fetch was
+    # treated as a first capture (original Captured lost, no CAPTURE UPDATE DETAILS).
+    carried_untouched = [e for e in manifest.get("entries", [])
+                         if e.get("normalized_url") not in seen]
+    entries.extend(carried_untouched)
 
     manifest["entries"] = entries
     manifest["input_count"] = sum(1 for u in urls if u.strip() and not u.strip().startswith("#"))
