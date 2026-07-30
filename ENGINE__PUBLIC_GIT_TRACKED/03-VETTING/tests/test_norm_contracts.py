@@ -60,6 +60,22 @@ WL_MATRIX = [
     ("NYC/SF - 3 days", "IRL NYC/SF - 3 days", WL_YELLOW),
     # Bare "<City> hybrid" phrasing repairs to known-city-unknown-cadence.
     ("New York hybrid", "IRL NYC - unknown days", WL_ORANGE),
+    # --- cadence-fidelity + multi-city/detail cases (2026-07-29 defect pass) ---
+    # An employer-stated RANGE keeps both endpoints; the color follows its MAXIMUM.
+    ("IRL NYC - 2-3 days", "IRL NYC - 2-3 days", WL_YELLOW),
+    ("IRL NYC - 4-5 days", "IRL NYC - 4-5 days", WL_ORANGE),
+    # "Remote or IRL ..." keeps EVERY genuinely-available office and its trailing detail.
+    ("Remote or IRL NYC/SF - unknown days (hub-office salary range; remote elsewhere in "
+     "US possible at 80-100% of range)",
+     "Remote or IRL NYC/SF - unknown days (hub-office salary range; remote elsewhere in "
+     "US possible at 80-100% of range)", WL_GREEN),
+    ("IRL NYC - 3 days (Mon/Tue/Thu)", "IRL NYC - 3 days (Mon/Tue/Thu)", WL_YELLOW),
+    ("IRL NYC - 5 days (non-negotiable in-office)",
+     "IRL NYC - 5 days (non-negotiable in-office)", WL_ORANGE),
+    ("IRL NYC/SF - unknown days", "IRL NYC/SF - unknown days", WL_ORANGE),
+    ("", "Unknown", WL_ORANGE),
+    ("IRL Menlo Park, CA - unknown days", "IRL Menlo Park, CA - unknown days", WL_RED),
+    ("IRL Sunnyvale/Kirkland - unknown days", "IRL Sunnyvale/Kirkland - unknown days", WL_RED),
 ]
 
 
@@ -107,6 +123,48 @@ def test_unparseable_becomes_unknown_with_loud_warning():
     got = normalize_working_location("see posting for details", CFG, warn=warnings.append)
     assert got == "Unknown"
     assert warnings, "an unparseable value must warn, never repair silently"
+
+
+@pytest.mark.parametrize("raw,expected", [
+    # A range is never collapsed to an endpoint, however it is written.
+    ("NYC - 2-3 days", "IRL NYC - 2-3 days"),
+    ("Hybrid New York, 2-3 days per week in office", "IRL NYC - 2-3 days"),
+    ("NYC — 4-5 days", "IRL NYC - 4-5 days"),
+    ("NYC/SF - 2-3 days", "IRL NYC/SF - 2-3 days"),
+])
+def test_day_ranges_are_preserved_never_collapsed(raw, expected):
+    """`2-3 days` used to normalize to `3 days` — silently rewriting a cadence the
+    employer stated is information loss on a field the candidate reads."""
+    assert normalize_working_location(raw, CFG, warn=quiet) == expected
+
+
+def test_range_color_comes_from_the_maximum():
+    assert working_location_color("IRL NYC - 2-3 days", CFG) == WL_YELLOW   # max 3 -> in band
+    assert working_location_color("IRL NYC - 3-4 days", CFG) == WL_ORANGE   # max 4 -> out
+    assert working_location_color("IRL NYC - 4-5 days", CFG) == WL_ORANGE
+    f = norm_contracts.working_location_facts("IRL NYC - 2-3 days", CFG)
+    assert f["days_range"] == (2, 3) and f["days_exact"] == 3
+
+
+@pytest.mark.parametrize("raw,expected", [
+    # Every genuinely-available office survives, and so does the trailing detail.
+    ("Remote or IRL NYC/SF - unknown days (hub-office salary range)",
+     "Remote or IRL NYC/SF - unknown days (hub-office salary range)"),
+    ("Remote or NYC/SF - unknown days (hub-office salary range)",
+     "Remote or IRL NYC/SF - unknown days (hub-office salary range)"),
+    ("Remote or hybrid in New York, NY / San Francisco, CA (hub-office salary range)",
+     "Remote or IRL NYC/SF - unknown days (hub-office salary range)"),
+])
+def test_remote_or_irl_keeps_every_office_and_the_trailing_detail(raw, expected):
+    """This form used to drop `/SF` AND the whole parenthetical."""
+    got = normalize_working_location(raw, CFG, warn=quiet)
+    assert got == expected
+    assert working_location_color(got, CFG) == WL_GREEN
+
+
+def test_a_parenthetical_that_only_restates_the_cadence_is_not_duplicated():
+    assert normalize_working_location(
+        "Hybrid — New York, NY (at least 2 days per week)", CFG, warn=quiet) == "IRL NYC - 2+ days"
 
 
 def test_no_home_metro_configured_cannot_judge_geography_orange_not_red():
@@ -382,6 +440,37 @@ def test_xlsx_written_cells_carry_the_exact_spec_hexes(tmp_path):
     # no grey anywhere in the populated Working Location column
     greys = {cell_hex(ws.cell(i + 2, wl_col)) for i in range(len(cases))}
     assert "D9D9D9" not in greys
+
+
+# The palette this column REPLACED. None of it may reappear in a regenerated sheet.
+OLD_PALETTE = {"A9D08E", "FFE699", "F4B183", "D9D9D9", "F4A6A6"}
+
+
+def test_whole_matrix_reaches_the_spreadsheet_with_the_right_fill_and_text(tmp_path):
+    """The full regression matrix through the FINAL artifact: every case's Working
+    Location text and the actual written fill hex of both Working Location and Location
+    Fit — with zero greys and zero old-palette hexes anywhere in those two columns."""
+    cfg_path = tmp_path / "jail.config.json"
+    cfg_path.write_text(json.dumps(CFG), encoding="utf-8")
+    csv_path = tmp_path / "matrix-rankings.csv"
+    xlsx_path = tmp_path / "matrix-rankings.xlsx"
+    write_csv(csv_path, [make_row(company=f"Co{i}", location=raw)
+                         for i, (raw, _, _) in enumerate(WL_MATRIX)])
+    make_rankings_xlsx.build(str(csv_path), str(xlsx_path), config_path=str(cfg_path))
+
+    wb = load_workbook(str(xlsx_path))
+    ws = wb["Job Rankings"]
+    headers = [c.value for c in ws[1]]
+    wl_col, lf_col = headers.index("Working Location") + 1, headers.index("Location Fit") + 1
+    seen = {}
+    for i, (raw, canonical, expected) in enumerate(WL_MATRIX):
+        r = i + 2
+        assert ws.cell(r, wl_col).value == canonical, f"written text for {raw!r}"
+        assert cell_hex(ws.cell(r, wl_col)) == expected, f"Working Location fill for {raw!r}"
+        assert cell_hex(ws.cell(r, lf_col)) == expected, f"Location Fit fill for {raw!r}"
+        seen[canonical] = cell_hex(ws.cell(r, wl_col))
+    assert set(seen.values()) == {WL_GREEN, WL_YELLOW, WL_ORANGE, WL_RED}
+    assert not (set(seen.values()) & OLD_PALETTE)
 
 
 def test_work_tools_cannot_survive_csv_to_xlsx_regeneration(tmp_path, capsys):

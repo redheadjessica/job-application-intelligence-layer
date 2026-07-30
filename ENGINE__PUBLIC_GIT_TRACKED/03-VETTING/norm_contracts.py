@@ -30,10 +30,15 @@ Allowed values (and nothing else):
   - <cities> is "/"-joined, ordered by the candidate's configured `city_priority`
     (priority cities first, others after in original order). Multi-office lists are
     preserved, never collapsed to one city.
-  - <cadence> is "N days" (exact), "N+ days" (open-ended minimum — "3 days" and
-    "3+ days" are DIFFERENT; open-endedness is preserved), or "unknown days" (city
-    known, day count not). An optional parenthetical detail may follow, e.g.
-    "3 days (Mon/Wed/Thu)".
+  - <cadence> is "N days" (exact), "N-M days" (a range the employer stated — kept
+    verbatim, never collapsed to an endpoint), "N+ days" (open-ended minimum —
+    "3 days" and "3+ days" are DIFFERENT; open-endedness is preserved), or
+    "unknown days" (city known, day count not). An optional parenthetical detail may
+    follow any of them, e.g. "3 days (Mon/Wed/Thu)" or "unknown days (hub-office
+    salary range; remote elsewhere possible)".
+  - A stated range is COLORED by its maximum ("2-3 days" is inside the acceptable
+    1-3 band; "4-5 days" is not) while the text keeps both endpoints. Display and
+    color are separate everywhere in this module.
   - "Onsite <city>" means 5 days ONLY when full-time attendance is established;
     otherwise "IRL <city> - unknown days".
   - "Unknown" ONLY when there is no reliable location signal at all. A known city
@@ -81,7 +86,11 @@ def _warn(msg):
 # --------------------------------------------------------------------------- #
 # Working Location
 # --------------------------------------------------------------------------- #
-_CADENCE_RE = r"(?:\d+\+? days?(?: \([^)]*\))?|unknown days)"
+# A cadence is "N days" (exact), "N-M days" (a range the employer stated — preserved
+# verbatim, never collapsed to one endpoint), "N+ days" (open-ended minimum), or
+# "unknown days"; each may carry a trailing parenthetical detail.
+_CADENCE_RE = (r"(?:\d+(?:\s*[-–—]\s*\d+)?\+? days?(?: \([^)]*\))?"
+               r"|unknown days(?: \([^)]*\))?)")
 _CANON_WL_RE = re.compile(
     rf"^(?:Remote|Remote \([^()]*(?:\([^()]*\))?[^()]*\)|(?:Remote or )?IRL .+ - {_CADENCE_RE})$"
 )
@@ -120,15 +129,29 @@ _OPEN_ENDED_RES = [
     re.compile(r"\b(\d+)\s+or more day(?:s)?\b", re.I),
 ]
 _EXACT_DAYS_RE = re.compile(r"\b(\d+)\s*day(?:s)?\b(\s*\(([^)]*)\))?", re.I)
+# An employer-stated RANGE ("2-3 days in office"). Must be tried before the exact-day
+# pattern, which would otherwise match only the range's upper endpoint and silently
+# rewrite "2-3 days" as "3 days" — information loss on a field the candidate reads
+# (the same fidelity rule that keeps "3 days" distinct from "3+ days").
+_RANGE_DAYS_RE = re.compile(r"\b(\d+)\s*[-–—]\s*(\d+)\s*day(?:s)?\b(\s*\(([^)]*)\))?", re.I)
 
 
-def _cadence_str(n, open_ended, detail=None):
-    base = f"{n}+ days" if open_ended else (f"{n} day" if n == 1 else f"{n} days")
+def _cadence_str(n, open_ended, detail=None, hi=None):
+    if hi is not None:
+        base = f"{n}-{hi} days"
+    elif open_ended:
+        base = f"{n}+ days"
+    else:
+        base = f"{n} day" if n == 1 else f"{n} days"
     return f"{base} ({detail})" if detail else base
 
 
 def _extract_cadence(raw):
     """Return (cadence_string_or_None, matched_day_phrases_found)."""
+    m = _RANGE_DAYS_RE.search(raw)
+    if m:
+        detail = (m.group(4) or "").strip() or None
+        return _cadence_str(int(m.group(1)), False, detail, hi=int(m.group(2))), True
     for rx in _OPEN_ENDED_RES:
         m = rx.search(raw)
         if m:
@@ -172,7 +195,12 @@ def _extract_cities(raw, cfg):
     # Drop cadence phrasing so day counts don't read as city tokens.
     for rx in _OPEN_ENDED_RES:
         work = rx.sub(" ", work)
+    work = _RANGE_DAYS_RE.sub(" ", work)
     work = re.sub(r"\b\d+\s*\+?\s*day(?:s)?\b", " ", work, flags=re.I)
+    # "unknown days" is cadence too — leaving it in used to swallow the city it followed
+    # ("NYC/SF - unknown days" kept only NYC, because "SF - unknown days" no longer
+    # looked like a city name).
+    work = re.sub(r"\bunknown\s+days?\b", " ", work, flags=re.I)
     work = re.sub(r"\b(per|a|each)\s+week\b|\bweekly\b", " ", work, flags=re.I)
     tokens = re.split(r"[/;,•·|]+|\bor\b|\band\b|&", work, flags=re.I)
     cities, seen = [], set()
@@ -214,6 +242,17 @@ def normalize_working_location(text, cfg=None, warn=_warn):
     remote = bool(re.search(r"\bremote\b(?![\s-]*friendly)", low))
     cadence, had_days = _extract_cadence(raw)
     cities = _extract_cities(raw, cfg)
+    # A trailing parenthetical carries employer detail worth keeping (e.g. "(hub-office
+    # salary range; remote elsewhere in US possible at 80-100% of range)"). Preserve it
+    # unless the cadence already absorbed a parenthetical of its own.
+    # A parenthetical that merely RESTATES the cadence ("(at least 2 days per week)") is
+    # already represented by the cadence itself and is not repeated.
+    tail = re.search(r"\(([^()]*)\)\s*$", raw)
+    tail_detail = None
+    if tail and not (cadence and "(" in cadence):
+        cand = tail.group(1).strip()
+        if cand and not re.search(r"\bdays?\b", cand, re.I):
+            tail_detail = cand
     if cities:
         if cadence is None:
             # "Onsite <city>" is 5 days ONLY when full-time attendance is established.
@@ -221,6 +260,8 @@ def normalize_working_location(text, cfg=None, warn=_warn):
                 cadence = "5 days"
             else:
                 cadence = "unknown days"
+        if tail_detail:
+            cadence = f"{cadence} ({tail_detail})"
         irl = f"IRL {'/'.join(cities)} - {cadence}"
         return f"Remote or {irl}" if remote else irl
     if remote:
@@ -245,7 +286,9 @@ def working_location_facts(canonical, cfg=None):
     facts = {
         "remote_available": s.lower().startswith("remote"),
         "nyc_option": False,       # an acceptable home-metro office is selectable
-        "days_exact": None,        # int when cadence is an exact "N days"
+        "days_exact": None,        # int when cadence is an exact "N days"; a stated
+                                   # range "N-M days" reports its MAXIMUM here
+        "days_range": None,        # (N, M) when the employer stated a range
         "days_open_ended": False,  # "N+ days"
         "days_unknown": False,     # "unknown days"
         "out_of_geo": False,       # in-person cities exist, none in the home metro
@@ -257,12 +300,15 @@ def working_location_facts(canonical, cfg=None):
         cities = [c.strip() for c in m.group(1).split("/") if c.strip()]
         facts["cities"] = cities
         cad = m.group(2)
-        dm = re.match(r"(\d+)(\+)?\s*day", cad)
+        dm = re.match(r"(\d+)(?:\s*[-–—]\s*(\d+))?(\+)?\s*day", cad)
         if dm:
-            if dm.group(2):
+            if dm.group(3):
                 facts["days_open_ended"] = True
             else:
-                facts["days_exact"] = int(dm.group(1))
+                # An employer-stated range is judged by its MAXIMUM: "2-3 days" is
+                # within the acceptable 1-3 band, "4-5 days" is not.
+                facts["days_exact"] = int(dm.group(2) or dm.group(1))
+                facts["days_range"] = (int(dm.group(1)), int(dm.group(2))) if dm.group(2) else None
         else:
             facts["days_unknown"] = True
         facts["nyc_option"] = any(c.lower() in aliases for c in cities)

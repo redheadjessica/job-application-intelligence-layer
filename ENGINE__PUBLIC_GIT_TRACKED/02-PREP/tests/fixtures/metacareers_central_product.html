@@ -1,0 +1,50 @@
+<!-- DURABLE REGRESSION FIXTURE (2026-07-29).
+
+     Shape of a real JS-rendered employer careers site (metacareers.com/profile/job_details/<id>/)
+     whose title tag, og:title and first heading are ALL pure site branding. It produced the
+     capture header `Company: Meta Careers` / `Role: Meta Careers` and the filename
+     `meta-careers__meta-careers.txt`: cleaning the COMPANY was not enough, because the role
+     was still branding. There is no JSON-LD on the page, so the only place the real title
+     exists is the first content line of the extracted body text, after the nav chrome.
+
+     The ONLY correct outputs are:
+        filename  meta__product-manager-central-product.txt
+        Company:  Meta
+        Role:     Product Manager, Central Product
+
+     The nav block below is the chrome observed verbatim in the real capture — it is what the
+     "first non-navigation heading line" recovery step has to walk past. Note "Working at Meta":
+     a nav label made only of nav vocabulary plus the employer's own name. -->
+<html>
+<head>
+  <meta property="og:title" content="Meta Careers" />
+  <title>Meta Careers</title>
+</head>
+<body>
+<h1>Meta Careers</h1>
+<div id="root">
+<p>Skip to main content</p>
+<p>Jobs</p>
+<p>Teams</p>
+<p>Career Programs</p>
+<p>Working at Meta</p>
+<p>Blog</p>
+<p>Podcasts</p>
+<p>Jobs</p>
+<p>Product Manager, Central Product</p>
+<p>Product Manager, Central Product</p>
+<p>Menlo Park, CA +2 locations</p>
+<p>Artificial Intelligence</p>
+<p>+ 5 more</p>
+<p>Apply now</p>
+<p>Product Managers work with cross-functional teams of engineers, designers, data
+scientists and researchers to build products. We are looking for Product Managers who
+value moving quickly and lead AI-native product development at scale.</p>
+<p>Product Manager, Central Product Responsibilities</p>
+<p>Be responsible for leading and driving a complex product area; defining success,
+prioritizing problems and identifying the best strategies.</p>
+<p>Minimum Qualifications</p>
+<p>8+ years of experience in product management or a related field.</p>
+</div>
+</body>
+</html>

@@ -1628,3 +1628,136 @@ def test_other_ats_apply_urls_are_untouched():
         _load("workable_feeld_cpo.json"), "feeldco", "Feeld", "http://x")
     assert "apply.workable.com" in wk["apply_url"]
     assert wk.get("employer_apply_url") is None
+
+
+# ===========================================================================
+# "Never company-as-role" — the guard symmetric to never-role-as-company.
+#
+# Real failing capture: metacareers.com wrote `Company: Meta Careers` /
+# `Role: Meta Careers` into `meta-careers__meta-careers.txt`. Cleaning the company was
+# not enough; a branding-only ROLE must be RECOVERED from the page (JSON-LD title ->
+# first heading -> first non-navigation body heading) or marked a capture failure.
+# ===========================================================================
+META_URL = "https://www.metacareers.com/profile/job_details/903804022277159/"
+META_FILE = "meta__product-manager-central-product.txt"
+META_ROLE = "Product Manager, Central Product"
+
+
+def _meta_html():
+    return (FIXTURES / "metacareers_central_product.html").read_text(encoding="utf-8")
+
+
+def _meta_body():
+    return af._html_to_text(_meta_html())
+
+
+def test_branding_only_title_is_recovered_from_the_body_heading():
+    """No JSON-LD, and the only heading is branding too — the real title exists only as
+    the first content line of the body, after the nav chrome."""
+    co, ro = pc.normalize_capture_identity(
+        "Meta Careers", "Meta Careers", url=META_URL,
+        html=_meta_html(), body=_meta_body())
+    assert (co, ro) == ("Meta", META_ROLE)
+    assert pc.base_filename(co, ro) == META_FILE
+    # Idempotent: the recovered identity re-normalizes to itself.
+    assert pc.normalize_capture_identity(co, ro, url=META_URL, html=_meta_html(),
+                                         body=_meta_body()) == (co, ro)
+
+
+@pytest.mark.parametrize("company,title", [
+    ("Meta Careers", "Meta Careers"),      # the observed pair
+    ("Meta", "Meta"),                      # title == company exactly
+    ("Meta", "Meta Careers"),              # branding suffix, nothing else
+    ("Meta", "Careers at Meta"),           # branding prefix
+    ("Meta", "Jobs — Meta"),               # branding with a dash separator
+    ("Meta", "Careers"),                   # bare branding
+    ("Meta", ""),                          # nothing captured at all
+])
+def test_invalid_titles_all_recover_to_the_real_role(company, title):
+    co, ro = pc.normalize_capture_identity(company, title, url=META_URL,
+                                           html=_meta_html(), body=_meta_body())
+    assert (co, ro) == ("Meta", META_ROLE)
+
+
+def test_jsonld_title_is_the_first_recovery_source():
+    identity = {"hiring_organization": "Meta", "title": META_ROLE}
+    co, ro = pc.normalize_capture_identity("Meta Careers", "Meta Careers", url=META_URL,
+                                           jsonld=identity)
+    assert (co, ro) == ("Meta", META_ROLE)
+
+
+def test_page_heading_is_the_second_recovery_source():
+    """When the first heading IS a real title, it is used (no body scan needed)."""
+    html = f"<html><head><title>Acme Careers</title></head><body><h1>{META_ROLE}</h1></body></html>"
+    co, ro = pc.normalize_capture_identity("Acme Careers", "Acme Careers",
+                                           url="https://careers.acme.com/jobs/9", html=html)
+    assert (co, ro) == ("Acme", META_ROLE)
+
+
+def test_a_real_title_containing_a_branding_word_is_never_discarded():
+    """The guard is narrow on purpose: a genuine role may contain 'Careers'/'Jobs'."""
+    for role in ("PM, Careers Platform Experience", "Director of Career Products",
+                 "Staff Product Manager, Jobs Marketplace"):
+        co, ro = pc.normalize_capture_identity("Acme", role, url="https://careers.acme.com/x")
+        assert (co, ro) == ("Acme", role)
+
+
+def test_unrecoverable_title_is_a_loud_capture_failure_not_a_branding_filename(tmp_path):
+    """Nothing recoverable: the title must NOT become a branding string. It is marked
+    `title: capture_failed`, which surfaces on the capture's Completeness line, in the
+    manifest entry, and in the prep report — never silently accepted."""
+    src = _batch_source(tmp_path)
+    url = "https://www.example-careers.com/job/1"
+
+    def fetch(u):
+        return {"ok": True, "title": "Example Careers", "company": "Example Careers",
+                "body": _LONG_BODY, "method": "requests", "error": None,
+                "meta": {"title": "Example Careers", "company": "Example Careers",
+                         "source": "requests/html", "structured_source": False,
+                         "working_location": "Remote", "compensation": "$1 - $2"},
+                "questions": []}
+
+    manifest = pc.process_urls([url], src, fetch)
+    entry = manifest["entries"][0]
+    assert entry["title"] == "Unknown Title"
+    assert entry["field_status"]["title"] == pc.CAPTURE_FAILED
+    assert "title capture failed" in entry["notes"]
+    written = (src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
+    assert "title ✗" in written
+    report = (tmp_path / "0 - Prep Report" / "prep-report.md").read_text(encoding="utf-8")
+    assert "JOB TITLE could not be captured" in report
+
+
+def test_company_as_role_normalizes_at_the_choke_point(tmp_path):
+    """The FINAL artifact through process_urls: filename + Company:/Role: header."""
+    src = _batch_source(tmp_path)
+    html = _meta_html()
+
+    def fetch(u):
+        return {"ok": True, "title": "Meta Careers", "company": "Meta Careers",
+                "body": af._html_to_text(html), "method": "playwright", "error": None,
+                "meta": {"title": "Meta Careers", "company": "Meta Careers",
+                         "source": "playwright/html", "structured_source": False,
+                         "raw_html": html, "working_location": "Menlo Park, CA",
+                         "compensation": None},
+                "questions": []}
+
+    manifest = pc.process_urls([META_URL], src, fetch)
+    entry = manifest["entries"][0]
+    assert entry["status"] == pc.USABLE
+    assert (entry["company"], entry["title"]) == ("Meta", META_ROLE)
+    assert Path(entry["output_path"]).name == META_FILE
+    assert entry["field_status"]["title"] == pc.FOUND
+    written = (src / META_FILE).read_text(encoding="utf-8")
+    assert "Company: Meta" in written
+    assert f"Role: {META_ROLE}" in written
+    # The old wrong name must not exist anywhere in the batch.
+    assert not (src / "meta-careers__meta-careers.txt").exists()
+
+
+def test_html_comments_never_leak_into_the_captured_body_text():
+    """Found while building the fixture: bs4 hands comment text back from get_text(), so a
+    page with a big comment block leaked it straight into the captured job text."""
+    body = _meta_body()
+    assert "DURABLE REGRESSION FIXTURE" not in body
+    assert body.splitlines()[0] == "Meta Careers"

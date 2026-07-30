@@ -2132,11 +2132,15 @@ def _html_to_text(html: str) -> str:
     if not html:
         return ""
     try:
-        from bs4 import BeautifulSoup
+        from bs4 import Comment, BeautifulSoup
 
         soup = BeautifulSoup(html, "html.parser")
         for tag in soup(["script", "style", "noscript"]):
             tag.decompose()
+        # HTML comments are never job content, but bs4 will happily hand their text back —
+        # a page with a large comment block leaks it straight into the captured job text.
+        for c in soup.find_all(string=lambda s: isinstance(s, Comment)):
+            c.extract()
         text = soup.get_text("\n", strip=True)
     except Exception:
         # Crude tag strip if bs4 is unavailable.

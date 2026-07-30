@@ -14,6 +14,7 @@ import hashlib
 import json
 import re
 from datetime import datetime, timezone
+from html import unescape as html_unescape
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -215,6 +216,144 @@ def _identity_key(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
 
 
+# --------------------------------------------------------------------------- #
+# "Never company-as-role" — the guard symmetric to never-role-as-company.
+#
+# The regression: a JS-rendered careers site (metacareers.com) whose <title>/og:title is
+# pure site branding produced `Company: Meta Careers` / `Role: Meta Careers` and the
+# filename `meta-careers__meta-careers.txt`. Cleaning the COMPANY was not enough — the
+# role was still branding. A title that is site chrome must be RECOVERED from the page
+# (JSON-LD title -> first <h1> -> first non-navigation heading in the extracted body),
+# and if recovery fails the title is marked a CAPTURE FAILURE (field_status `title`
+# -> capture_failed) so the completeness gate and the prep report say so loudly, rather
+# than a branding string being minted into a filename as if it were a job title.
+# --------------------------------------------------------------------------- #
+
+# "Careers at X" / "Jobs | X" — a branding wrapper occupying the WHOLE string.
+_BRAND_ONLY_PREFIX_RE = re.compile(rf"^(?:careers?|jobs?)(?:\s+at\s+|{_BRAND_SEP})", re.I)
+# Words that only ever appear in site navigation / page chrome, never alone in a job
+# title. A line whose every word is in this set (plus the employer's own name) is nav.
+_NAV_WORDS = {
+    "a", "about", "accessibility", "alerts", "all", "an", "and", "apply", "at", "back",
+    "benefits", "blog", "blogs", "board", "career", "careers", "content", "contact",
+    "cookie", "cookies", "culture", "current", "diversity", "employees", "events",
+    "faq", "faqs", "for", "found", "help", "home", "hiring", "in", "internships",
+    "investors", "job", "jobs", "join", "language", "life", "listings", "locations",
+    "location", "log", "login", "logout", "main", "menu", "more", "news", "now", "of",
+    "offices", "open", "openings", "or", "our", "out", "overview", "people", "podcast",
+    "podcasts", "policy", "positions", "press", "privacy", "profile", "program",
+    "programs", "resources", "results", "roles", "saved", "search", "sign", "skip",
+    "students", "team", "teams", "terms", "the", "to", "up", "us", "view", "we",
+    "work", "working",
+}
+
+
+def _is_branding_only(text: str) -> bool:
+    """True when a string is a careers-site branding label rather than a job title —
+    "Meta Careers", "Careers at Acme", "Jobs — Acme", bare "Careers"/"Jobs".
+    Deliberately narrow: only strings of at most 3 words qualify, so a real title that
+    happens to contain the word "Careers" ("PM, Careers Platform Experience") is safe."""
+    s = re.sub(r"\s+", " ", str(text or "").strip())
+    if not s:
+        return True
+    if re.fullmatch(r"(?:careers?|jobs?)", s, re.I):
+        return True
+    if len(s.split(" ")) > 3:
+        return False
+    return bool(_BRAND_ONLY_PREFIX_RE.match(s) or _CO_WRAPPER_SUFFIX_RE.search(s))
+
+
+def _title_is_invalid(title: str, company: str) -> bool:
+    """A captured title is invalid when it is missing, is site branding, or normalizes
+    to the same slug as the company (company-as-role)."""
+    s = str(title or "").strip()
+    if not s or s == "Unknown Title":
+        return True
+    if _is_branding_only(s):
+        return True
+    return bool(_identity_key(s)) and _identity_key(s) == _identity_key(company)
+
+
+def _headings_from_html(html: str | None) -> list[str]:
+    """Heading text from a page's markup, <h1>s before <h2>s, tags stripped. A regex
+    (not a parser) keeps prep_common dependency-free — this reads only heading text."""
+    out: list[str] = []
+    # Comments are markup, not content — and a comment mentioning a tag would otherwise
+    # open a match that runs on until the real closing tag.
+    src = re.sub(r"<!--.*?-->", " ", str(html or ""), flags=re.S)
+    for level in ("h1", "h2"):
+        for m in re.finditer(rf"<{level}\b[^>]*>(.*?)</{level}>", src, re.I | re.S):
+            txt = re.sub(r"<[^>]+>", " ", m.group(1))
+            txt = re.sub(r"\s+", " ", html_unescape(txt)).strip()
+            if txt:
+                out.append(txt)
+    return out
+
+
+# Job-description SECTION headers. These are the most likely wrong answer when scanning
+# body text for a title, so they are rejected outright — a flagged capture failure beats a
+# capture whose `Role:` line says "About the role".
+_SECTION_HEADERS = {
+    "about the role", "about the job", "about this role", "about this job", "about us",
+    "about the team", "about the company", "the role", "the opportunity", "job description",
+    "role description", "position summary", "overview", "summary", "responsibilities",
+    "key responsibilities", "what you'll do", "what you will do", "what youll do",
+    "qualifications", "minimum qualifications", "preferred qualifications", "requirements",
+    "who you are", "what we're looking for", "what we are looking for", "nice to have",
+    "benefits", "perks", "compensation", "salary", "pay transparency", "how to apply",
+    "equal opportunity employer", "our mission", "why join us", "your impact",
+}
+
+
+def _first_content_heading(body: str | None, names: list[str]) -> str | None:
+    """The first line of extracted body text that reads as a job title rather than
+    navigation chrome or a JD section header. On the metacareers capture the body opens
+    with "Skip to main content / Jobs / Teams / Career Programs / Working at Meta / Blog /
+    Podcasts / Jobs" and then the real title, "Product Manager, Central Product"."""
+    nav = set(_NAV_WORDS)
+    for name in names:
+        nav |= {w for w in re.split(r"[^a-z0-9]+", str(name or "").lower()) if w}
+    for raw in str(body or "").splitlines()[:60]:
+        ln = re.sub(r"\s+", " ", raw).strip(" \t|·:-–—")
+        if not (6 <= len(ln) <= 120) or ln.endswith("."):  # a title is not a sentence
+            continue
+        if re.sub(r"[^a-z' ]+", "", ln.lower()).strip() in _SECTION_HEADERS:
+            continue
+        words = [w for w in re.split(r"[^A-Za-z0-9'&]+", ln) if w]
+        if len(words) < 2 or all(w.lower() in nav for w in words):
+            continue
+        if any(_title_is_invalid(ln, n) for n in names):
+            continue
+        return ln
+    return None
+
+
+def _recover_title(jsonld: dict, html: str | None, body: str | None,
+                   names: list[str]) -> str | None:
+    """Recover a real job title for a capture whose scraped title was branding.
+    In order: JSON-LD `title`, the page's first heading, the first non-navigation
+    heading line of the extracted body text. Returns None rather than inventing one.
+
+    `names` is every name this employer is known by here (the cleaned company plus any
+    domain-derived form) — a heading made only of nav words plus one of those names
+    ("Working at Meta") is chrome, not a title."""
+    names = [n for n in names if str(n or "").strip()]
+    candidates: list[str] = [str((jsonld or {}).get("title") or "")]
+    candidates += _headings_from_html(html)
+    heading = _first_content_heading(body, names)
+    if heading:
+        candidates.append(heading)
+    for cand in candidates:
+        c = re.sub(r"\s+", " ", str(cand or "").strip())
+        if not c:
+            continue
+        clean, _ = _strip_title_branding(c)
+        clean = clean.strip()
+        if clean and not any(_title_is_invalid(clean, n) for n in names or [""]):
+            return clean
+    return None
+
+
 def _strip_trailing_company_echo(title: str, company: str) -> str:
     """Drop a trailing ` - <Company>` / ` | <Company>` echo from a title."""
     if not company or not title:
@@ -226,7 +365,8 @@ def _strip_trailing_company_echo(title: str, company: str) -> str:
 
 
 def normalize_capture_identity(company: str | None, title: str | None, url: str | None = None,
-                               jsonld: dict | None = None) -> tuple[str, str]:
+                               jsonld: dict | None = None, html: str | None = None,
+                               body: str | None = None) -> tuple[str, str]:
     """Canonical (company, title) for a captured job post — the single normalizer behind
     the `company-name__job-title.txt` filename and the `Company:`/`Role:` header lines.
 
@@ -240,6 +380,12 @@ def normalize_capture_identity(company: str | None, title: str | None, url: str 
       5. NEVER role-as-company: if the cleaned company equals (or contains / is contained
          by) the cleaned title, replace it with the suffix- or domain-derived name — but
          only when such an alternative actually exists (conservative: never invent one).
+      6. NEVER company-as-role (symmetric guard): if the cleaned title is site branding
+         ("Meta Careers", "Careers at X") or slugs to the same value as the company,
+         RECOVER it from JSON-LD `title`, then the page's first heading, then the first
+         non-navigation heading line of the extracted body. If nothing is recoverable the
+         title becomes "Unknown Title", which `assess_completeness` records as
+         `title: capture_failed` — a loud flag, never an invented or branding filename.
 
     Idempotent: an already-clean pair passes through unchanged.
     """
@@ -261,12 +407,27 @@ def normalize_capture_identity(company: str | None, title: str | None, url: str 
         clean_company = wrapper_co or domain_co or clean_company
     clean_title = _strip_trailing_company_echo(clean_title, clean_company)
 
+    # NEVER company-as-role. Attempted BEFORE the role-as-company swap below: when the two
+    # values collide, recovering a real title from the page tells us which of the pair was
+    # actually broken, so a good company name isn't thrown away to fix a bad title.
+    names = [n for n in (clean_company, domain_co, wrapper_co) if n]
+    if _title_is_invalid(clean_title, clean_company):
+        recovered = _recover_title(jsonld, html, body, names)
+        if recovered:
+            clean_title = recovered
+
+    # NEVER role-as-company.
     ck, tk = _identity_key(clean_company), _identity_key(clean_title)
     if ck and tk and (ck == tk or ck in tk or tk in ck):
         for alt in (wrapper_co, domain_co):
             if alt and _identity_key(alt) != tk:
                 clean_company = alt
                 break
+
+    # Still branding / still the company name: fail loudly rather than mint a filename out
+    # of site chrome. "Unknown Title" is what assess_completeness reads as capture_failed.
+    if _title_is_invalid(clean_title, clean_company):
+        clean_title = ""
 
     return (clean_company or "Unknown", clean_title or "Unknown Title")
 
@@ -1067,6 +1228,11 @@ def write_report(path: Path, manifest: dict) -> None:
     incomplete = [x for x in usable
                   if any((x.get("field_status") or {}).get(f) in (CAPTURE_FAILED, NOT_POSTED, CONFLICTING)
                          for f in HARD_FIELDS)]
+    # Usable posts whose JOB TITLE could not be captured (the page offered only careers-site
+    # branding and no real title was recoverable from JSON-LD / headings / body). Flagged
+    # separately and loudly: the capture is still rankable, but its filename and `Role:` line
+    # are placeholders, so paste the real title (or re-fetch) before tailoring anything.
+    titleless = [x for x in usable if (x.get("field_status") or {}).get("title") == CAPTURE_FAILED]
     safe = "Yes — usable posts are ready to rank." if usable else "No usable posts yet."
 
     lines = [f"# Prep Report — {manifest['batch']}", ""]
@@ -1081,7 +1247,15 @@ def write_report(path: Path, manifest: dict) -> None:
                  "relying on them (open them, paste the real job text if needed, then re-run prep).")
     if incomplete:
         lines.append(f"- ⚠️ {len(incomplete)} usable post(s) with an incomplete comp/location capture — see below")
+    if titleless:
+        lines.append(f"- 🚨 {len(titleless)} usable post(s) whose JOB TITLE could not be captured — see below")
     lines += ["", "## Details"]
+    if titleless:
+        lines.append("**🚨 Job title not captured (the page gave only careers-site branding):**")
+        for x in titleless:
+            lines.append(f"- {x.get('company','?')} — title unknown; the capture's `Role:` line and "
+                         f"filename are placeholders. Paste the real title into the file or re-fetch "
+                         f"before tailoring.  ({x['original_url']})")
     if incomplete:
         lines.append("**⚠️ Incomplete captures (still ranked — review the flagged field):**")
         for x in incomplete:
@@ -1285,8 +1459,13 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
         # (company, title) pair is canonicalized here — once — before the filename, the
         # header, and the manifest entry are derived from it. Idempotent per URL.
         company, title = normalize_capture_identity(
-            company, title, url=url, jsonld=meta.get("jsonld_identity"))
+            company, title, url=url, jsonld=meta.get("jsonld_identity"),
+            html=meta.get("raw_html"), body=body)
         meta["company"], meta["title"] = company, title
+        # The title status was assessed against the RAW scraped title; re-derive it from
+        # the canonical one so a branding-only title that could not be recovered shows up
+        # as a capture failure in the completeness line, the manifest, and the report.
+        field_status["title"] = FOUND if title != "Unknown Title" else CAPTURE_FAILED
         questions = res.get("questions") if res.get("questions") is not None else meta.get("questions")
         missing = missing_hard_fields(field_status)
         has_comp = field_status.get("compensation") == FOUND
@@ -1302,6 +1481,9 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
             note_bits = []
             if len(methods_tried) > 1:
                 note_bits.append(f"usable after fallback (tried: {', '.join(methods_tried)})")
+            if field_status.get("title") == CAPTURE_FAILED:
+                note_bits.append("job title capture failed — the page gave only site branding "
+                                 "and no real role title could be recovered")
             if missing:
                 note_bits.append("incomplete capture: " + ", ".join(
                     f"{f.replace('_', '-')} {field_status.get(f)}" for f in missing))

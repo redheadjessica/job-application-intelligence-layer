@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 
 import requests
 import trafilatura
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment
 
 import prep_common
 from ats_fetchers import (
@@ -82,6 +82,9 @@ def extract_clean_text(html: str, url: str) -> str:
     soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
+    # HTML comments are markup, not job content — never let their text into the capture.
+    for c in soup.find_all(string=lambda s: isinstance(s, Comment)):
+        c.extract()
     text = soup.get_text("\n", strip=True)
     return re.sub(r"\n{3,}", "\n\n", text).strip()
 
