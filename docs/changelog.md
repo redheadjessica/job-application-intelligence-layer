@@ -11,6 +11,22 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — Post-delivery QA pass + process retrospective (no engine changes)
+
+After the unified-tracker delivery, a targeted cross-artifact QA audit (tracker rows ↔ captures ↔
+registry) found two data defects the per-artifact validations had missed: one CSV row whose
+scorer-returned `lane_fit` and workflow-attached `job_file` were lost during row assembly (repaired
+from the scoring run's own journal — never invented), and a run-together board-token brand casing in
+one capture header + CSV cell. Both repaired in the private data; stale pre-migration vet-run outputs
+quarantined into a labeled staging folder. The engine gaps these expose (no row-integrity validation
+at the CSV writer; no employer-name source for ATS-hosted board tokens) are catalogued — with the
+full root-cause taxonomy of this stretch's ~25 defects and an ROI-ranked hardening plan — in
+`docs/process-retrospective-2026-07-30.md`. Headline: five bug classes (duplicated code paths,
+prompt-owned contracts, tests-green-artifact-wrong, silent failure, mid-flight spec evolution);
+Tier-1 recommendations are promoting the ad-hoc capture acceptance gate into the engine, row-integrity
+validation in the normalize pass, and consolidating the two prep CLIs into one. No code changed as
+part of the retrospective itself.
+
 ## 2026-07-30 — Phase A (cont.): docs record the capture format and the column contract
 
 `docs/v2-end-to-end-workflow.md` and `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/CLAUDE.md` now describe the
