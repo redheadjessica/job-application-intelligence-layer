@@ -2440,7 +2440,7 @@ def test_working_locations_render_as_short_metro_or_list():
     assert "Working Location(s): NYC or SF" in out
     # Dedupe after canonicalization; unknown cities pass through verbatim.
     assert pc._format_working_locations(
-        "New York, NY; New York City; Austin, TX") == "NYC or Austin, TX"
+        "New York, NY; New York City; Austin, TX") == "NYC or Austin"
     # Single values (Remote / one city) stay simple.
     assert pc._format_working_locations("Remote") == "Remote"
     assert pc._format_working_locations("San Francisco, CA") == "SF"
@@ -2568,8 +2568,10 @@ def test_flat_city_state_blob_renders_short_metro_or_join():
     # Unknown cities in a blob pass through verbatim.
     assert pc._format_working_locations(
         "San Francisco, CA, Bozeman, MT") == "SF or Bozeman, MT"
-    # A single City, ST is NOT a blob — unchanged behavior.
-    assert pc._format_working_locations("Austin, TX") == "Austin, TX"
+    # A single City, ST is NOT a blob — it renders as one place (short-canon name
+    # when known, verbatim otherwise).
+    assert pc._format_working_locations("Austin, TX") == "Austin"
+    assert pc._format_working_locations("Bozeman, MT") == "Bozeman, MT"
 
 
 def test_a_genuine_employer_edit_does_replace_the_body(tmp_path):
@@ -3327,3 +3329,219 @@ def test_manifest_writes_are_atomic_and_locked(tmp_path):
     with pc.file_lock(mpath, timeout=1):
         pass
     assert manifest["counts"][pc.USABLE] == 1
+
+
+# ===========================================================================
+# Canary-run extraction defects (2026-07-30). Live SHAPES, synthetic text.
+# ===========================================================================
+# The live Ashby comp shape: a non-salary component glued onto the tier summary.
+_ASHBY_COMP_WITH_EQUITY = {
+    "compensationTierSummary": "$172K – $248K • Offers Equity",
+    "compensationTiers": [{
+        "title": "", "tierSummary": "$172K – $248K • Offers Equity",
+        "components": [
+            {"summary": "Offers Equity", "compensationType": "EquityPercentage",
+             "minValue": None, "maxValue": None},
+            {"summary": "$172K – $248K", "compensationType": "Salary", "interval": "1 YEAR",
+             "currencyCode": "USD", "minValue": 172000, "maxValue": 248000},
+        ]}]}
+
+
+def test_base_salary_filters_on_compensation_type_and_renders_inline():
+    """Defect 1: `Offers Equity` was rendered as a Base Salary band (and its presence
+    made a single-band posting render as a bullet list). Only `Salary`-type components
+    belong in Base Salary; the rest route to Additional Compensation."""
+    comp, _raw = af._ashby_compensation(_ASHBY_COMP_WITH_EQUITY)
+    assert comp == "$172K – $248K"
+    assert "Equity" not in comp
+    assert af._ashby_additional_components(_ASHBY_COMP_WITH_EQUITY) == ["Equity"]
+    out = pc.build_output_text("http://x", "PM", "Help Scout", _SYNTH_BODY,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": comp,
+                                     "additional_compensation_components": ["Equity"],
+                                     "working_location": "Remote"},
+                               field_status={"compensation": pc.FOUND,
+                                             "working_location": pc.FOUND,
+                                             "description": pc.FOUND, "conflicts": []},
+                               methods_tried=["ats"])
+    # ONE band -> inline, not a one-item bullet list.
+    assert "Base Salary: $172-248K\n" in out
+    assert "- $172-248K" not in out
+    assert "Offers Equity" not in out
+    assert "Additional Compensation: Equity mentioned, but details not provided." in out
+
+
+def test_a_tier_summary_is_never_split_into_pseudo_bands():
+    """The ` • `-joined summary is the employer's DISPLAY wording, not a band list."""
+    comp, _raw = af._ashby_compensation({
+        "compensationTiers": [{"title": "", "tierSummary": "$150K – $180K • Offers Equity • Bonus",
+                               "components": []}]})
+    assert comp == "$150K – $180K"
+
+
+def test_multi_zone_salary_summaries_still_render_per_band():
+    """The filter must not flatten a genuine multi-zone posting (the BetterUp shape)."""
+    comp, _raw = af._ashby_compensation({
+        "compensationTiers": [
+            {"title": "Zone A: SF / NYC", "tierSummary": "$236K – $296K", "components": []},
+            {"title": "Zone B: Austin", "tierSummary": "$213K – $266K", "components": []}]})
+    assert comp == "Zone A: SF / NYC: $236K – $296K · Zone B: Austin: $213K – $266K"
+
+
+_BASE_RANGE_SENTENCE = (
+    "About the role\nResponsibilities include shipping product.\n"
+    "The anticipated new hire base salary range for this full-time position is "
+    "$122,400-$170,000 + equity + benefits.\n" + ("x " * 60))
+
+
+def test_additional_compensation_never_restates_the_base_range():
+    """Defect 2: the whole base-salary sentence was surfaced as Additional
+    Compensation. Only its non-base components belong there."""
+    out = pc.build_output_text("http://x", "PM", "Acme", _BASE_RANGE_SENTENCE,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "$122,400 - $170,000",
+                                     "working_location": "Remote"},
+                               field_status={"compensation": pc.FOUND,
+                                             "working_location": pc.FOUND,
+                                             "description": pc.FOUND, "conflicts": []},
+                               methods_tried=["ats"])
+    line = next(l for l in out.splitlines() if l.startswith("Additional Compensation:"))
+    assert line == "Additional Compensation: Equity and Benefits mentioned, but details not provided."
+    assert "122,400" not in line and "170,000" not in line and "base salary" not in line.lower()
+    # Base Salary still carries the range (abbreviated, one decimal — $122,400 is not round).
+    assert "Base Salary: $122.4-170K" in out
+
+
+def test_a_benefits_mention_inside_a_comp_sentence_is_never_did_not_mention():
+    """Defect 3: `Benefits: Employer did not mention benefits.` while the posting's own
+    comp sentence said `+ benefits` — a capture contradicting its source."""
+    benefits, _e = af.mine_benefits_equity(_BASE_RANGE_SENTENCE)
+    assert benefits == af.MENTIONED_NO_DETAILS
+    out = pc.build_output_text("http://x", "PM", "Acme", _BASE_RANGE_SENTENCE,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "$122,400 - $170,000",
+                                     "working_location": "Remote"},
+                               methods_tried=["ats"])
+    assert "Benefits: Mentioned, but details not provided." in out
+    assert "did not mention benefits" not in out
+    # Other component-style mentions count too...
+    for phrase in ("plus benefits", "and comprehensive benefits", "benefits package",
+                   "+ full benefits", "offers competitive benefits"):
+        body = f"About the role\nResponsibilities include shipping. Salary {phrase}.\n"
+        assert af.mine_benefits_equity(body)[0] == af.MENTIONED_NO_DETAILS, phrase
+    # ...but a posting that genuinely says nothing about benefits still reports that.
+    assert af.mine_benefits_equity(
+        "About the role\nResponsibilities include shipping product every quarter.")[0] is None
+
+
+@pytest.mark.parametrize("structured,prose,conflict", [
+    # Defect 4: alias spellings of ONE metro are agreement, not a conflict.
+    ("San Francisco, CA; Remote, US", ["Bay Area, CA"], False),
+    ("Bay Area, CA", ["San Francisco, CA"], False),
+    ("New York, NY", ["Brooklyn, NY"], False),
+    ("Washington, DC", ["Arlington, VA"], False),
+    # A subset relationship is agreement too.
+    ("San Francisco, CA; New York, NY", ["San Francisco, CA"], False),
+    # A genuinely disjoint geography STILL conflicts (don't defeat the feature).
+    ("Austin, TX; New York, NY", ["Denver, CO"], True),
+    ("Seattle, WA", ["Austin, TX"], True),
+])
+def test_metro_aliases_do_not_create_a_false_location_conflict(structured, prose, conflict):
+    assert pc._location_materially_disagrees(structured, prose) is conflict
+
+
+def test_maven_shaped_capture_reports_no_conflict(tmp_path):
+    """End-to-end on the observed shape: SF + Remote structurally, "Bay Area" in the
+    prose preference sentence — one metro, so no conflict and no lost preference line."""
+    body = ("About the role\nResponsibilities include shipping product.\n"
+            "Strong preference for those based in San Francisco.\n" + ("x " * 60))
+    meta = {"title": "PM", "source": "greenhouse-boards-api", "structured_source": True,
+            "compensation": "USD 200,000-250,000",
+            "working_location": "San Francisco, CA; Remote, US"}
+    fs = pc.assess_completeness(meta, body, [])
+    assert fs["working_location"] == pc.FOUND
+    assert "conflicts" in fs and not fs["conflicts"]
+    out = pc.build_output_text("http://x", "PM", "Acme", body, meta=meta,
+                               field_status=fs, methods_tried=["ats"])
+    assert "Conflicting employer information" not in out
+    assert "Location Preference: Strong preference for those based in SF." in out
+
+
+# ---- Defect 5: the employer page's declared name beats a board-token guess ----
+_HELPSCOUT_HTML = ('<html><head><meta property="og:site_name" content="Help Scout">'
+                   '<title>Careers</title></head><body>x</body></html>')
+
+
+def test_employer_declared_name_beats_a_board_token_guess():
+    assert af.employer_declared_name(_HELPSCOUT_HTML) == "Help Scout"
+    co, ro = pc.normalize_capture_identity(
+        "Helpscout", "Senior Product Manager",
+        url="https://www.helpscout.com/company/careers/?ashby_jid=abc",
+        html=_HELPSCOUT_HTML)
+    assert (co, ro) == ("Help Scout", "Senior Product Manager")
+    assert pc.base_filename(co, ro) == "help-scout__senior-product-manager.txt"
+    # JSON-LD hiringOrganization outranks og:site_name.
+    assert af.employer_declared_name(_HELPSCOUT_HTML,
+                                     {"hiring_organization": "Help Scout Inc."}) == "Help Scout Inc."
+
+
+def test_without_an_employer_signal_the_board_token_fallback_still_applies():
+    plain = "<html><head><title>Careers</title></head><body>x</body></html>"
+    assert af.employer_declared_name(plain) is None
+    co, _ro = pc.normalize_capture_identity(
+        "Helpscout", "Senior Product Manager",
+        url="https://www.helpscout.com/company/careers/?ashby_jid=abc", html=plain)
+    assert co == "Helpscout"
+    # An ATS-hosted URL never adopts a page name (the host names the platform).
+    co2, _ = pc.normalize_capture_identity(
+        "Betterup", "Principal PM", url="https://jobs.ashbyhq.com/betterup/abc",
+        html='<meta property="og:site_name" content="Ashby">')
+    assert co2 == "Betterup"
+
+
+def test_the_employer_name_lookup_only_fires_for_a_token_shaped_guess():
+    pju = pytest.importorskip("prep_job_urls")
+    # Fires: employer domain + single run-together word matching the domain label.
+    assert pju._should_check_employer_name(
+        "https://www.helpscout.com/company/careers/?ashby_jid=abc", "Helpscout") is True
+    # Does not fire: already multi-word, an ATS host, or a name unrelated to the domain.
+    assert pju._should_check_employer_name(
+        "https://www.helpscout.com/careers", "Help Scout") is False
+    assert pju._should_check_employer_name(
+        "https://jobs.ashbyhq.com/helpscout/abc", "Helpscout") is False
+    assert pju._should_check_employer_name(
+        "https://www.example.com/careers", "Acme") is False
+
+
+# ---- Defect 6: the Remote-/-Hybrid office-naming convention ----
+def test_greenhouse_office_naming_convention_collapses_readably():
+    raw = ("Remote - New York City, NY; Remote - Seattle, WA; Remote - United States; "
+           "San Francisco - Hybrid")
+    assert pc._format_working_locations(raw) == "Remote (US; NYC or Seattle) or IRL SF"
+    # Onsite naming, and a plain list with no convention, still behave.
+    assert pc._format_working_locations("Austin - Onsite; Remote - United States") == \
+        "Remote (US) or IRL Austin"
+    assert pc._format_working_locations("New York City; San Francisco") == "NYC or SF"
+    assert pc._format_working_locations("Remote") == "Remote"
+
+
+def test_office_expectation_is_never_inferred_from_the_word_hybrid():
+    """Defect 6, second half: `Hybrid` alone must NOT produce a day count. A cadence
+    appears only when the employer states one (`N days per week`)."""
+    body = ("About the role\nResponsibilities include shipping product.\n"
+            "This is a hybrid role based in our San Francisco office.\n" + ("x " * 60))
+    assert pc._mine_office_expectation(body) is None
+    out = pc.build_output_text("http://x", "PM", "Acme", body,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 200,000",
+                                     "workplace": "Hybrid",
+                                     "working_location": "Remote - United States; "
+                                                         "San Francisco - Hybrid"},
+                               methods_tried=["ats"])
+    assert "Office Expectation: Not Specified" in out
+    assert "Days Per Week" not in out
+    assert "Working Location(s): Remote (US) or IRL SF" in out
+    # A STATED cadence in the same shape does come through.
+    body2 = body.replace("This is a hybrid role based in our San Francisco office.",
+                         "Hybrid: employees work from the San Francisco office 3 days per week.")
+    assert pc._mine_office_expectation(body2) == "3 Days Per Week"

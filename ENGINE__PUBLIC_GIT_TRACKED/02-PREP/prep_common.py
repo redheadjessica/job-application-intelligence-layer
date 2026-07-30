@@ -27,6 +27,7 @@ from zoneinfo import ZoneInfo
 from ats_fetchers import (
     ATS_HOST_KEYWORDS,
     MENTIONED_NO_DETAILS,
+    employer_declared_name,
     UUID_RE,
     _EQUITY_SPECIFICS_RE,
     _gh_board_tokens_from_domain,
@@ -431,9 +432,20 @@ def _strip_trailing_company_echo(title: str, company: str) -> str:
     return title
 
 
+def _is_employer_domain(url: str | None) -> bool:
+    """True when the posting URL is on the EMPLOYER's own domain rather than an ATS or
+    job board — i.e. the page's self-declared name is authoritative for the company."""
+    host = urlparse(url or "").netloc.lower().replace("www.", "")
+    labels = [p for p in host.split(".") if p]
+    if len(labels) < 2:
+        return False
+    return not any(l in ATS_HOST_KEYWORDS or l in _BOARD_HOSTS for l in labels)
+
+
 def normalize_capture_identity(company: str | None, title: str | None, url: str | None = None,
                                jsonld: dict | None = None, html: str | None = None,
-                               body: str | None = None) -> tuple[str, str]:
+                               body: str | None = None,
+                               declared_name: str | None = None) -> tuple[str, str]:
     """Canonical (company, title) for a captured job post — the single normalizer behind
     the `company-name__job-title.txt` filename and the `Company:`/`Role:` header lines.
 
@@ -469,6 +481,16 @@ def normalize_capture_identity(company: str | None, title: str | None, url: str 
     clean_title, wrapper_co = _strip_title_branding(raw_title)
     clean_company = _clean_company_wrappers(raw_company)
     domain_co = _company_from_domain(url)
+
+    # On the EMPLOYER's own domain, their page's declared name beats a board-token guess:
+    # a token title-cased into one word ("helpscout" -> "Helpscout") is a guess, and some
+    # ATS APIs expose no organization name at all. Only overrides when the two names are
+    # the same company modulo spacing/punctuation, so a wrong page never renames a job.
+    declared = declared_name or employer_declared_name(html, jsonld)
+    if declared and _is_employer_domain(url):
+        if not clean_company or _identity_key(declared) == _identity_key(clean_company) \
+                or _identity_key(declared) == _identity_key(domain_co or ""):
+            clean_company = _clean_company_wrappers(declared) or clean_company
 
     if not clean_company or _CAREERY_RE.search(clean_company):
         clean_company = wrapper_co or domain_co or clean_company
@@ -938,13 +960,53 @@ def _comp_materially_disagrees(structured: str, prose_values: list[str]) -> bool
     return a[1] < b[0] or b[1] < a[0]
 
 
+# Metro aliases that mean the SAME place for conflict purposes. Without this, an employer
+# listing "San Francisco, CA" structurally and "Bay Area, CA" in the prose was reported as
+# `Conflicting employer information` — a false conflict between two names for one metro.
+_METRO_ALIAS_KEYS = {
+    "sanfrancisco": "sf", "sf": "sf", "sfbayarea": "sf", "bayarea": "sf",
+    "sanfranciscobayarea": "sf", "southsanfrancisco": "sf", "oakland": "sf",
+    "newyork": "nyc", "newyorkcity": "nyc", "nyc": "nyc", "manhattan": "nyc",
+    "brooklyn": "nyc", "newyorkmetro": "nyc",
+    "losangeles": "la", "la": "la",
+    "washington": "dc", "washingtondc": "dc", "dc": "dc",
+    "seattle": "seattle", "austin": "austin", "boston": "boston", "chicago": "chicago",
+    "denver": "denver", "atlanta": "atlanta", "arlington": "dc",
+}
+
+
+def metro_key(city: str) -> str:
+    """A canonical key for a city/metro name, so alias spellings of one metro compare
+    equal ("San Francisco" / "Bay Area" / "SF Bay Area" -> `sf`)."""
+    base = re.split(r",", str(city or ""))[0]
+    k = re.sub(r"[^a-z0-9]+", "", base.lower())
+    return _METRO_ALIAS_KEYS.get(k, k)
+
+
+def _metro_keys(text: str, prose_cities=None) -> set:
+    """Canonical metro keys named by a location string and/or a prose city list.
+    Both `City, ST` pairs and bare metro names ("Bay Area", "NYC") are recognized."""
+    keys = {metro_key(c) for c in (prose_cities or [])}
+    keys |= {metro_key(c) for c in _prose_city_states(str(text or ""), limit=12)}
+    for part in re.split(r"[;/|]|\bor\b|,", str(text or "")):
+        k = metro_key(part)
+        if k in set(_METRO_ALIAS_KEYS.values()):
+            keys.add(k)
+    return {k for k in keys if k}
+
+
 def _location_materially_disagrees(structured: str, prose_cities: list[str]) -> bool:
-    """True only when BOTH sides name "City, ST" places and the city sets are disjoint."""
-    a = {c.split(",")[0].strip().lower() for c in _prose_city_states(str(structured or ""), limit=12)}
-    b = {c.split(",")[0].strip().lower() for c in prose_cities}
+    """True only when both sides name places and, AFTER metro canonicalization, the two
+    sets are disjoint AND neither is a subset of the other. Alias spellings of one metro
+    ("San Francisco, CA" vs "Bay Area, CA") are agreement, not a conflict; a genuinely
+    disjoint geography (Denver vs Austin/NYC) still flags."""
+    a = _metro_keys(structured)
+    b = _metro_keys("", prose_cities)
     if not a or not b:
         return False
-    return a.isdisjoint(b)
+    if a & b or a <= b or b <= a:
+        return False
+    return True
 
 
 def assess_completeness(meta: dict | None, body: str, questions: list | None) -> dict:
@@ -1305,6 +1367,11 @@ _METRO_SHORT = {
     "los angeles": "LA", "los angeles, ca": "LA", "la": "LA",
     "washington, d.c.": "DC", "washington d.c.": "DC", "washington dc": "DC",
     "washington, dc": "DC", "dc": "DC", "d.c.": "DC",
+    # Metros with no common abbreviation: keep the city, drop the state code so a
+    # rendered list reads as places rather than postal data.
+    "seattle, wa": "Seattle", "austin, tx": "Austin", "boston, ma": "Boston",
+    "chicago, il": "Chicago", "denver, co": "Denver", "atlanta, ga": "Atlanta",
+    "portland, or": "Portland", "san diego, ca": "San Diego", "miami, fl": "Miami",
 }
 
 
@@ -1338,6 +1405,73 @@ def _split_city_state_blob(s: str) -> list[str] | None:
     return parts if pairs >= 2 else None
 
 
+# Employers routinely encode the ARRANGEMENT inside an office NAME on their board:
+# `Remote - New York City, NY`, `San Francisco - Hybrid`, `Austin - Onsite`. Rendered
+# literally, a multi-office list becomes an unreadable blob
+# ("Remote - New York City, NY or Remote - Seattle, WA or Remote - United States or
+# San Francisco - Hybrid"). These parse the convention so the field reads like the
+# canonical grammar — WITHOUT inventing a cadence that was never stated.
+_OFFICE_ARRANGEMENT_RE = re.compile(
+    r"(?i)^\s*(?:(?P<lead>remote|hybrid|on-?site|in-?office)\s*[-–—:]\s*(?P<rest>.+)"
+    r"|(?P<rest2>.+?)\s*[-–—:]\s*(?P<trail>remote|hybrid|on-?site|in-?office))\s*$")
+_NATIONWIDE_RE = re.compile(r"(?i)^(united states|usa|us|nationwide|anywhere in the us"
+                            r"|remote us|us remote)$")
+
+
+def _parse_office_entry(part: str) -> tuple[str | None, str]:
+    """(arrangement|None, place) for one office entry, reading the employer's own
+    `Remote - X` / `X - Hybrid` naming convention."""
+    s = re.sub(r"\s+", " ", str(part or "")).strip()
+    m = _OFFICE_ARRANGEMENT_RE.match(s)
+    if not m:
+        return None, s
+    lead = (m.group("lead") or m.group("trail") or "").lower()
+    place = (m.group("rest") or m.group("rest2") or "").strip()
+    arrangement = "Remote" if lead.startswith("remote") else (
+        "Hybrid" if lead.startswith("hybrid") else "Onsite")
+    return arrangement, place
+
+
+def _collapse_office_convention(parts: list[str]) -> str | None:
+    """Readable text for a multi-office list whose entries encode their arrangement:
+    `Remote (US; NYC or Seattle) or IRL SF`. Returns None when no entry uses the
+    convention (the plain short-metro join then applies). A cadence is NEVER added
+    here — `Office Expectation` carries that, and only when the employer stated it."""
+    remote_places: list[str] = []
+    remote_nationwide = False
+    office_places: list[str] = []
+    plain: list[str] = []
+    used_convention = False
+    for part in parts:
+        arrangement, place = _parse_office_entry(part)
+        short = _short_metro(place)
+        if arrangement is None:
+            if short:
+                plain.append(short)
+            continue
+        used_convention = True
+        if arrangement == "Remote":
+            if _NATIONWIDE_RE.match(place.strip()):
+                remote_nationwide = True
+            elif short and short not in remote_places:
+                remote_places.append(short)
+        elif short and short not in office_places:
+            office_places.append(short)
+    if not used_convention:
+        return None
+    segments: list[str] = []
+    if remote_nationwide or remote_places:
+        detail_bits = []
+        if remote_nationwide:
+            detail_bits.append("US")
+        if remote_places:
+            detail_bits.append(" or ".join(remote_places))
+        segments.append(f"Remote ({'; '.join(detail_bits)})" if detail_bits else "Remote")
+    for place in office_places + [p for p in plain if p not in office_places]:
+        segments.append(f"IRL {place}")
+    return " or ".join(dict.fromkeys(segments)) or None
+
+
 def _format_working_locations(value: str) -> str:
     """A multi-city working-location list rendered for humans: short metro names
     joined with ` or ` (`New York City; San Francisco` -> `NYC or SF`), deduped
@@ -1352,6 +1486,9 @@ def _format_working_locations(value: str) -> str:
         parts = [p.strip() for p in s.split(";") if p.strip()]
     else:
         parts = _split_city_state_blob(s) or [s]
+    collapsed = _collapse_office_convention(parts)
+    if collapsed:
+        return collapsed
     if len(parts) == 1:
         return _short_metro(parts[0])
     shorts = list(dict.fromkeys(_short_metro(p) for p in parts))
@@ -1365,7 +1502,8 @@ _METRO_SENTENCE_FORMS = sorted(
     [("San Francisco Bay Area", "SF Bay Area"), ("San Francisco, California", "SF"),
      ("San Francisco, CA", "SF"), ("New York City, New York", "NYC"),
      ("New York City, NY", "NYC"), ("New York City", "NYC"), ("New York, NY", "NYC"),
-     ("Los Angeles, CA", "LA"), ("Washington, D.C.", "DC"), ("Washington, DC", "DC")],
+     ("Los Angeles, CA", "LA"), ("Washington, D.C.", "DC"), ("Washington, DC", "DC"),
+     ("San Francisco", "SF"), ("New York", "NYC"), ("Los Angeles", "LA")],
     key=lambda kv: -len(kv[0]))
 # An employer-stated location PREFERENCE (never a requirement): a sentence whose
 # preference wording attaches to being based/located somewhere.
@@ -1441,18 +1579,60 @@ def _strip_bullet_and_label(text: str) -> str:
     return s
 
 
-def _additional_compensation_value(meta: dict, body: str) -> str:
+_BENEFITS_TOKEN_RE = re.compile(r"(?i)\bbenefits?\b|\bperks?\b")
+
+
+def _base_range_figures(meta: dict, fs: dict) -> set:
+    """The whole-thousand figures already represented in Base Salary, so an
+    additional-comp sentence that merely RESTATES the base range can be recognized."""
+    text = " ".join(str(x or "") for x in (
+        meta.get("compensation"), meta.get("compensation_raw"),
+        fs.get("compensation_prose"), " ".join(fs.get("compensation_prose_all") or [])))
+    out = set()
+    for m in re.finditer(r"\d[\d,]*(?:\.\d+)?", text):
+        raw = m.group(0).replace(",", "")
+        try:
+            v = float(raw)
+        except ValueError:
+            continue
+        if v >= 1000:
+            out.add(round(v / 1000.0, 1))
+    return out
+
+
+def _additional_compensation_value(meta: dict, body: str, fs: dict | None = None) -> str:
     """The COMPENSATION `Additional Compensation:` value — bonus/commission/equity
     eligibility, never merged into base salary. A real equity description (a grant
     size / vesting schedule / dollar value) passes through, cleaned of bullet
     markers and label prefixes; detail-free equity language collapses to clean
     comp-only wording (`Equity Opportunities.`) or the honest mention phrase.
     401(k)/benefits language never lands here — those are benefits."""
+    fs = fs or {}
     equity = meta.get("equity")
     if equity is None and body:
         _b, equity = mine_benefits_equity(body)
     parts: list[str] = []
     mentions = _mine_additional_comp_mentions(body or "")
+    # Structured non-salary components (e.g. Ashby's EquityPercentage) are authoritative
+    # and never depend on prose mining.
+    for name in (meta.get("additional_compensation_components") or []):
+        if name and name not in mentions:
+            mentions.append(str(name))
+    # A mined sentence that RESTATES the base range is not additional compensation:
+    # "The anticipated new hire base salary range ... is $122,400-$170,000 + equity +
+    # benefits." must contribute only its equity/benefits MENTIONS, never the base range.
+    if equity and equity != MENTIONED_NO_DETAILS:
+        figures = _base_range_figures(meta, fs)
+        sentence_figures = {round(float(m.group(0).replace(",", "")) / 1000.0, 1)
+                            for m in re.finditer(r"\d[\d,]*(?:\.\d+)?", str(equity))
+                            if float(m.group(0).replace(",", "")) >= 1000}
+        if figures and sentence_figures & figures:
+            for rx, name in _ADDL_COMP_TOKENS:
+                if rx.search(str(equity)) and name not in mentions:
+                    mentions.append(name)
+            if _BENEFITS_TOKEN_RE.search(str(equity)) and "Benefits" not in mentions:
+                mentions.append("Benefits")
+            equity = MENTIONED_NO_DETAILS
     if equity and equity != MENTIONED_NO_DETAILS:
         detail = _strip_bullet_and_label(equity)
         if _EQUITY_SPECIFICS_RE.search(detail):
@@ -2073,7 +2253,7 @@ def build_output_text(url: str, title: str, company: str, body_text: str, *,
     else:
         lines.append(f"Base Salary: {_honest(None, 'compensation', 'compensation')}")
     lines.append("")
-    lines.append(f"Additional Compensation: {_additional_compensation_value(meta, body_text)}")
+    lines.append(f"Additional Compensation: {_additional_compensation_value(meta, body_text, fs)}")
     lines.append("")
     lines.append(f"Benefits: {_benefits_value(meta, body_text)}")
     lines.append("")
@@ -2810,7 +2990,8 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
         # header, and the manifest entry are derived from it. Idempotent per URL.
         company, title = normalize_capture_identity(
             company, title, url=url, jsonld=meta.get("jsonld_identity"),
-            html=meta.get("raw_html"), body=body)
+            html=meta.get("raw_html"), body=body,
+            declared_name=meta.get("employer_declared_name"))
         meta["company"], meta["title"] = company, title
         # The title status was assessed against the RAW scraped title; re-derive it from
         # the canonical one so a branding-only title that could not be recovered shows up

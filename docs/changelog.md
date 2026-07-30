@@ -62,6 +62,43 @@ Groundwork for a parallel refresh, where several workers touch the same durable 
   cover-letter workflows keep working against an unmigrated file instead of silently writing
   nothing. The cover-letter marker is now the literal `Yes` (was `Y`) per the column semantics.
 
+## 2026-07-30 — Canary-run extraction fixes: comp components, honest benefits, metro aliases, employer names, office conventions
+
+Six defects the 4-job canary surfaced, all fixed from structured source data (synthetic fixtures):
+
+- **Base Salary filters on the component TYPE.** An Ashby comp tier glues non-salary components onto
+  its display summary with " • " (`$172K – $248K • Offers Equity`), and that string was split into
+  pseudo-bands — one of them reading `Offers Equity` as if it were a pay range. Only salary-type
+  components now reach Base Salary; equity/bonus/commission route to Additional Compensation. The
+  employer's own display wording (currency symbols, abbreviated thousands) is still preferred, with
+  the non-salary parts stripped out and the structured min/max as the fallback. Consequence: a
+  posting with one real band renders INLINE again instead of as a one-item bullet list.
+- **Additional Compensation never restates the base range.** A mined sentence whose figures are
+  already represented in Base Salary now contributes only its non-base components — so
+  "…base salary range … is $122,400-$170,000 + equity + benefits." yields
+  `Equity and Benefits mentioned, but details not provided.` instead of the whole sentence.
+- **A benefits mention inside a compensation sentence counts.** The mention rule previously required
+  eligibility/disclaimer wording, so "+ benefits" in a comp sentence produced
+  `Employer did not mention benefits.` — a capture contradicting its own source. Benefits named as a
+  comp component or offered package ("+ benefits", "plus benefits", "benefits package") now yield the
+  honest mentioned-without-details phrase; a posting that truly says nothing still says so.
+- **No more false location conflicts from metro aliases.** Conflict detection now canonicalizes
+  city/metro names before comparing (San Francisco / Bay Area / SF Bay Area → one metro; Brooklyn →
+  NYC; Arlington → DC) and treats a subset relationship as agreement. Genuinely disjoint geographies
+  still flag, pinned both ways.
+- **The employer page's declared name beats a board-token guess.** A token title-cased into one word
+  ("helpscout" → "Helpscout") is a guess, and some ATS APIs expose no organization name at all. On the
+  employer's OWN domain, a page-declared name (JSON-LD `hiringOrganization`, then `og:site_name`) now
+  wins — but only when it names the same company modulo spacing, so a wrong page can never rename a
+  job. One extra best-effort request fires only for a token-shaped guess on an employer domain; the
+  title-cased fallback still applies when the page declares nothing.
+- **Multi-office lists read like locations again.** Employers encode arrangement inside office NAMES
+  (`Remote - <city>`, `<city> - Hybrid`, `<city> - Onsite`); rendered literally that became an
+  unreadable blob. The convention is now parsed and collapsed (`Remote (US; NYC or Seattle) or
+  IRL SF`), remote entries deduped, and the short-metro canon extended so a list reads as places
+  rather than postal data. **No cadence is invented by this**: `Office Expectation` still requires an
+  explicit stated day count, and the word "Hybrid" alone yields `Not Specified` (pinned).
+
 ## 2026-07-30 — Phase A: the 27-column rankings contract, locked and migrated at the writer
 
 - **The final 27-column contract** (order authoritative) now has ONE definition,

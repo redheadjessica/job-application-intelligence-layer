@@ -371,6 +371,16 @@ _EQUITY_SPECIFICS_RE = re.compile(
 # when no Benefits section exists to mine items from).
 _BENEFITS_MENTION_RE = re.compile(
     r"(?i)[^.\n]*\b(?:benefits?|perks?)\b[^.\n]*")
+# Benefits named as a COMPENSATION COMPONENT or an offered package, with no specifics —
+# e.g. "... is $122,400-$170,000 + equity + benefits.", "plus benefits", "benefits package".
+# This is the shape the eligibility-only regex above misses: the mention lives inside the
+# comp sentence rather than in a benefits section, and reporting "did not mention" while
+# the posting says "+ benefits" contradicts the employer's own text.
+_BENEFITS_COMPONENT_RE = re.compile(
+    r"(?i)(?:[+&]\s*(?:full\s+|comprehensive\s+)?benefits?\b|"
+    r"\b(?:plus|and|includes?|including|offers?|with)\s+(?:full\s+|comprehensive\s+|"
+    r"competitive\s+|generous\s+)?benefits?\b|"
+    r"\bbenefits?\s+(?:package|program|plan)\b)")
 
 
 def _mention_only(sentence: str, specifics_re: "re.Pattern") -> bool:
@@ -434,10 +444,13 @@ def mine_benefits_equity(text: str) -> tuple[Optional[str], Optional[str]]:
         if items:
             benefits = "; ".join(items)
     if not benefits:
-        # No Benefits section to mine — but an eligibility/mention sentence naming benefits
-        # still means the employer referenced them ("Mentioned", never "Not posted").
+        # No Benefits section to mine — but ANY mention still means the employer
+        # referenced them ("Mentioned", never "Not posted"): an eligibility clause, or
+        # benefits named as a comp component / offered package ("+ benefits").
         bm = _BENEFITS_MENTION_RE.search(body)
         if bm and _MENTION_ONLY_RE.search(bm.group(0)):
+            benefits = MENTIONED_NO_DETAILS
+        elif _BENEFITS_COMPONENT_RE.search(body):
             benefits = MENTIONED_NO_DETAILS
     equity = None
     e = _EQUITY_RE.search(body)
@@ -593,9 +606,61 @@ def _fetch_ashby_by_jid(url: str, jid: str, timeout: int = 20) -> Optional[dict]
     return None
 
 
+# Ashby component `compensationType` values that are BASE SALARY. Everything else
+# (EquityPercentage, Bonus, Commission, …) is additional compensation and must never
+# reach the Base Salary field — "Offers Equity" is not a salary band.
+_ASHBY_SALARY_TYPES = {"salary", "hourly", "basesalary", "base"}
+# A component type -> the Additional Compensation component name we report.
+_ASHBY_ADDITIONAL_NAMES = {
+    "equitypercentage": "Equity", "equity": "Equity", "equityamount": "Equity",
+    "bonus": "Bonus", "annualbonus": "Bonus", "signingbonus": "Signing Bonus",
+    "commission": "Commission", "targetcommission": "Commission",
+}
+
+
+# Summary wording that describes a non-salary component rather than a pay band, for
+# stripping it out of a " • "-joined tier summary even when the component list is absent.
+_NON_SALARY_WORDING_RE = re.compile(
+    r"(?i)^(?:offers?|includes?|plus|eligible for)?\s*"
+    r"(?:equity|stock|options?|rsus?|bonus|commission|benefits?|perks?)\b")
+
+
+def _ashby_component_kind(component: dict) -> str:
+    return re.sub(r"[^a-z]+", "", str((component or {}).get("compensationType") or "").lower())
+
+
+def _ashby_additional_components(comp: dict) -> list[str]:
+    """Component NAMES for the non-salary parts of an Ashby comp object (equity,
+    bonus, commission …), in the order the employer listed them. These belong in
+    Additional Compensation, never in Base Salary."""
+    out: list[str] = []
+    for t in (comp or {}).get("compensationTiers") or []:
+        if not isinstance(t, dict):
+            continue
+        for c in (t.get("components") or []):
+            if not isinstance(c, dict):
+                continue
+            kind = _ashby_component_kind(c)
+            if not kind or kind in _ASHBY_SALARY_TYPES:
+                continue
+            name = _ASHBY_ADDITIONAL_NAMES.get(kind)
+            if not name:
+                # Unknown non-salary type: fall back to its own summary wording.
+                name = (c.get("summary") or "").strip() or None
+            if name and name not in out:
+                out.append(name)
+    return out
+
+
 def _ashby_compensation(comp: dict) -> tuple[Optional[str], Optional[str]]:
-    """Return (normalized per-zone string, verbatim raw) from Ashby's
-    `compensation` object. Prefers the per-zone `compensationTiers`."""
+    """Return (normalized per-zone BASE-SALARY string, verbatim raw) from Ashby's
+    `compensation` object. Prefers the per-zone `compensationTiers`.
+
+    Only components whose `compensationType` is a salary type are represented: the
+    structured components beat the `tierSummary` STRING, which glues non-salary
+    parts on with " • " ("$172K – $248K • Offers Equity") and used to be split into
+    pseudo-bands — one of them reading "Offers Equity" as if it were a pay range.
+    """
     if not isinstance(comp, dict):
         return None, None
     tiers = comp.get("compensationTiers") or []
@@ -605,10 +670,19 @@ def _ashby_compensation(comp: dict) -> tuple[Optional[str], Optional[str]]:
             continue
         title = (t.get("title") or "").strip()
         summary = (t.get("tierSummary") or "").strip()
-        # Prefer explicit min/max/currency/interval from the salary component.
+        # Explicit min/max/currency/interval from the SALARY components only, plus the
+        # display wording of every NON-salary component so it can be stripped from the
+        # summary string below.
         comp_bits = []
+        non_salary_wording = []
         for c in (t.get("components") or []):
             if not isinstance(c, dict):
+                continue
+            kind = _ashby_component_kind(c)
+            if kind and kind not in _ASHBY_SALARY_TYPES:
+                wording = (c.get("summary") or "").strip()
+                if wording:
+                    non_salary_wording.append(wording)
                 continue
             lo, hi = c.get("minValue"), c.get("maxValue")
             cur = c.get("currencyCode") or ""
@@ -618,7 +692,17 @@ def _ashby_compensation(comp: dict) -> tuple[Optional[str], Optional[str]]:
                 if interval and interval.upper() not in ("", "1 YEAR"):
                     rng = f"{rng}/{interval}"
                 comp_bits.append(rng)
-        detail = summary or (", ".join(comp_bits) if comp_bits else "")
+        # The tier summary carries the employer's own display wording (currency symbols,
+        # abbreviated thousands) so it stays PREFERRED — but the non-salary parts it glues
+        # on with " • " are removed first, since "Offers Equity" is not a pay band. The
+        # structured salary components are the fallback when no usable summary survives.
+        salary_summary = ""
+        if summary:
+            parts = [p.strip() for p in re.split(r"\s*•\s*", summary) if p.strip()]
+            keep = [p for p in parts
+                    if p not in non_salary_wording and not _NON_SALARY_WORDING_RE.search(p)]
+            salary_summary = ", ".join(keep)
+        detail = salary_summary or (", ".join(comp_bits) if comp_bits else "")
         if title and detail:
             zone_parts.append(f"{title}: {detail}")
         elif detail:
@@ -682,6 +766,7 @@ def _ashby_job_to_result(job: dict, org: str) -> Optional[dict]:
         return None
 
     comp, comp_raw = _ashby_compensation(job.get("compensation") or {})
+    additional_comp = _ashby_additional_components(job.get("compensation") or {})
     working_location, location_raw = _ashby_working_location(job)
     benefits, equity = mine_benefits_equity(body)
     workplace = job.get("workplaceType")
@@ -693,6 +778,9 @@ def _ashby_job_to_result(job: dict, org: str) -> Optional[dict]:
         "location": job.get("location"),
         "working_location": working_location,
         "employment_type": job.get("employmentType"),
+        # Structured non-salary components (equity/bonus/commission), for
+        # Additional Compensation — never merged into Base Salary.
+        "additional_compensation_components": additional_comp,
         "remote": job.get("isRemote"),
         "workplace": workplace,
         "compensation": comp,
@@ -2152,6 +2240,40 @@ def ats_company_from_url(url: str) -> Optional[str]:
     if not slug:
         slug = (parse_qs(parsed.query).get("for") or [None])[0]
     return _prettify_slug(slug) if slug else None
+
+
+_OG_SITE_NAME_RE = re.compile(
+    r'(?is)<meta[^>]+(?:property|name)\s*=\s*["\']og:site_name["\'][^>]*'
+    r'content\s*=\s*["\']([^"\']+)["\']')
+_OG_SITE_NAME_ALT_RE = re.compile(
+    r'(?is)<meta[^>]+content\s*=\s*["\']([^"\']+)["\'][^>]*'
+    r'(?:property|name)\s*=\s*["\']og:site_name["\']')
+
+
+def employer_declared_name(html_text: Optional[str] = None,
+                           jsonld: Optional[dict] = None) -> Optional[str]:
+    """The employer's OWN declared name from their careers page, in confidence order:
+    JSON-LD `hiringOrganization.name` (or an Organization `name`), then
+    `og:site_name`. Returns None when the page declares neither.
+
+    Why this exists: a board TOKEN title-cased into one word ("helpscout" ->
+    "Helpscout") is a guess, and several ATS APIs expose no organization name at all.
+    When the posting lives on the employer's own domain, the page itself is the better
+    authority for how the company spells its name ("Help Scout")."""
+    for key in ("hiring_organization", "hiringOrganization", "organization"):
+        val = (jsonld or {}).get(key)
+        if isinstance(val, dict):
+            val = val.get("name")
+        if isinstance(val, str) and val.strip():
+            return re.sub(r"\s+", " ", val).strip()
+    src = str(html_text or "")
+    for rx in (_OG_SITE_NAME_RE, _OG_SITE_NAME_ALT_RE):
+        m = rx.search(src)
+        if m:
+            name = re.sub(r"\s+", " ", html.unescape(m.group(1))).strip()
+            if name:
+                return name
+    return None
 
 
 def _prettify_slug(slug: str) -> str:
