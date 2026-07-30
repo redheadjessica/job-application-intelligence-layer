@@ -337,3 +337,65 @@ def test_cli_reports_per_file_and_exits_nonzero_on_failure(tmp_path):
     assert "1 passed, 1 failed of 2." in joined
     bad.unlink()
     assert qa.run([tmp_path], out=msgs.append) == 0
+
+
+# ---- Gate precision (Tranche 2): the Ordergroove false positive -----------------
+def test_the_ordergroove_shape_is_a_must_pass():
+    """A capture that HONESTLY reports base as not broken out, while the body's only
+    figure is a total-comp (base + bonus) statement and the header's Additional
+    Compensation explains exactly that, must PASS. A permanent gate that cries wolf
+    gets ignored — precision matters as much as recall."""
+    body = ("About the role\nResponsibilities include shipping product.\n"
+            "The total compensation range (base + annual bonus) for this position "
+            "is starting at $209,000.\n" + ("value delivered. " * 60))
+    text = _valid_capture(body=body, meta={"compensation": None, "comp_expected": False})
+    text = re.sub(r"(?m)^Base Salary: .*$",
+                  "Base Salary: Employer did not mention compensation.", text)
+    text = re.sub(r"(?m)^Additional Compensation: .*$",
+                  "Additional Compensation: Total compensation (base + annual bonus) "
+                  "starting at $209,000; base is not broken out.", text)
+    problems = qa.validate_capture(text, filename="ordergroove__group-product-manager.txt")
+    assert not any("false absence" in p for p in problems), problems
+
+
+def test_total_comp_context_alone_suppresses_the_false_absence_check():
+    """(a): an OTE / base+bonus figure is not a base band even with no Additional
+    Compensation accounting."""
+    for phrase in ("OTE for this role is $200,000 - $260,000.",
+                   "On-target earnings of $250,000.",
+                   "Total cash compensation: $209,000 - $240,000."):
+        body = ("About the role\nResponsibilities include shipping product.\n"
+                f"{phrase}\n" + ("value delivered. " * 60))
+        text = _valid_capture(body=body, meta={"compensation": None, "comp_expected": False})
+        text = re.sub(r"(?m)^Base Salary: .*$",
+                      "Base Salary: Employer did not mention compensation.", text)
+        problems = qa.validate_capture(text, filename="acme__pm.txt")
+        assert not any("false absence" in p for p in problems), phrase
+
+
+def test_the_header_accounting_for_the_figure_suppresses_the_check():
+    """(b): even a plain figure is fine when Additional Compensation already carries it."""
+    body = ("About the role\nResponsibilities include shipping product.\n"
+            "Compensation for this position is $209,000 - $240,000.\n"
+            + ("value delivered. " * 60))
+    text = _valid_capture(body=body, meta={"compensation": None, "comp_expected": False})
+    text = re.sub(r"(?m)^Base Salary: .*$",
+                  "Base Salary: Employer did not mention compensation.", text)
+    text = re.sub(r"(?m)^Additional Compensation: .*$",
+                  "Additional Compensation: Package of $209,000 - $240,000 including "
+                  "bonus; base not broken out.", text)
+    problems = qa.validate_capture(text, filename="acme__pm.txt")
+    assert not any("false absence" in p for p in problems)
+
+
+def test_a_genuine_base_band_still_fails_the_false_absence_check():
+    """Recall preserved: a REAL base band with a did-not-mention header still fails
+    (the Playlist/Meta/Spring class the check exists for)."""
+    body = ("About the role\nResponsibilities include shipping product.\n"
+            "The base salary range for this role is $150,000 - $180,000 annually.\n"
+            + ("value delivered. " * 60))
+    text = _valid_capture(body=body)
+    text = re.sub(r"(?m)^Base Salary: .*$",
+                  "Base Salary: Employer did not mention compensation.", text)
+    assert any("false absence" in p and "compensation" in p
+               for p in qa.validate_capture(text, filename="acme__pm.txt"))

@@ -11,6 +11,17 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — Gate precision: an honest total-comp capture is a must-pass
+
+The gate's first read-only run over real captures produced one false positive: a capture that
+HONESTLY reports "Employer did not mention compensation" because the body's only money figure is a
+total-comp (base + annual bonus) statement, with the Additional Compensation line explaining exactly
+that — a deliberate, correct capture. The false-absence check now (a) ignores money figures whose
+surrounding context marks them total-comp / OTE / base+bonus, and (b) ignores figures the header's
+Additional Compensation line already accounts for. The honest shape is a MUST-PASS fixture; the
+genuine-base-band recall case stays pinned. A permanent gate that cries wolf gets ignored —
+precision is tuned as carefully as recall. Suite: 600 → 604 green.
+
 ## 2026-07-30 — B12: the Comp Range is computed, the scorer's band choice is advisory
 
 Twice in live use the scorer picked the home-metro base-salary band and had to be overridden by

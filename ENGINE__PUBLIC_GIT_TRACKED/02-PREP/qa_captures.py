@@ -88,6 +88,30 @@ _BODY_BENEFITS_HEADING_RE = re.compile(
 _BODY_SALARY_BAND_RE = re.compile(
     r"(?i)(?:salary|compensation|pay)\D{0,80}\$\s?\d[\d,.]*\s?(?:k\b|,\d{3})"
     r"|\$\s?\d[\d,.]*\s?(?:k\b|,\d{3})?\s?(?:-|–|—|to)\s?\$?\s?\d[\d,.]*")
+# A money figure that is a TOTAL-COMP / OTE / base+bonus statement is NOT a base-salary
+# band — "Employer did not mention compensation" (base) can be TRUE alongside it, with
+# the Additional Compensation line carrying the explanation (the Ordergroove shape,
+# deliberate Track A decision). Checked in a context window around each money match.
+_TOTAL_COMP_CONTEXT_RE = re.compile(
+    r"(?i)total\s+(?:cash\s+)?comp(?:ensation)?|\bOTE\b|on[-\s]?target\s+earnings"
+    r"|base\s*\+|\+\s*(?:annual\s+)?bonus|base\s+(?:salary\s+)?(?:and|&)\s+bonus"
+    r"|\(base\s*\+")
+
+
+def _body_has_true_base_band(body: str, additional_comp_value: str) -> bool:
+    """True only when the body contains a money figure that really is a BASE-salary
+    band: not a total-comp/OTE/base+bonus statement, and not a figure the header's
+    Additional Compensation line already accounts for."""
+    addl_digits = set(re.findall(r"\d[\d,]*(?:\.\d+)?", additional_comp_value or ""))
+    for m in _BODY_SALARY_BAND_RE.finditer(body or ""):
+        context = body[max(0, m.start() - 120):m.end() + 40]
+        if _TOTAL_COMP_CONTEXT_RE.search(context):
+            continue
+        figure_digits = set(re.findall(r"\d[\d,]*(?:\.\d+)?", m.group(0)))
+        if figure_digits and figure_digits <= addl_digits:
+            continue  # the header already accounts for this exact figure
+        return True
+    return False
 
 _FILENAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]*__[a-z0-9][a-z0-9-]*(?:-[a-z0-9]+)?\.txt$")
 _QUESTION_LINE_RE = re.compile(r"^\d+\.\s+.+\s\[(Required|Optional)\]$")
@@ -271,7 +295,7 @@ def validate_capture(text: str, filename: str | None = None) -> list[str]:
         problems.append("false absence: header says employer did not mention benefits, "
                         "but the body contains a benefits section")
     if base_salary_inline and base_salary_inline.startswith("Employer did not mention") and \
-            _BODY_SALARY_BAND_RE.search(body):
+            _body_has_true_base_band(body, _grab(head, "Additional Compensation") or ""):
         problems.append("false absence: header says employer did not mention compensation, "
                         "but the body contains a base-salary band")
 
