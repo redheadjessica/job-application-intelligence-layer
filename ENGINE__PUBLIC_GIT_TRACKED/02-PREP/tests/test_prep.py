@@ -4026,3 +4026,117 @@ def test_the_cli_runs_over_a_folder_and_reports(tmp_path):
     assert "LATEST CAPTURE DETAILS" in path.read_text(encoding="utf-8")
     counts = arh.run([path.parent], registry_path=reg_path, out=msgs.append)
     assert counts["changed"] == 0 and counts["unchanged"] == 1
+
+
+# ===========================================================================
+# LinkedIn-shaped block fusion (2026-07-30). The LinkedIn guest fragment leans on
+# <strong>/<span>/<br> rather than clean <p>/<h3>, and the converter flattened an
+# inline element's subtree with get_text() — losing any separator nested inside it
+# and fusing adjacent inline elements ("You will:Growth Systems & Product…").
+# It already routed through the SHARED converter, so the fix is there, not in a
+# second implementation.
+# ===========================================================================
+_LINKEDIN_FUSION_SHAPES = {
+    # Adjacent inline elements relying on the elements themselves for separation.
+    "adjacent-strong":
+        "<strong>You will:</strong><strong>Growth Systems &amp; Product Ownership</strong>"
+        "<ul><li>Own the roadmap for the Growth pod end-to-end</li></ul>",
+    # A <br> NESTED inside an inline wrapper — invisible to a get_text() flatten.
+    "nested-br":
+        "<strong>You will:<br><br>Growth Systems &amp; Product Ownership</strong>"
+        "<ul><li>Own the roadmap for the Growth pod end-to-end</li></ul>",
+    # Nested spans, LinkedIn's other common shape.
+    "nested-span":
+        "<span><span>You will:</span><span>Growth Systems &amp; Product Ownership</span></span>"
+        "<ul><li>Own the roadmap for the Growth pod end-to-end</li></ul>",
+}
+
+
+@pytest.mark.parametrize("shape", sorted(_LINKEDIN_FUSION_SHAPES))
+def test_linkedin_style_inline_markup_never_fuses_blocks(shape):
+    text = af._html_to_text(_LINKEDIN_FUSION_SHAPES[shape])
+    # The reported signature: a label glued to the next heading.
+    assert "You will:Growth" not in text
+    assert not re.search(r"[a-z]:[A-Z]", text), text
+    lines = [l for l in text.splitlines() if l.strip()]
+    assert "You will:" in lines
+    assert "Growth Systems & Product Ownership" in lines
+    assert lines.index("You will:") + 1 <= lines.index("Growth Systems & Product Ownership")
+    # The list still renders, and no text was lost.
+    assert "- Own the roadmap for the Growth pod end-to-end" in lines
+
+
+def test_the_linkedin_body_routes_through_the_shared_converter():
+    """The fix belongs in ONE converter (the 43aab1e divergence lesson): the LinkedIn
+    body is produced by `_html_to_text`, not a private flattener."""
+    src = Path(af.__file__).read_text(encoding="utf-8")
+    linkedin_src = src[src.index("def _fetch_linkedin"):src.index("# Greenhouse")]
+    assert "_html_to_text(" in linkedin_src
+    assert "get_text(\"\\n\"" not in linkedin_src   # no private flattening
+
+
+def test_the_boundary_guard_does_not_break_ordinary_prose():
+    """Re-run of the fusion guard across the converter's other fixtures: a separator is
+    inserted only at an ELEMENT boundary, never inside ordinary prose."""
+    # One text node: a mid-sentence colon clause stays inline.
+    assert af._html_to_text("<p>Health Coverage: Full medical. Note: details vary by state.</p>") \
+        == "Health Coverage: Full medical. Note: details vary by state."
+    # Mid-sentence markup must not gain a break (or a space).
+    assert af._html_to_text("<p>This is <strong>bold</strong>face text.</p>") == \
+        "This is boldface text."
+    assert af._html_to_text("<p>See <a href='http://x'>our site</a> for more.</p>") == \
+        "See our site for more."
+    # A lowercase continuation after an element boundary is not a new block.
+    assert af._html_to_text("<p><strong>Note:</strong> details vary by state.</p>") == \
+        "Note: details vary by state."
+    # Every earlier converter fixture stays fusion-free.
+    for html in (_ROLE_DETAILS_TAIL_HTML, _BR_NESTED_LI_HTML):
+        _assert_no_boundary_fusion(af._html_to_text(html))
+
+
+def test_previously_pinned_converter_shapes_are_unchanged():
+    """The nested-list, ordered-list, heading and paragraph fixtures must render
+    exactly as before the inline-recursion change."""
+    assert af._html_to_text(
+        "<ul><li>Benefits<ul><li>Medical</li><li>Dental<ul><li>Ortho rider</li></ul>"
+        "</li></ul></li><li>Equity</li></ul>") == (
+        "- Benefits\n  - Medical\n  - Dental\n    - Ortho rider\n- Equity")
+    assert af._html_to_text(
+        "<h2>Process</h2><ol><li>Apply online</li><li>Interview</li></ol>") == (
+        "Process\n\n1. Apply online\n2. Interview")
+    assert af._html_to_text(
+        "<p>We are a mission-driven company. We ship weekly.</p>"
+        "<p>Our team is distributed. Everyone writes.</p>") == (
+        "We are a mission-driven company. We ship weekly.\n\n"
+        "Our team is distributed. Everyone writes.")
+    assert af._html_to_text(
+        "<ul><li><p>Own the roadmap end-to-end.</p></li><li><p>Ship weekly.</p></li></ul>") == (
+        "- Own the roadmap end-to-end.\n- Ship weekly.")
+
+
+# ---- LinkedIn posting date --------------------------------------------------
+def test_linkedin_posted_date_uses_a_real_date_when_the_fragment_exposes_one():
+    jsonld = ('<script type="application/ld+json">{"@type":"JobPosting","title":"PM",'
+              '"datePosted":"2026-07-15T00:00:00Z","hiringOrganization":{"name":"Foodsmart"},'
+              '"jobLocation":{"address":{"addressLocality":"Remote"}},'
+              '"employmentType":"FULL_TIME"}</script>')
+    assert af.linkedin_posted_date(jsonld) == "2026-07-15"
+    # A <time datetime> attribute is a real date too.
+    assert af.linkedin_posted_date('<time datetime="2026-07-15">2 weeks ago</time>') == "2026-07-15"
+
+
+def test_linkedin_relative_posted_wording_is_never_converted_to_a_date():
+    """"2 weeks ago" is relative to OUR fetch, not the employer's publication date —
+    converting it would fabricate a date. Those captures stay an honest Unknown."""
+    for frag in ('<span class="posted-time-ago__text">2 weeks ago</span>',
+                 '<span class="posted-time-ago__text">Posted 30 days ago</span>',
+                 "<div>no date information at all</div>", ""):
+        assert af.linkedin_posted_date(frag) is None
+    # And the writer renders that honestly.
+    out = pc.build_output_text("https://www.linkedin.com/jobs/view/staff-pm-4417244583/",
+                               "Staff PM", "Foodsmart", _SYNTH_BODY,
+                               meta={"title": "Staff PM", "source": "linkedin-guest-api",
+                                     "structured_source": True, "posted_date": None,
+                                     "compensation": "USD 200,000", "working_location": "Remote"},
+                               methods_tried=["ats"])
+    assert "Job Posted At: Unknown" in out

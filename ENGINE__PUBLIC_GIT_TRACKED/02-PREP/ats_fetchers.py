@@ -947,6 +947,31 @@ def _linkedin_job_id(url: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
+def linkedin_posted_date(fragment_html: str, soup=None) -> Optional[str]:
+    """The employer's publication date from a LinkedIn guest job fragment, or None.
+
+    Real dates only, in confidence order: a JSON-LD JobPosting `datePosted`, then a
+    `<time datetime="...">` attribute. The fragment's usual "2 weeks ago" wording is a
+    RELATIVE string and is deliberately NOT converted — deriving a date from it against
+    our own fetch time would be an inference, not the employer's date, and
+    `normalize_posting_date` already rejects that shape for the same reason (Workday's
+    "Posted 30 Days Ago"). Those postings stay an honest `Unknown`."""
+    jp = extract_jsonld_jobposting(fragment_html) or {}
+    if jp.get("posted_date"):
+        return jp["posted_date"]
+    m = re.search(r'(?is)<time[^>]*\sdatetime\s*=\s*["\']([^"\']+)["\']', fragment_html or "")
+    if m:
+        return normalize_posting_date(m.group(1))
+    if soup is not None:
+        try:
+            el = soup.select_one("time[datetime]")
+            if el is not None:
+                return normalize_posting_date(el.get("datetime"))
+        except Exception:
+            pass
+    return None
+
+
 def _fetch_linkedin(url: str, timeout: int = 20) -> Optional[dict]:
     """Fetch a LinkedIn job via the logged-out guest jobPosting endpoint.
 
@@ -1037,6 +1062,10 @@ def _fetch_linkedin(url: str, timeout: int = 20) -> Optional[dict]:
         "compensation": comp,
         "apply_url": url,
         "text": text,
+        # A real date when the fragment exposes one; a relative "2 weeks ago" is never
+        # converted into a fabricated date (see linkedin_posted_date).
+        "posted_date": linkedin_posted_date(resp.text, soup),
+        "updated_date": None,
         "source": "linkedin-guest-api",
     }
 
@@ -2448,10 +2477,14 @@ def _render_html_list(tag, depth: int) -> str:
                             item_lines.extend(blocks.pop(0).split("\n"))
                         tail_blocks.extend(blocks)
                     else:
-                        inline_buf.append(c.get_text(" "))
-            flush()
+                        # Same reason as in `_html_blocks`: recurse so a nested <br>
+                        # or block element inside an inline wrapper is still seen.
+                        if _boundary_needs_break(inline_buf, c):
+                            inline_buf.append(_BR_SENTINEL)
+                        walk(c)
 
         walk(li)
+        flush()
         first = item_lines[0] if item_lines else ""
         bullet = [f"{indent}{marker} {first}".rstrip()]
         bullet += [f"{indent}  {cont}" for cont in item_lines[1:]]
@@ -2465,6 +2498,30 @@ def _render_html_list(tag, depth: int) -> str:
                 piece += "\n\n" + block
         out_parts.append(piece)
     return "\n".join(out_parts)
+
+
+# Two ADJACENT inline elements are concatenated with no separator, which is correct for
+# mid-sentence markup ("<strong>bold</strong>face") but fuses a label or sentence onto the
+# next element when the author relied on the elements themselves for separation:
+# "<strong>You will:</strong><strong>Growth Systems &amp; Product Ownership</strong>"
+# rendered as `You will:Growth Systems & Product Ownership`. Only an ELEMENT boundary is
+# considered, so ordinary prose inside ONE text node ("Note: details vary") is untouched.
+_BOUNDARY_END = (":", ".", "!", "?")
+
+
+def _boundary_needs_break(inline_buf: list, child) -> bool:
+    tail = "".join(inline_buf).replace(_BR_SENTINEL, "\n")
+    left = tail.rstrip()
+    if not left or not left.endswith(_BOUNDARY_END):
+        return False
+    # Already separated by a line break or blank space at the boundary? Nothing to do.
+    if tail != left and tail[len(left):].strip("\t ") != "":
+        return False
+    try:
+        nxt = child.get_text(" ").strip()
+    except Exception:
+        return False
+    return bool(nxt) and nxt[:1].isupper()
 
 
 def _html_blocks(node, depth: int = 0) -> list[str]:
@@ -2485,26 +2542,34 @@ def _html_blocks(node, depth: int = 0) -> list[str]:
             if text:
                 out.append(text)
 
-    for c in node.children:
-        if isinstance(c, NavigableString):
-            inline_buf.append(str(c))
-        elif isinstance(c, Tag):
-            n = c.name.lower()
-            if n in ("script", "style", "noscript"):
-                continue
-            if n == "br":
-                inline_buf.append(_BR_SENTINEL)
-            elif n in _HTML_LIST_TAGS:
-                flush()
-                rendered = _render_html_list(c, depth)
-                if rendered:
-                    out.append(rendered)
-            elif n in _HTML_BLOCK_TAGS:
-                flush()
-                out.extend(_html_blocks(c, depth))
-            else:
-                # Inline tag (a/strong/em/span/…): text only — a link keeps its text.
-                inline_buf.append(c.get_text(" "))
+    def walk_inline(n):
+        for c in n.children:
+            if isinstance(c, NavigableString):
+                inline_buf.append(str(c))
+            elif isinstance(c, Tag):
+                name = c.name.lower()
+                if name in ("script", "style", "noscript"):
+                    continue
+                if name == "br":
+                    inline_buf.append(_BR_SENTINEL)
+                elif name in _HTML_LIST_TAGS:
+                    flush()
+                    rendered = _render_html_list(c, depth)
+                    if rendered:
+                        out.append(rendered)
+                elif name in _HTML_BLOCK_TAGS:
+                    flush()
+                    out.extend(_html_blocks(c, depth))
+                else:
+                    # Inline tag (a/strong/em/span/…) — RECURSE rather than take
+                    # `get_text()`, so a <br> or a block element NESTED inside it is
+                    # still seen. Flattening the subtree instead is how LinkedIn's
+                    # `<strong>`/`<span>`-heavy markup lost its separators.
+                    if _boundary_needs_break(inline_buf, c):
+                        inline_buf.append(_BR_SENTINEL)
+                    walk_inline(c)
+
+    walk_inline(node)
     flush()
     return out
 

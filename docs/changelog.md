@@ -62,6 +62,37 @@ Groundwork for a parallel refresh, where several workers touch the same durable 
   cover-letter workflows keep working against an unmigrated file instead of silently writing
   nothing. The cover-letter marker is now the literal `Yes` (was `Y`) per the column semantics.
 
+## 2026-07-30 — LinkedIn-shaped block fusion, fixed in the one shared converter
+
+The 55-capture validation left a single failure: a LinkedIn-sourced body read
+`You will:Growth Systems & Product Ownership` — the same block-fusion class fixed earlier for
+Ashby, on markup the converter didn't cover.
+
+- **Diagnosis first: the LinkedIn path was NOT bypassing the shared converter** (it already calls
+  `_html_to_text`), so the fix belongs there rather than in a second implementation — the divergence
+  lesson from the two prep CLIs. The actual bug: an inline element's subtree was flattened with
+  `get_text()`, which silently drops any `<br>` or block element NESTED inside it. LinkedIn's guest
+  fragment leans on `<strong>`/`<span>`/`<br>` rather than clean `<p>`/`<h3>`, so its separators
+  lived exactly where the flatten discarded them.
+- **The converter now recurses into inline elements** instead of flattening them, so nested breaks
+  and nested blocks are seen wherever they appear — in paragraph flow and inside list items alike.
+- **Plus an element-boundary guard**: two ADJACENT inline elements are concatenated with no
+  separator (correct for `<strong>bold</strong>face`), which fuses when the author relied on the
+  elements themselves for separation. A break is now inserted only when the left side ends a label
+  or sentence (`: . ! ?`) AND the right side starts capitalized AND the boundary is between two
+  ELEMENTS — so ordinary prose in one text node ("Note: details vary by state.") is untouched,
+  mid-sentence markup keeps rendering as one word, and a lowercase continuation stays inline. The
+  earlier nested-list / ordered-list / heading / paragraph / li-wrapped-paragraph fixtures are
+  re-asserted unchanged.
+- **LinkedIn posting dates**: the guest result carried no date field at all, so every LinkedIn
+  capture rendered `Job Posted At: Unknown`. It now uses a REAL date when the fragment exposes one —
+  a JSON-LD `datePosted`, else a `<time datetime="…">` attribute. The fragment's usual "2 weeks ago"
+  wording is deliberately NOT converted: it is relative to our fetch, not the employer's publication
+  date, and inventing a date from it is exactly what `normalize_posting_date` already refuses for
+  Workday's "Posted 30 Days Ago". Those captures stay honest Unknowns.
+
+Suite: 512 → 520 green.
+
 ## 2026-07-30 — Registry-authoritative re-render: staged captures no longer claim to be the original
 
 Refreshing a whole batch through parallel STAGED workers exposed an artifact-level violation of the
