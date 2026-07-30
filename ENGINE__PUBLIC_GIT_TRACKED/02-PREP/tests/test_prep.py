@@ -1703,6 +1703,35 @@ def test_the_employer_name_alone_never_masks_the_title_line():
                                      ["Acme"]) == "Staff PM, Growth"
 
 
+def test_title_recovery_ignores_h2_footer_chrome_and_uses_the_body_instead():
+    """Observed live: h1 was "job details" and the h2 list ran "Jobs search results",
+    "Follow Life at <Employer> on", "More about us" — footer chrome that outranked the body's
+    own first content line and became the role. Recovery reads h1 ONLY."""
+    role = "Product Manager, Workspace Ecosystem"
+    html = ("<html><body><h1>job details</h1><h2>Jobs search results</h2>"
+            "<h2>Follow Life at Google on</h2><h2>More about us</h2></body></html>")
+    body = f"{role}\n- linkCopy link\n- Health, dental, vision insurance\n"
+    url = "https://www.google.com/about/careers/applications/jobs/results/93719465-pm"
+    co, ro = pc.normalize_capture_identity(role, "job details", url=url, html=html, body=body)
+    assert (co, ro) == ("Google", role)
+    assert pc._headings_from_html(html) == ["job details"]
+
+
+@pytest.mark.parametrize("label", ["Jobs search results", "Search Results", "job details"])
+def test_a_short_label_made_only_of_nav_vocabulary_is_branding(label):
+    """Generalizes past a fixed list: the same careers SPA served a different chrome title on
+    every visit ("job details", then "Jobs search results")."""
+    assert pc._title_is_branding(label) is True
+
+
+@pytest.mark.parametrize("real", [
+    "Product Manager, Central Product", "Director of Product", "Staff PM",
+    "Head of Design", "Senior Software Engineer",
+])
+def test_real_titles_are_never_branding(real):
+    assert pc._title_is_branding(real) is False
+
+
 def test_a_plain_collision_is_fixed_on_the_COMPANY_side_not_by_rewriting_the_title():
     """When a non-branding title merely equals the company, the ambiguity is resolved by the
     never-role-as-company guard — the title is NOT rewritten from loose body text. A real

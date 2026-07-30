@@ -26,8 +26,24 @@ live page can produce on a different visit:
   names now only count as nav vocabulary *in combination with* a real nav word — which is all that case
   ("Working at <Employer>") ever needed.
 
+Two further rounds on the same URL (it served a different chrome title on literally every fetch):
+
+- **Title recovery read `<h2>` as a title signal. It isn't.** On that page the h1 was "job details" and
+  the h2 list ran "Jobs search results" / "Follow Life at &lt;Employer&gt; on" / "More about us" — footer
+  chrome that outranked the body's own first content line and became the captured role. Recovery now
+  reads **h1 only**, per the spec's chain (JSON-LD title → first h1 → first non-navigation body heading).
+  The primary fetch path's separate branded-h1-then-real-h2 handling is unaffected.
+- **Branding detection generalized past a fixed list**: a short label built ENTIRELY of page-navigation
+  vocabulary is chrome, whatever the wording. A fixed list of generic page titles was losing a
+  whack-a-mole against one SPA.
+
 Lesson worth keeping: for capture identity, a dry run over saved files is necessary but not sufficient —
-the same URL can serve different chrome on a different visit, so re-fetch before declaring it fixed.
+the same URL can serve different chrome on a different visit, so re-fetch before declaring it fixed. Four
+fetches of one URL produced four different titles; only the last two were usable.
+
+Recommended follow-up (NOT implemented — outside the spec's recovery chain): several careers URLs carry
+the role slug in the path (`…/results/<id>-product-manager-workspace-ecosystem`). That is a
+high-confidence, offline title source and would have resolved this page on the first attempt.
 
 
 ## 2026-07-29 (later) — Three captured-identity defects caught by dry-running the new normalizer over a real batch

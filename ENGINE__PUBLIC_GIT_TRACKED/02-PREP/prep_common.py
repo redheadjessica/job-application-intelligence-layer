@@ -252,7 +252,8 @@ _NAV_WORDS = {
     "podcasts", "policy", "positions", "press", "privacy", "profile", "program",
     "programs", "resources", "results", "roles", "saved", "search", "sign", "skip",
     "students", "team", "teams", "terms", "the", "to", "up", "us", "view", "we",
-    "work", "working",
+    "work", "working", "detail", "details", "description", "result", "results", "search",
+    "share", "link", "copy", "print", "email",
 }
 
 
@@ -275,6 +276,12 @@ def _is_branding_only(text: str) -> bool:
     if not s:
         return True
     if re.sub(r"\s+", " ", re.sub(r"[^a-z ]+", " ", s.lower())).strip() in _GENERIC_PAGE_TITLES:
+        return True
+    words = [w for w in re.split(r"[^A-Za-z0-9'&]+", s) if w]
+    # A short label built ENTIRELY of page-navigation vocabulary is chrome, not a role.
+    # This is what generalizes past a fixed list: the same careers SPA served "job details"
+    # on one visit and "Jobs search results" on the next.
+    if words and len(words) <= 4 and all(w.lower() in _NAV_WORDS for w in words):
         return True
     if len(s.split(" ")) > 3:
         return False
@@ -299,13 +306,19 @@ def _title_is_invalid(title: str, company: str) -> bool:
 
 
 def _headings_from_html(html: str | None) -> list[str]:
-    """Heading text from a page's markup, <h1>s before <h2>s, tags stripped. A regex
-    (not a parser) keeps prep_common dependency-free — this reads only heading text."""
+    """<h1> text from a page's markup, tags stripped. A regex (not a parser) keeps
+    prep_common dependency-free — this reads only heading text.
+
+    Deliberately h1-ONLY. h2 is not a title signal on a real careers page: one observed
+    page's h1 was "job details" and its h2 list ran "Jobs search results", "Follow Life at
+    <Employer> on", "More about us" — footer chrome that would outrank the body's own first
+    content line. (The primary fetch path already handles the branded-h1-then-real-h2 shape
+    separately, in `extract_title`.)"""
     out: list[str] = []
     # Comments are markup, not content — and a comment mentioning a tag would otherwise
     # open a match that runs on until the real closing tag.
     src = re.sub(r"<!--.*?-->", " ", str(html or ""), flags=re.S)
-    for level in ("h1", "h2"):
+    for level in ("h1",):
         for m in re.finditer(rf"<{level}\b[^>]*>(.*?)</{level}>", src, re.I | re.S):
             txt = re.sub(r"<[^>]+>", " ", m.group(1))
             txt = re.sub(r"\s+", " ", html_unescape(txt)).strip()
