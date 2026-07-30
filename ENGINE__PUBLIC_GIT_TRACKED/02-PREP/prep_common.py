@@ -1718,17 +1718,28 @@ def _region_set(lines: list[str], keys: tuple) -> set:
     return {ln for ln in lines if any(k in ln for k in keys)}
 
 
-def _normalize_substantive(body: str | None) -> str:
-    """The SUBSTANTIVE text of a body — bullet markers, list numbering, and
-    whitespace/formatting characters stripped — so restoring the employer's list
-    structure never reads as an employer edit."""
-    out: list[str] = []
+_URL_RE = re.compile(r"(?i)\b(?:https?://|www\.)\S+")
+
+
+def _substantive_units(body: str | None) -> dict:
+    """The SUBSTANTIVE sentence multiset of a body. Everything a re-render can
+    legitimately change is normalized away: bullet markers and list numbering,
+    whitespace, letter CASE (the old flattener uppercased headings), raw URLs and
+    link-rendering artifacts, and ELEMENT ORDER (a multiset, not a linear diff —
+    HTML element order can differ from a plaintext flattening without the
+    employer having edited anything). Only genuine sentence additions, removals,
+    or rewordings change the multiset."""
+    from collections import Counter
+    units: Counter = Counter()
     for raw in str(body or "").splitlines():
         ln = re.sub(r"^[ \t]*(?:[-•*·]+|\d{1,3}\.)\s*", "", raw)
-        ln = re.sub(r"\s+", " ", ln).strip().lower()
-        if ln:
-            out.append(ln)
-    return " ".join(out)
+        ln = _URL_RE.sub(" ", ln)
+        for sent in re.split(r"(?<=[.!?;])\s+", ln):
+            unit = re.sub(r"[^a-z0-9 ]+", " ", sent.lower())
+            unit = re.sub(r"\s+", " ", unit).strip()
+            if unit:
+                units[unit] += 1
+    return units
 
 
 def material_change_notes(old_body: str | None, new_body: str | None) -> str:
@@ -1742,12 +1753,17 @@ def material_change_notes(old_body: str | None, new_body: str | None) -> str:
     new_raw = str(new_body or "")
     if old_raw == new_raw:
         return "No material changes detected."
-    if _normalize_substantive(old_raw) == _normalize_substantive(new_raw):
+    old_units, new_units = _substantive_units(old_raw), _substantive_units(new_raw)
+    if old_units == new_units:
         return "Employer content unchanged; source list formatting restored."
-    old_lines, new_lines = _material_lines(old_raw), _material_lines(new_raw)
-    changed = [name for name, keys in _MATERIAL_REGIONS
-               if _region_set(old_lines, keys) != _region_set(new_lines, keys)]
-    if changed:
+    # Genuine sentence additions/removals/rewordings: judge only the CHANGED
+    # units, so page-chrome churn (nav/cookie lines with no material vocabulary)
+    # never masquerades as an employer edit.
+    diff_units = ([u for u in old_units if old_units[u] > new_units.get(u, 0)]
+                  + [u for u in new_units if new_units[u] > old_units.get(u, 0)])
+    material = any(any(k in u for k in keys)
+                   for _name, keys in _MATERIAL_REGIONS for u in diff_units)
+    if material:
         return "Employer materially updated the posting."
     return "No material changes detected."
 
@@ -1913,8 +1929,12 @@ def capture_update_notes(prior_text: str | None, new_text: str,
         parts.append(body_notes)
     elif body_notes == "Employer materially updated the posting.":
         parts.append(body_notes)
-    elif parts:
+    elif parts and (old_body or "") == (new_body or ""):
         parts.append("Job text unchanged.")
+    elif parts:
+        # The bytes differ but nothing the comparator deems employer content did
+        # (chrome-level churn) — still never claim "Job text unchanged".
+        parts.append("Employer content unchanged; source list formatting restored.")
     if not parts:
         return "No material changes detected."
     return " ".join(parts)

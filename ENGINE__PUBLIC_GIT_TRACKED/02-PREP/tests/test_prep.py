@@ -2947,3 +2947,141 @@ def test_material_update_uses_the_new_vocabulary(tmp_path):
     edited = old.replace("$150,000 - $180,000", "$160,000 - $190,000")
     assert pc.material_change_notes(old, edited) == "Employer materially updated the posting."
     assert pc.material_change_notes(old, old) == "No material changes detected."
+
+
+# ===========================================================================
+# Fourth live-run review: block-element fusion in the HTML converter, the
+# `, Exempt` regression it caused, and false "materially updated" notes.
+# ===========================================================================
+# The exact observed Ashby shape: a Role Details heading + employment + cadence
+# paragraphs following (or jammed into) the final list item.
+_ROLE_DETAILS_TAIL_HTML = (
+    "<p>What we're looking for:</p>"
+    "<ul><li><p>Experience with early-stage or ambiguous problem spaces where you "
+    "had to build the roadmap from scratch rather than inherit one.</p></li></ul>"
+    "<p>Role Details:</p>"
+    "<p>Employment Type: Full Time, Exempt</p>"
+    "<p>This is hybrid (onsite from our NYC or San Francisco hub location three "
+    "days per week: Tuesday, Wednesday, Thursday)</p>")
+
+
+def _assert_no_boundary_fusion(text):
+    """Block boundaries must never fuse at the character level. The `:X`/`aA`
+    artifacts only ever appear when two blocks are glued with no separator."""
+    assert not re.search(r"[a-z]:[A-Z]", text), text
+    for a, b in re.findall(r"([a-z])([A-Z])", text):
+        # camelCase can occur inside legitimate words/brands; the observed bug
+        # produced 'ExemptThis' — assert the specific fused shapes never appear.
+        pass
+    for fused in ("Role Details:Employment", "ExemptThis", "one. Role Details"):
+        assert fused not in text, fused
+
+
+@pytest.mark.parametrize("html", [
+    _ROLE_DETAILS_TAIL_HTML,
+    # The same three blocks jammed INSIDE the final <li> (the fused live shape).
+    ("<p>What we're looking for:</p>"
+     "<ul><li><p>Experience with early-stage or ambiguous problem spaces where you "
+     "had to build the roadmap from scratch rather than inherit one.</p>"
+     "<p>Role Details:</p>"
+     "<p>Employment Type: Full Time, Exempt</p>"
+     "<p>This is hybrid (onsite from our NYC or San Francisco hub location three "
+     "days per week: Tuesday, Wednesday, Thursday)</p></li></ul>"),
+])
+def test_block_siblings_never_fuse_onto_a_list_item(html):
+    text = af._html_to_text(html)
+    _assert_no_boundary_fusion(text)
+    lines = text.splitlines()
+    # The list item ends at its own text — NOT extended by the following blocks.
+    item = next(l for l in lines if l.startswith("- "))
+    assert item == ("- Experience with early-stage or ambiguous problem spaces where "
+                    "you had to build the roadmap from scratch rather than inherit one.")
+    # Each block is its own line; the heading is blank-line separated.
+    assert "Role Details:" in lines
+    assert "Employment Type: Full Time, Exempt" in lines
+    assert any(l.startswith("This is hybrid (onsite from our NYC or San Francisco")
+               for l in lines)
+    i = lines.index("Role Details:")
+    assert lines[i - 1] == "" and lines[i + 1] == ""
+
+
+def test_employment_exempt_survives_the_html_converted_body():
+    """The `, Exempt` regression: the fused text broke the prose miner. Over the
+    CONVERTED body, `Employment Type: Full Time, Exempt` sits on its own line and
+    the miner (and the structured-field `, Exempt` append) both see it again."""
+    body = af._html_to_text(_ROLE_DETAILS_TAIL_HTML)
+    assert pc._mine_employment(body) == "Full Time, Exempt"
+    # Structured field bare -> mined from the converted body.
+    out = pc.build_output_text("http://x", "PM", "Acme",
+                               body + "\n" + ("x " * 60),
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 150,000",
+                                     "working_location": "NYC; San Francisco"},
+                               methods_tried=["ats"])
+    assert "Employment: Full Time, Exempt" in out
+    # Structured "FullTime" + exempt statement in the converted body -> appended.
+    out2 = pc.build_output_text("http://x", "PM", "Acme",
+                                body + "\n" + ("x " * 60),
+                                meta={"title": "PM", "structured_source": True,
+                                      "employment_type": "FullTime",
+                                      "compensation": "USD 150,000",
+                                      "working_location": "NYC; San Francisco"},
+                                methods_tried=["ats"])
+    assert "Employment: Full Time, Exempt" in out2
+    # And the cadence paragraph mines cleanly too (bonus of the un-fused body).
+    assert "Office Expectation: 3 Days Per Week, Tuesday–Thursday" in out
+
+
+def test_reflattening_differences_never_read_as_an_employer_edit(tmp_path):
+    """(a) heading case + element reorder + URL-rendering differences -> content
+    unchanged; the note names formatting restoration, plus the field-corrections
+    clause when fields changed."""
+    old = ("ABOUT THE ROLE\n"
+           "We are hiring a product manager to own the roadmap.\n"
+           "Learn more at https://example.com/about ( https://example.com/about )\n"
+           "REQUIREMENTS\n"
+           "5+ years of product experience required.\n"
+           "The base salary range for this role is $150,000 - $180,000 annually.\n"
+           + ("filler value delivered. " * 20))
+    new = ("About the role\n\n"
+           "We are hiring a product manager to own the roadmap.\n\n"
+           "The base salary range for this role is $150,000 - $180,000 annually.\n\n"
+           "Requirements\n\n"                     # heading case + sentence relocated
+           "- 5+ years of product experience required.\n"  # now a bullet
+           "Learn more at\n"                       # link rendered as text, URL gone
+           + ("filler value delivered. " * 20))
+    assert pc.material_change_notes(old, new) == \
+        "Employer content unchanged; source list formatting restored."
+    # (b) one genuinely ADDED sentence -> materially updated.
+    added = new + "\nWe now also require experience with clinical workflows.\n"
+    assert pc.material_change_notes(new, added) == "Employer materially updated the posting."
+    # (c) one REWORDED sentence -> materially updated.
+    reworded = new.replace("5+ years of product experience required.",
+                           "8+ years of product experience required.")
+    assert pc.material_change_notes(new, reworded) == "Employer materially updated the posting."
+    # End-to-end: field correction + formatting restoration compose in the note.
+    def first(u):
+        return {"ok": True, "title": "PM", "company": "Acme", "body": old,
+                "method": "requests", "error": None,
+                "meta": {"title": "PM", "source": "requests/html",
+                         "structured_source": True, "employment_type": "FullTime",
+                         "compensation": "USD 150,000", "working_location": "Remote"},
+                "questions": []}
+
+    def second(u):
+        return {"ok": True, "title": "PM", "company": "Acme",
+                "body": new + "\nFull Time, Exempt\n",
+                "method": "ats", "error": None,
+                "meta": {"title": "PM", "source": "greenhouse-boards-api",
+                         "structured_source": True, "employment_type": "FullTime",
+                         "compensation": "USD 150,000", "working_location": "Remote"},
+                "questions": []}
+
+    src = _batch_source(tmp_path)
+    url = "https://example.com/job/reflatten"
+    pc.process_urls([url], src, first)
+    manifest = pc.process_urls([url], src, second, force=True)
+    out = (src / Path(manifest["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
+    notes = next(l for l in out.splitlines() if l.startswith("Additional Notes:"))
+    assert "Corrected the employment type from the original capture." in notes
+    assert "Job text unchanged" not in notes

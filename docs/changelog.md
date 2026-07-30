@@ -11,6 +11,31 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Fourth live-run review: block-fusion fix, exempt-mining regression, honest re-flattening comparison
+
+- **HTML converter no longer fuses block elements (text fidelity, serious).** Block-level elements an
+  ATS nests inside a list item beyond the item's own text (observed: a `Role Details:` heading plus
+  employment and cadence paragraphs jammed into the final `<li>`) were character-fused onto the item
+  with zero separators (`…ExemptThis is hybrid…`). The list renderer now returns those as trailing
+  blocks that render after the list, blank-line separated; the item is never extended. Pinned with the
+  exact observed shape both as list-siblings and jammed-inside-the-li, plus a `[a-z]:[A-Z]`
+  boundary-fusion guard.
+- **`, Exempt` mining restored** (consequence of the fusion): over the converted body,
+  `Employment Type: Full Time, Exempt` sits on its own line again, so both the prose miner and the
+  structured-field `, Exempt` append see it — pinned over the HTML-CONVERTED body shape, not just
+  hand-written prose. The cadence paragraph mines cleanly again too.
+- **Re-flattening never reads as an employer edit.** Both live files claimed
+  `Employer materially updated the posting.` when the employer changed nothing — every difference was
+  heading CASE (the old flattener uppercased headings), URL-rendering artifacts, or element order. The
+  substantive comparator now case-folds, strips URLs/link artifacts, and compares normalized sentence
+  MULTISETS (order-tolerant); only genuine sentence additions/removals/rewordings (judged on the
+  changed units, so chrome churn can't masquerade) say materially updated. Composition rule:
+  `Job text unchanged.` only when the bytes are identical — otherwise the formatting-restoration
+  phrase, e.g. `Corrected the employment type from the original capture. Employer content unchanged;
+  source list formatting restored.`
+
+Suite: 438 → 442 green (golden regenerated for a whitespace-only link-padding improvement).
+
 ## 2026-07-29 — Second approval round: capture-history registry, ORIGINAL/LATEST sections, simplified comp layout, list-structure preservation
 
 The user reviewed both previews and issued a second set of required changes. All engine/test work in

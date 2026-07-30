@@ -2175,18 +2175,28 @@ _HTML_BLOCK_TAGS = {
 }
 
 
-def _render_html_list(tag, depth: int) -> str:
+def _render_html_list(tag, depth: int) -> tuple[str, list[str]]:
     """A <ul>/<ol> as `- item` / `1. item` lines; nested lists indent 2 spaces
-    per level and follow their parent item's text."""
+    per level and follow their parent item's text.
+
+    Returns (rendered_list, trailing_blocks). Block-level elements an ATS nests
+    INSIDE a list item beyond the item's own text (the observed Ashby shape: a
+    `Role Details:` heading and employment/cadence paragraphs jammed into the
+    final <li>) never extend or fuse onto the item — they come back as
+    trailing_blocks and render as their own blank-line-separated blocks after
+    the list. Character-level fusion of block boundaries is a text-fidelity bug."""
     from bs4 import Tag
 
     ordered = tag.name.lower() == "ol"
     lines: list[str] = []
+    trailing: list[str] = []
 
-    def li_content(node, inline_parts, nested):
+    def li_content(node, inline_parts, nested, extras, state):
         from bs4 import NavigableString
         for c in node.children:
             if isinstance(c, NavigableString):
+                if str(c).strip():
+                    state["seen"] = True
                 inline_parts.append(str(c))
             elif isinstance(c, Tag):
                 n = c.name.lower()
@@ -2195,23 +2205,39 @@ def _render_html_list(tag, depth: int) -> str:
                 if n in _HTML_LIST_TAGS:
                     nested.append(c)
                 elif c.find(list(_HTML_LIST_TAGS)) is not None:
-                    li_content(c, inline_parts, nested)  # block wrapper holding a list
+                    li_content(c, inline_parts, nested, extras, state)
+                elif n in _HTML_BLOCK_TAGS:
+                    blocks = _html_blocks(c, 0)
+                    if not state["seen"] and blocks:
+                        # The item's own text is its FIRST block (space-padded —
+                        # a block boundary is never a zero-width join)…
+                        inline_parts.append(f" {blocks[0]} ")
+                        state["seen"] = True
+                        extras.extend(blocks[1:])
+                    else:
+                        # …every further block is separate content, never fused.
+                        extras.extend(blocks)
                 else:
+                    if c.get_text().strip():
+                        state["seen"] = True
                     inline_parts.append(c.get_text(" "))
 
     for i, li in enumerate(tag.find_all("li", recursive=False), 1):
         inline_parts: list[str] = []
         nested: list = []
-        li_content(li, inline_parts, nested)
+        extras: list[str] = []
+        li_content(li, inline_parts, nested, extras, {"seen": False})
         text = re.sub(r"\s+", " ", "".join(inline_parts)).strip()
         marker = f"{i}." if ordered else "-"
         indent = "  " * depth
         lines.append(f"{indent}{marker} {text}".rstrip())
         for sub in nested:
-            rendered = _render_html_list(sub, depth + 1)
+            rendered, sub_trailing = _render_html_list(sub, depth + 1)
             if rendered:
                 lines.append(rendered)
-    return "\n".join(lines)
+            trailing.extend(sub_trailing)
+        trailing.extend(extras)
+    return "\n".join(lines), trailing
 
 
 def _html_blocks(node, depth: int = 0) -> list[str]:
@@ -2239,9 +2265,12 @@ def _html_blocks(node, depth: int = 0) -> list[str]:
                 inline_buf.append(" ")
             elif n in _HTML_LIST_TAGS:
                 flush()
-                rendered = _render_html_list(c, depth)
+                rendered, trailing = _render_html_list(c, depth)
                 if rendered:
                     out.append(rendered)
+                # Blocks an ATS nested inside a list item beyond the item's own
+                # text render AFTER the list, blank-line separated — never fused.
+                out.extend(b for b in trailing if b.strip())
             elif n in _HTML_BLOCK_TAGS:
                 flush()
                 out.extend(_html_blocks(c, depth))

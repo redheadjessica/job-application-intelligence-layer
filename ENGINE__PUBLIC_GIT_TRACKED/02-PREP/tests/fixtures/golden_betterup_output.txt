@@ -110,7 +110,7 @@ At BetterUp, we are committed to living out our mission every day and that start
 - Flexible paid time off
 - Per year:
   - All federal/statutory holidays observed
-  - 4 BetterUp Inner Workdays ( https://www.betterup.co/inner-work )
+  - 4 BetterUp Inner Workdays (https://www.betterup.co/inner-work)
   - 5 Volunteer Days to give back
   - Learning and Development stipend
   - Company wide Summer & Winter breaks
