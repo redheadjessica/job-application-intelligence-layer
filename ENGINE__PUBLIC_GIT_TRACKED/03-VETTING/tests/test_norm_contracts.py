@@ -162,6 +162,27 @@ def test_remote_or_irl_keeps_every_office_and_the_trailing_detail(raw, expected)
     assert working_location_color(got, CFG) == WL_GREEN
 
 
+@pytest.mark.parametrize("raw,expected", [
+    # `Remote (<detail>)` is part of the canonical grammar — employer detail is kept.
+    ("Remote, US (in-office 1-2x/quarter; SF office option, not required)",
+     "Remote (US; in-office 1-2x/quarter; SF office option, not required)"),
+    ("Remote (US) or IRL US offices - unknown days", "Remote (US)"),
+    ("Remote - US only", "Remote (US only)"),
+    ("Remote (states: NY, CA)", "Remote (states: NY, CA)"),
+    # ...but a compound adjective is not a detail, and a scope adverb is not a city.
+    ("Remote-first, home base anywhere in the US", "Remote"),
+    ("Fully remote", "Remote"),
+    ("Remote", "Remote"),
+])
+def test_remote_detail_is_preserved_but_never_invented(raw, expected):
+    """Real values were being flattened to bare `Remote`, discarding the employer's country
+    restriction and its office-cadence note. Separately, "Fully remote" used to mint a city
+    named "Fully" (`IRL Fully - unknown days`) — a capitalized word is not a place."""
+    got = normalize_working_location(raw, CFG, warn=quiet)
+    assert got == expected
+    assert working_location_color(got, CFG) == WL_GREEN
+
+
 def test_a_parenthetical_that_only_restates_the_cadence_is_not_duplicated():
     assert normalize_working_location(
         "Hybrid — New York, NY (at least 2 days per week)", CFG, warn=quiet) == "IRL NYC - 2+ days"

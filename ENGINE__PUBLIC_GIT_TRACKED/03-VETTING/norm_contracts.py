@@ -119,6 +119,14 @@ _WL_STOPWORDS = {
     "office", "irl", "required", "full-time", "full time", "days", "day", "week",
     "location", "working location", "workplace", "hq", "headquarters", "or", "and",
     "the", "in", "at", "attend", "must", "per",
+    # Degree/scope adverbs and non-places. Without these, "Fully remote" minted a city
+    # named "Fully" ("IRL Fully - unknown days") — a capitalized word is not a place.
+    "fully", "mostly", "primarily", "largely", "partially", "partly", "entirely",
+    "completely", "anywhere", "nationwide", "worldwide", "global", "globally",
+    "optional", "preferred", "based", "home", "wfh", "offices", "onsite/hybrid",
+    # Country/region scopes are not cities ("IRL US offices" is not an office in a city
+    # called "US"). A genuine country restriction survives as `Remote (US)` detail instead.
+    "us", "usa", "u.s.", "u.s.a.", "united states", "america", "north america",
 }
 
 _OPEN_ENDED_RES = [
@@ -265,7 +273,26 @@ def normalize_working_location(text, cfg=None, warn=_warn):
         irl = f"IRL {'/'.join(cities)} - {cadence}"
         return f"Remote or {irl}" if remote else irl
     if remote:
-        return "Remote"
+        # `Remote (<detail>)` is part of the canonical grammar, so employer detail is kept
+        # rather than flattened away: a real value read
+        # "Remote, US (in-office 1-2x/quarter; SF office option, not required)" and came out
+        # as bare "Remote", discarding both the country restriction and the cadence note.
+        bits = []
+        # The separator must be a comma, a paren, or a SPACED dash — "Remote-first" is a
+        # compound adjective, not "Remote (first)".
+        sep = r"(?:,|\(|\s+[–—-]\s+)"
+        qual = re.match(rf"remote\s*{sep}\s*([A-Za-z][A-Za-z .]{{0,30}}?)\s*(?:[,)(;.]|$)", low)
+        # A country/region scope is exactly the kind of detail worth keeping here (it is a
+        # scope, not a city), so this check uses its own narrow skip set, not _WL_STOPWORDS.
+        _QUAL_SKIP = {"first", "friendly", "or", "and", "in", "at", "the", "day", "days",
+                      "office", "offices", "hybrid", "onsite", "remote", "based"}
+        if qual and qual.group(1).strip().lower() not in _QUAL_SKIP:
+            bits.append(re.match(rf"[Rr]emote\s*{sep}\s*(.{{0,32}}?)\s*(?:[,)(;.]|$)",
+                                 raw).group(1).strip())
+        if tail_detail:
+            bits.append(tail_detail)
+        detail = "; ".join(b for b in dict.fromkeys(bits) if b)
+        return f"Remote ({detail})" if detail else "Remote"
     if had_days:
         warn(f"working location had a day count but no recognizable city — set to Unknown: {raw!r}")
         return "Unknown"

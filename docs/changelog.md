@@ -11,6 +11,30 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 (retro-application) — `Remote (<detail>)` was being flattened, and "Fully remote" minted a city called "Fully"
+
+Retro-applying the contract normalizers to a real 51-job batch surfaced two more instances of the same
+information-loss family as the day-range and multi-office defects:
+
+- **`Remote (<detail>)` collapsed to bare `Remote`.** A real value read "Remote, US (in-office
+  1-2x/quarter; SF office option, not required)" and normalized to `Remote`, discarding both the country
+  restriction and the employer's own office-cadence note — even though `Remote (<detail>)` is explicitly
+  part of the canonical grammar. Detail is now preserved from a comma/paren/spaced-dash qualifier and a
+  trailing parenthetical. Guarded so a compound adjective is not mistaken for detail ("Remote-first" is
+  `Remote`, not `Remote (first)`).
+- **A capitalized word is not a place.** "Fully remote" normalized to `IRL Fully - unknown days` —
+  inventing an office in a city named "Fully". Degree/scope adverbs and country/region scopes are now
+  location keywords, not city candidates ("IRL US offices" is not an office in a city called "US"; a
+  genuine country restriction survives as `Remote (US)` detail instead).
+
+Also worth recording from that pass: the batch's **Comp Fit** column held long scoring *rationale prose*
+rather than a label, so the (approved, already-shipped) re-derivation of Comp Fit from the normalized
+Comp Range replaced it with the midpoint label. That is the contract working as designed, but it is
+lossy for anything a scorer parked in a contract-governed column. The pre-normalization CSV is kept
+beside the regenerated one in that batch. General lesson: prose belongs in a notes column, never in a
+column that a normalizer owns.
+
+
 ## 2026-07-29 (later still) — Two more identity defects, caught by actually re-fetching
 
 Re-fetching the renamed captures (rather than trusting the dry run) exposed two more cases the same
