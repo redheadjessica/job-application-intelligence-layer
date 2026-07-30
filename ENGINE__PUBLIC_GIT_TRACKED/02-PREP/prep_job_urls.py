@@ -11,6 +11,7 @@ retries the thin/failed ones. --force refetches everything.
 from __future__ import annotations
 
 import argparse
+import sys
 import re
 from pathlib import Path
 from urllib.parse import urlparse
@@ -222,66 +223,15 @@ def read_urls(input_file: Path) -> list[str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Fetch job URLs (ATS API first, then requests) into a batch, with "
-                    "dedupe, thin/failed quarantine, a manifest and a prep report."
-    )
-    parser.add_argument("batch_dir", help="The 'All Job Posts (full text)' source folder for the batch")
-    parser.add_argument("--input", default="job_urls.txt",
-                        help="URL list: a bare filename inside batch_dir, or a path")
-    parser.add_argument("--force", action="store_true",
-                        help="Refetch every URL (default re-run skips already-usable, retries thin/failed)")
-    args = parser.parse_args()
-
-    batch_dir = Path(args.batch_dir).expanduser().resolve()
-    inp = Path(args.input).expanduser()
-    input_file = inp.resolve() if (inp.is_absolute() or "/" in args.input) else (batch_dir / args.input)
-
-    if not batch_dir.exists():
-        raise SystemExit(f"Source folder does not exist: {batch_dir}")
-    if not input_file.exists():
-        raise SystemExit(f"URL input file not found: {input_file}")
-
-    urls = read_urls(input_file)
-    if not urls:
-        raise SystemExit("No URLs found in input file.")
-
-    # HARD RULE (Jessica, 7/16/26): never quarantine a URL after trying only one fetch
-    # method. If Playwright is available, wire it in as the automatic second attempt for
-    # any URL the requests fetcher can't get real content from (JS-rendered SPAs especially).
-    try:
-        from playwright.sync_api import sync_playwright
-        HAVE_PLAYWRIGHT = True
-    except ImportError:
-        HAVE_PLAYWRIGHT = False
-
-    if HAVE_PLAYWRIGHT:
-        import prep_job_urls_playwright as pjp
-        print(f"Found {len(urls)} URL(s). Fetching (ATS API first, then requests; "
-              f"apply-page questions always rendered for Ashby/Lever/Workable/Homerun; "
-              f"Playwright auto-retry enabled for thin/failed results)...")
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            try:
-                # The Ashby/Lever/Workable/Homerun job APIs never carry questions, so
-                # always render their apply page on the primary pass (best-effort; the
-                # render degrades to [] on failure and never fails the fetch).
-                def apply_renderer(u, apply_hint=None):
-                    return pjp.render_apply_questions(browser, u, apply_hint)
-
-                def primary(u):
-                    return fetch_one(u, question_renderer=apply_renderer)
-
-                prep_common.process_urls(urls, batch_dir, primary, force=args.force,
-                                          fetch_fallback=pjp.make_fetch_one(browser),
-                                          fallback_label="playwright")
-            finally:
-                browser.close()
-    else:
-        print(f"Found {len(urls)} URL(s). Fetching (ATS API first, then requests)... "
-              f"[Playwright not installed — no automatic second-method retry available; "
-              f"thin/failed results will note this limitation]")
-        prep_common.process_urls(urls, batch_dir, fetch_one, force=args.force)
+    """DEPRECATED entry point — the canonical CLI is prep.py. This wrapper forwards
+    to it with `--engine auto` (the exact behavior this script always had: requests
+    first, per-URL Playwright fallback when installed). The module itself remains
+    the REQUESTS ENGINE (`fetch_one`) that prep.py composes."""
+    print("NOTE: prep_job_urls.py is a deprecated entry point — use\n"
+          "  python ENGINE__PUBLIC_GIT_TRACKED/02-PREP/prep.py <batch_dir> --engine auto\n"
+          "Forwarding with --engine auto...")
+    import prep as prep_cli
+    raise SystemExit(prep_cli.main(["prep.py"] + sys.argv[1:] + ["--engine", "auto"]))
 
 
 if __name__ == "__main__":

@@ -33,7 +33,7 @@ The rankings output was reworked into a job-search **tracker** (see `v2-end-to-e
 
 ## Still remaining / not yet tested
 
-- **Live job-post fetch (Unit 4)** — the only network-bound path, still **unverified against reality**. Needs `requests` / `trafilatura` / `bs4` (+ optional `playwright` for the renderer). Run it as a **separate, disposable real-URL smoke test**: scaffold a throwaway batch, paste 3–5 real public job URLs, run `ENGINE__PUBLIC_GIT_TRACKED/02-PREP/prep_job_urls.py`, and confirm the prep report + quarantine behave on real pages. Local only — **never committed, never screenshotted**; record a dated pass/fail note here if useful. (V2.1 Unit 6.)
+- **Live job-post fetch (Unit 4)** — the only network-bound path, still **unverified against reality**. Needs `requests` / `trafilatura` / `bs4` (+ optional `playwright` for the renderer). Run it as a **separate, disposable real-URL smoke test**: scaffold a throwaway batch, paste 3–5 real public job URLs, run `ENGINE__PUBLIC_GIT_TRACKED/02-PREP/prep.py`, and confirm the prep report + quarantine behave on real pages. Local only — **never committed, never screenshotted**; record a dated pass/fail note here if useful. (V2.1 Unit 6.)
 - **Real-URL prep across live ATS pages** — Greenhouse / Lever / Ashby / Workday / LinkedIn-guest parsing, URL dedupe, and thin/failed classification on actual postings. Part of the same real-URL smoke; not yet run.
 - **Screenshot capture** — the synthetic runtime is staged and the `expected-outputs/` artifacts exist, but the PNGs under `docs/screenshots/` have not been captured yet. (V2.1 Unit 5.)
 - **GitHub Mermaid render** — the README + `v2-end-to-end-workflow.md` Mermaid diagrams have not been confirmed to render on GitHub.

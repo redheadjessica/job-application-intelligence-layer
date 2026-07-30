@@ -395,32 +395,15 @@ def read_urls(input_file: Path) -> list[str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Render job URLs with Playwright (deeper fallback/retry).")
-    parser.add_argument("batch_dir", help="The 'All Job Posts (full text)' source folder for the batch")
-    parser.add_argument("--input", default="job_urls.txt", help="URL list filename inside batch_dir, or a path")
-    parser.add_argument("--force", action="store_true", help="Refetch every URL (default retries only thin/failed)")
-    args = parser.parse_args()
-
-    batch_dir = Path(args.batch_dir).expanduser().resolve()
-    inp = Path(args.input).expanduser()
-    input_file = inp.resolve() if (inp.is_absolute() or "/" in args.input) else (batch_dir / args.input)
-
-    if not batch_dir.exists():
-        raise SystemExit(f"Source folder does not exist: {batch_dir}")
-    if not input_file.exists():
-        raise SystemExit(f"URL input file not found: {input_file}")
-
-    urls = read_urls(input_file)
-    if not urls:
-        raise SystemExit("No URLs found in input file.")
-
-    print(f"Found {len(urls)} URL(s). Rendering with Playwright (ATS API first)...")
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        try:
-            prep_common.process_urls(urls, batch_dir, make_fetch_one(browser), force=args.force)
-        finally:
-            browser.close()
+    """DEPRECATED entry point — the canonical CLI is prep.py. This wrapper forwards
+    to it with `--engine playwright`. The module itself remains the RENDERED-PAGE
+    ENGINE (`make_fetch_one`, `render_apply_questions`) that prep.py composes."""
+    print("NOTE: prep_job_urls_playwright.py is a deprecated entry point — use\n"
+          "  python ENGINE__PUBLIC_GIT_TRACKED/02-PREP/prep.py <batch_dir> --engine playwright\n"
+          "Forwarding with --engine playwright...")
+    import sys as _sys
+    import prep as prep_cli
+    raise SystemExit(prep_cli.main(["prep.py"] + _sys.argv[1:] + ["--engine", "playwright"]))
 
 
 if __name__ == "__main__":

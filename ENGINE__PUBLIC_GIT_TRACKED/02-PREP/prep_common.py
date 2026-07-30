@@ -3,8 +3,8 @@
 
 One place for: URL normalization + dedupe keys, collision-safe filenames,
 thin/failed classification, the per-batch quarantine layout, manifest read/
-write/merge, and the human-readable prep report. Both prep_job_urls.py
-(requests) and prep_job_urls_playwright.py (render) call process_urls() with a
+write/merge, and the human-readable prep report. The canonical CLI (prep.py)
+composes the requests/playwright engines and calls process_urls() with a
 script-specific `fetch_one` callback so the dedupe / classify / quarantine /
 manifest logic lives here, not duplicated.
 """

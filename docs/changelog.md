@@ -11,6 +11,26 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — B4: one canonical prep CLI, engines composed rather than forked
+
+`02-PREP/prep.py` is now THE entry point: `--engine auto|requests|playwright`. **auto** (default) is
+requests-first with the per-URL Playwright fallback through `process_urls`' existing HARD-RULE
+cascade plus the always-on apply-page question render, degrading to requests-only (limitation
+recorded) when Playwright is absent — exactly what `prep_job_urls.py` always did. **requests** is
+deterministic and browser-free; **playwright** is the rendered-page engine for stubborn JS pages.
+Whatever the engine, every capture flows through the ONE `process_urls` — identity, enrichment,
+registry, QA gate.
+
+Migration discipline: all callers were searched first and every one migrated — `new_batch.py`'s
+printed instructions, root `CLAUDE.md`, `requirements.txt` comments, the intake and
+cover-letter-intake skills, `docs/testing-and-caveats.md`, `docs/v2-end-to-end-workflow.md`, and
+`prep_common`'s docstring. The old filenames remain as ENGINE MODULES (their `fetch_one`
+implementations, which prep.py composes) with thin deprecation wrappers that forward to prep.py
+with the matching engine — no caller breaks, and the forwarding is loud. The behavioral divergence
+guard now runs across ENGINE MODES: the same posting through requests, playwright, and auto
+produces byte-identical captures (timestamps normalized), pinning that no mode can grow its own
+enrichment path again. Suite: 659 → 663 green.
+
 ## 2026-07-30 — B8: one true end-to-end test through the real wiring
 
 `03-VETTING/tests/test_e2e_pipeline.py` drives the ACTUAL pipeline, not reimplementations: stubbed

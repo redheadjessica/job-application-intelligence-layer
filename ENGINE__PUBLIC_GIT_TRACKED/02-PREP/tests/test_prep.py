@@ -1,4 +1,5 @@
 import re  # noqa: E402  (used by the HTML-structure tests)
+import sys  # noqa: E402  (used by the CLI subprocess tests)
 """Regression suite for the comp/working-location completeness gate, provenance,
 statuses, and the narrow application-question filter (Priorities 1-3).
 
@@ -4551,3 +4552,100 @@ def test_geo_labels_render_in_multi_band_bullets(tmp_path):
     assert "\n- New York: $160-230K\n" in out
     assert "\n- Los Angeles: $140-190K\n" in out
     assert "Pay Range" not in out.split("COMPENSATION")[1].split("APPLICATION")[0]
+
+
+# ===========================================================================
+# B4 — the single prep CLI. One entry point (prep.py), engine modes composing
+# the SAME downstream path. The old filenames remain as engine modules with
+# deprecated forwarding entry points.
+# ===========================================================================
+def _prep_module():
+    import prep
+    return prep
+
+
+def test_every_engine_mode_reaches_the_same_capture_and_qa_gate(tmp_path, monkeypatch):
+    """The behavioral divergence guard, now across ENGINE MODES: the same posting
+    through the requests engine, the playwright engine, and the auto composition
+    must produce byte-identical captures (identity, sections, QA gate all shared,
+    because every mode flows through the one process_urls)."""
+    prep = _prep_module()
+    import prep_job_urls as pju
+    import prep_job_urls_playwright as pjp
+    ats_res = _ashby_on_employer_domain_result()
+    monkeypatch.setattr(pju, "fetch_via_ats", lambda u, **k: dict(ats_res))
+    monkeypatch.setattr(pjp, "fetch_via_ats", lambda u, **k: dict(ats_res))
+
+    class DummyBrowser:   # the ATS branch never touches it
+        pass
+
+    captures = {}
+    for engine in ("requests", "playwright", "auto"):
+        browser = None if engine == "requests" else DummyBrowser()
+        fetch_one, fallback, label, _banner = prep.build_fetchers(engine, browser)
+        src = _batch_source(tmp_path / engine)
+        manifest = pc.process_urls(
+            [_ASHBY_EMPLOYER_DOMAIN_URL], src, fetch_one,
+            fetch_fallback=fallback, fallback_label=label,
+            registry_path=tmp_path / engine / "reg.json",
+            employer_name_fetcher=_fake_employer_name_fetcher([]))
+        entry = manifest["entries"][0]
+        assert entry["status"] == pc.USABLE, (engine, entry["notes"])
+        text = (src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
+        # Strip only the capture timestamps (each run has its own clock reading).
+        text = re.sub(r"^Captured At: .*$", "Captured At: <ts>", text, flags=re.M)
+        captures[engine] = (Path(entry["output_path"]).name, text)
+    assert captures["requests"] == captures["playwright"] == captures["auto"]
+    assert captures["requests"][0] == \
+        "help-scout__lead-principal-product-manager-resolve.txt"
+
+
+def test_the_auto_engine_composes_requests_first_with_playwright_fallback():
+    prep = _prep_module()
+
+    class DummyBrowser:
+        pass
+
+    fetch_one, fallback, label, banner = prep.build_fetchers("auto", DummyBrowser())
+    assert callable(fetch_one) and callable(fallback)
+    assert label == "playwright"
+    assert "auto-retry" in banner.lower() or "playwright" in banner.lower()
+    # requests: no browser, no fallback.
+    f2, fb2, lb2, banner2 = prep.build_fetchers("requests")
+    assert fb2 is None and lb2 is None
+    assert "no browser" in banner2
+
+
+def test_the_old_entry_points_forward_with_a_deprecation_note(tmp_path):
+    """Compatibility wrappers: the old filenames still work, loudly, via prep.py."""
+    import subprocess
+    src = tmp_path / "3 - Source Material" / "All Job Posts (full text)"
+    src.mkdir(parents=True)
+    # No URL file -> prep.py exits with its own clear error AFTER the forward,
+    # which proves the wrapper delegated rather than running its old body.
+    for old, engine in (("prep_job_urls.py", "auto"),
+                        ("prep_job_urls_playwright.py", "playwright")):
+        res = subprocess.run(
+            [sys.executable,
+             str(Path(pc.__file__).parent / old), str(src), "--input", "missing.txt"],
+            capture_output=True, text=True)
+        assert res.returncode != 0
+        assert "deprecated entry point" in res.stdout
+        assert f"--engine {engine}" in res.stdout
+        assert "URL input file not found" in (res.stdout + res.stderr)
+
+
+def test_the_canonical_cli_validates_its_arguments(tmp_path):
+    import subprocess
+    res = subprocess.run(
+        [sys.executable, str(Path(pc.__file__).parent / "prep.py"),
+         str(tmp_path / "nope"), "--engine", "auto"],
+        capture_output=True, text=True)
+    assert res.returncode != 0
+    assert "Source folder does not exist" in (res.stdout + res.stderr)
+    res2 = subprocess.run(
+        [sys.executable, str(Path(pc.__file__).parent / "prep.py"),
+         str(tmp_path), "--engine", "carrier-pigeon"],
+        capture_output=True, text=True)
+    assert res2.returncode != 0
+    assert "invalid choice" in res2.stderr

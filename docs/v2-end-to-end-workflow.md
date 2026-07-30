@@ -117,7 +117,7 @@ ENGINE__PUBLIC_GIT_TRACKED/01-INBOX/
 PRIVATE__YOUR_FILES_GITIGNORED/01-INBOX__YOUR_PRIVATE_INFO/
   paste-job-urls-to-rank-here.txt  (gitignored working copy; created by new_batch.py)
 
-ENGINE__PUBLIC_GIT_TRACKED/02-PREP/                 prep_job_urls.py · prep_job_urls_playwright.py · ats_fetchers.py
+ENGINE__PUBLIC_GIT_TRACKED/02-PREP/                 prep.py (canonical CLI) · prep_job_urls.py · prep_job_urls_playwright.py · ats_fetchers.py
 
 ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/   (public)
   CLAUDE.md · new_batch.py · make_rankings_xlsx.py · apply_on_ice.py
