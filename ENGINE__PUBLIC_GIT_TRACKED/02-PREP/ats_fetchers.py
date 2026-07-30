@@ -2175,69 +2175,101 @@ _HTML_BLOCK_TAGS = {
 }
 
 
-def _render_html_list(tag, depth: int) -> tuple[str, list[str]]:
-    """A <ul>/<ol> as `- item` / `1. item` lines; nested lists indent 2 spaces
-    per level and follow their parent item's text.
+# A single <br /> is a LINE BREAK inside its block; a <br /><br /> run is a
+# PARAGRAPH BREAK (new block). The sentinel survives whitespace collapsing so
+# the distinction reaches the renderer intact.
+_BR_SENTINEL = "\x00"
+_PARA_BREAK_RE = re.compile(rf"(?:{_BR_SENTINEL}[ \t]*){{2,}}")
 
-    Returns (rendered_list, trailing_blocks). Block-level elements an ATS nests
-    INSIDE a list item beyond the item's own text (the observed Ashby shape: a
-    `Role Details:` heading and employment/cadence paragraphs jammed into the
-    final <li>) never extend or fuse onto the item — they come back as
-    trailing_blocks and render as their own blank-line-separated blocks after
-    the list. Character-level fusion of block boundaries is a text-fidelity bug."""
-    from bs4 import Tag
+
+def _segment_lines(segment: str) -> list[str]:
+    """Clean lines of one paragraph segment: single-<br> sentinels and embedded
+    newlines become line boundaries; horizontal whitespace collapses."""
+    lines: list[str] = []
+    for part in segment.split(_BR_SENTINEL):
+        for raw in part.split("\n"):
+            ln = re.sub(r"[ \t]+", " ", raw).strip()
+            if ln:
+                lines.append(ln)
+    return lines
+
+
+def _render_html_list(tag, depth: int) -> str:
+    """A <ul>/<ol> as `- item` / `1. item` lines; nested lists indent 2 spaces
+    per level. A single <br> inside an item is a line break (continuation line,
+    indented under the item — never a new bullet); a <br><br> run, or any
+    further block-level element an ATS nests inside the item (the observed
+    Ashby shape: `Role Details:` + employment/cadence paragraphs + a nested
+    comp list jammed into the final <li>), ends the item's text — the rest
+    renders as its own blank-line-separated blocks IN DOCUMENT ORDER, never
+    fused onto the bullet."""
+    from bs4 import NavigableString, Tag
 
     ordered = tag.name.lower() == "ol"
-    lines: list[str] = []
-    trailing: list[str] = []
-
-    def li_content(node, inline_parts, nested, extras, state):
-        from bs4 import NavigableString
-        for c in node.children:
-            if isinstance(c, NavigableString):
-                if str(c).strip():
-                    state["seen"] = True
-                inline_parts.append(str(c))
-            elif isinstance(c, Tag):
-                n = c.name.lower()
-                if n in ("script", "style", "noscript"):
-                    continue
-                if n in _HTML_LIST_TAGS:
-                    nested.append(c)
-                elif c.find(list(_HTML_LIST_TAGS)) is not None:
-                    li_content(c, inline_parts, nested, extras, state)
-                elif n in _HTML_BLOCK_TAGS:
-                    blocks = _html_blocks(c, 0)
-                    if not state["seen"] and blocks:
-                        # The item's own text is its FIRST block (space-padded —
-                        # a block boundary is never a zero-width join)…
-                        inline_parts.append(f" {blocks[0]} ")
-                        state["seen"] = True
-                        extras.extend(blocks[1:])
-                    else:
-                        # …every further block is separate content, never fused.
-                        extras.extend(blocks)
-                else:
-                    if c.get_text().strip():
-                        state["seen"] = True
-                    inline_parts.append(c.get_text(" "))
-
+    indent = "  " * depth
+    out_parts: list[str] = []
     for i, li in enumerate(tag.find_all("li", recursive=False), 1):
-        inline_parts: list[str] = []
-        nested: list = []
-        extras: list[str] = []
-        li_content(li, inline_parts, nested, extras, {"seen": False})
-        text = re.sub(r"\s+", " ", "".join(inline_parts)).strip()
         marker = f"{i}." if ordered else "-"
-        indent = "  " * depth
-        lines.append(f"{indent}{marker} {text}".rstrip())
-        for sub in nested:
-            rendered, sub_trailing = _render_html_list(sub, depth + 1)
-            if rendered:
-                lines.append(rendered)
-            trailing.extend(sub_trailing)
-        trailing.extend(extras)
-    return "\n".join(lines), trailing
+        item_lines: list[str] = []      # the bullet's own text (+ continuations)
+        tail_blocks: list[str] = []     # everything after the item text, in order
+        inline_buf: list[str] = []
+
+        def flush():
+            raw = "".join(inline_buf)
+            inline_buf.clear()
+            for seg in _PARA_BREAK_RE.split(raw):
+                seg_lines = _segment_lines(seg)
+                if not seg_lines:
+                    continue
+                if not item_lines and not tail_blocks:
+                    item_lines.extend(seg_lines)
+                else:
+                    tail_blocks.append("\n".join(seg_lines))
+
+        def walk(node):
+            for c in node.children:
+                if isinstance(c, NavigableString):
+                    inline_buf.append(str(c))
+                elif isinstance(c, Tag):
+                    n = c.name.lower()
+                    if n in ("script", "style", "noscript"):
+                        continue
+                    if n == "br":
+                        inline_buf.append(_BR_SENTINEL)
+                    elif n in _HTML_LIST_TAGS:
+                        flush()
+                        rendered = _render_html_list(c, depth + 1)
+                        if rendered:
+                            tail_blocks.append(rendered)
+                    elif c.find(list(_HTML_LIST_TAGS)) is not None:
+                        walk(c)  # block wrapper holding a list — recurse in order
+                    elif n in _HTML_BLOCK_TAGS:
+                        flush()
+                        blocks = [b for b in _html_blocks(c, 0) if b.strip()]
+                        # The item's own text is the FIRST block (its internal
+                        # single-<br> line breaks become continuation lines);
+                        # everything after is separate, in document order.
+                        if not item_lines and not tail_blocks and blocks:
+                            item_lines.extend(blocks.pop(0).split("\n"))
+                        tail_blocks.extend(blocks)
+                    else:
+                        inline_buf.append(c.get_text(" "))
+            flush()
+
+        walk(li)
+        first = item_lines[0] if item_lines else ""
+        bullet = [f"{indent}{marker} {first}".rstrip()]
+        bullet += [f"{indent}  {cont}" for cont in item_lines[1:]]
+        piece = "\n".join(bullet)
+        for block in tail_blocks:
+            # A nested list stays adjacent to its item; plain blocks are
+            # blank-line separated (a heading gets its own paragraph).
+            if block.lstrip().startswith(("-", "1.")) and block.startswith("  " * (depth + 1)):
+                piece += "\n" + block
+            else:
+                piece += "\n\n" + block
+        out_parts.append(piece)
+    return "\n".join(out_parts)
 
 
 def _html_blocks(node, depth: int = 0) -> list[str]:
@@ -2249,10 +2281,14 @@ def _html_blocks(node, depth: int = 0) -> list[str]:
     inline_buf: list[str] = []
 
     def flush():
-        t = re.sub(r"\s+", " ", "".join(inline_buf)).strip()
+        raw = "".join(inline_buf)
         inline_buf.clear()
-        if t:
-            out.append(t)
+        # A <br><br> run splits the buffered inline flow into separate blocks;
+        # a single <br> becomes a line break within its block.
+        for seg in _PARA_BREAK_RE.split(raw):
+            text = "\n".join(_segment_lines(seg))
+            if text:
+                out.append(text)
 
     for c in node.children:
         if isinstance(c, NavigableString):
@@ -2262,15 +2298,12 @@ def _html_blocks(node, depth: int = 0) -> list[str]:
             if n in ("script", "style", "noscript"):
                 continue
             if n == "br":
-                inline_buf.append(" ")
+                inline_buf.append(_BR_SENTINEL)
             elif n in _HTML_LIST_TAGS:
                 flush()
-                rendered, trailing = _render_html_list(c, depth)
+                rendered = _render_html_list(c, depth)
                 if rendered:
                     out.append(rendered)
-                # Blocks an ATS nested inside a list item beyond the item's own
-                # text render AFTER the list, blank-line separated — never fused.
-                out.extend(b for b in trailing if b.strip())
             elif n in _HTML_BLOCK_TAGS:
                 flush()
                 out.extend(_html_blocks(c, depth))

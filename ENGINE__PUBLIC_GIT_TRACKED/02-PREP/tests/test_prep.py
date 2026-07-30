@@ -3085,3 +3085,59 @@ def test_reflattening_differences_never_read_as_an_employer_edit(tmp_path):
     notes = next(l for l in out.splitlines() if l.startswith("Additional Notes:"))
     assert "Corrected the employment type from the original capture." in notes
     assert "Job text unchanged" not in notes
+
+
+# ===========================================================================
+# Fifth live-run review: <br /> semantics in the HTML converter.
+# ===========================================================================
+# The employer's REAL markup shape (synthetic text): the follow-on paragraphs
+# and the nested comp <ul> are all INSIDE the last <li>, and the `Role Details:`
+# heading is separated from the item text only by a <br /><br /> run.
+_BR_NESTED_LI_HTML = (
+    "<p>What we're looking for:</p>"
+    "<ul><li><p>Experience with early-stage or ambiguous problem spaces where you "
+    "had to build the roadmap from scratch rather than inherit one.<br /><br />"
+    "<strong>Role Details:</strong></p>"
+    "<p>Employment Type: Full Time, Exempt</p>"
+    "<ul><li><p><strong>Base Compensation:</strong> The base compensation range "
+    "for this position is<br />$182,000–$227,000 USD Annually </p></li></ul>"
+    "<p><strong>This is hybrid (onsite from our NYC or San Francisco hub location "
+    "three days per week: Tuesday, Wednesday, Thursday)</strong></p></li></ul>")
+
+
+def test_double_br_ends_the_item_and_headings_get_their_own_line():
+    text = af._html_to_text(_BR_NESTED_LI_HTML)
+    _assert_no_boundary_fusion(text)
+    lines = text.splitlines()
+    # The bullet ends at its own sentence — the <br /><br /> heading never glues on.
+    assert ("- Experience with early-stage or ambiguous problem spaces where you "
+            "had to build the roadmap from scratch rather than inherit one.") in lines
+    assert not any("inherit one. Role Details" in l for l in lines)
+    # The heading and the employment paragraph are their own blank-line-separated blocks.
+    i = lines.index("Role Details:")
+    assert lines[i - 1] == "" and lines[i + 1] == ""
+    assert "Employment Type: Full Time, Exempt" in lines
+    # The nested comp bullet keeps its single-<br> LINE BREAK as an indented
+    # continuation line — never a new bullet.
+    j = next(k for k, l in enumerate(lines)
+             if l.strip().startswith("- Base Compensation:"))
+    assert lines[j].endswith("range for this position is")
+    assert lines[j + 1].strip() == "$182,000–$227,000 USD Annually"
+    assert not lines[j + 1].strip().startswith("-")
+    # The hybrid paragraph is separate; document order is preserved; no text lost.
+    k = next(k for k, l in enumerate(lines) if l.startswith("This is hybrid (onsite"))
+    assert lines.index("Role Details:") < lines.index("Employment Type: Full Time, Exempt") < j < k
+    # And the downstream miners see the un-fused shape.
+    assert pc._mine_employment(text) == "Full Time, Exempt"
+    assert pc._mine_office_expectation(text) == "3 Days Per Week, Tuesday–Thursday"
+
+
+def test_single_br_mid_paragraph_is_a_line_break_not_a_new_block():
+    text = af._html_to_text("<p>The range is<br />$182,000 annually and generous.</p>")
+    assert text == "The range is\n$182,000 annually and generous."
+    # A <br /><br /> run IS a paragraph break.
+    text2 = af._html_to_text("<p>First thought.<br /><br />Second thought.</p>")
+    assert text2 == "First thought.\n\nSecond thought."
+    # Inside a plain (non-nested) list item: continuation line, never a new bullet.
+    text3 = af._html_to_text("<ul><li>Line one<br />line two</li><li>Item two</li></ul>")
+    assert text3 == "- Line one\n  line two\n- Item two"

@@ -11,6 +11,19 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Fifth live-run review: `<br />` semantics in the HTML converter
+
+Ground-truthed against the employer's real markup shape: a single `<br />` now renders as a LINE
+BREAK inside its block (an indented continuation line inside a list item — never a new bullet), and
+a `<br /><br />` run as a PARAGRAPH BREAK that ends the item's text. With that, a heading separated
+from a bullet only by `<br /><br />` (`Role Details:`) lands on its own blank-line-separated line
+instead of gluing to the bullet, and the follow-on paragraphs plus a nested comp list jammed inside
+the same `<li>` render as separate blocks in document order. The list renderer was restructured to a
+sequential walker (item text = first text-bearing content; everything after renders in order), and
+the block flush handles the break sentinels. Pinned with the exact observed nesting plus
+single-`<br>`-mid-paragraph cases; the downstream employment/cadence miners are asserted over the
+converted shape. Suite: 442 → 444 green.
+
 ## 2026-07-29 — Fourth live-run review: block-fusion fix, exempt-mining regression, honest re-flattening comparison
 
 - **HTML converter no longer fuses block elements (text fidelity, serious).** Block-level elements an
