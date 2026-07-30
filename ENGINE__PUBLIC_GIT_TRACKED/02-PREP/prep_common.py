@@ -1356,15 +1356,21 @@ def _mine_additional_comp_mentions(body: str) -> list[str]:
 
 
 # A short `<Label>:` prefix on a mined bullet ("Financial Wellness: 401(k) program
-# and equity opportunities") is section formatting, not content.
-_LABEL_PREFIX_RE = re.compile(r"^([A-Z][A-Za-z&/()'’ \-]{0,40}):\s+(.+)$")
+# and equity opportunities", "Parental Leave & Family Support: Up to 18 weeks…") is
+# section formatting, not content. Anchored at the START of the bullet only — a
+# mid-sentence clause ("… benefits. Note: details vary") is never treated as a label.
+_LABEL_PREFIX_RE = re.compile(r"^([A-Z][A-Za-z0-9&/()'’ \-]{0,48}):\s+(.+)$")
 
 
 def _strip_bullet_and_label(text: str) -> str:
     s = re.sub(r"^[\s\-•*·]+", "", str(text or "")).strip()
     m = _LABEL_PREFIX_RE.match(s)
-    if m and len(m.group(1).split()) <= 4:
-        s = m.group(2).strip()
+    if m:
+        # Count real words — connector tokens ("&", "and", "of") don't make a label a
+        # sentence, so "Parental Leave & Family Support" still strips.
+        words = [w for w in m.group(1).split() if w.lower() not in ("&", "and", "of", "the")]
+        if len(words) <= 5:
+            s = m.group(2).strip()
     return s
 
 
@@ -1403,10 +1409,31 @@ def _additional_compensation_value(meta: dict, body: str) -> str:
     return " ".join(parts)
 
 
+# Sentence-bounded benefits budget: the summary never slices a sentence mid-word.
+_BENEFITS_BUDGET = 480
+# Concrete, unusually-important detail markers rank a sentence as worth keeping;
+# generic perk wording ranks it as the first to drop when over budget.
+_BENEFIT_CONCRETE_RE = re.compile(
+    r"(?i)\d|\$|no[-\s]?cost|free\b|therapy|insurance|401|parental|leave|holiday|"
+    r"paid|weeks|break|pto|equity")
+_BENEFIT_GENERIC_RE = re.compile(
+    r"(?i)stipend|perk|discount|wellness|growth|support|benefit|competitive|"
+    r"tailored|opportunit")
+
+
+def _benefit_distinctiveness(sentence: str) -> int:
+    score = 2 if _BENEFIT_CONCRETE_RE.search(sentence) else 0
+    if _BENEFIT_GENERIC_RE.search(sentence):
+        score -= 1
+    return score
+
+
 def _benefits_value(meta: dict, body: str) -> str:
     """The COMPENSATION `Benefits:` value: period-separated short sentences from a
     mined benefits section, the honest mention phrase, or the did-not-mention
-    phrase — never `Not Posted` when the employer did reference benefits."""
+    phrase — never `Not Posted` when the employer did reference benefits.
+    Over-budget summaries drop whole LEAST-DISTINCTIVE sentences (generic perk
+    wording) rather than slicing characters — never a mid-word `…`."""
     benefits = meta.get("benefits")
     if benefits is None and body:
         benefits, _e = mine_benefits_equity(body)
@@ -1423,11 +1450,21 @@ def _benefits_value(meta: dict, body: str) -> str:
                       r"(?:opportunit(?:y|ies)|grants?|compensation)\b", "", item)
         item = item.strip(" ,").rstrip(".")
         if item:
-            items.append(item)
+            items.append(item[0].upper() + item[1:])
     if not items:
         return "Employer Did Not Mention Benefits."
-    sentences = ". ".join(i[0].upper() + i[1:] if i else i for i in items)
-    return sentences + ("" if sentences.endswith(("…", ".")) else ".")
+
+    def render(parts: list[str]) -> str:
+        joined = ". ".join(parts)
+        return joined + ("" if joined.endswith(("…", ".")) else ".")
+
+    # Sentence-bounded budget: drop whole sentences, least distinctive first
+    # (among ties, the later one goes), preserving original order of the keepers.
+    while len(items) > 1 and len(render(items)) > _BENEFITS_BUDGET:
+        drop_idx = min(range(len(items)),
+                       key=lambda i: (_benefit_distinctiveness(items[i]), -i))
+        items.pop(drop_idx)
+    return render(items)
 
 
 _K_AMOUNT_RE = re.compile(r"\$\s?(\d{1,3}(?:\.\d+)?)\s?[kK]\b")

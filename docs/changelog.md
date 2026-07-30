@@ -11,6 +11,25 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — Second live-run review: two Benefits-summary fixes (label stripping, sentence-bounded truncation)
+
+Five of the six previous fixes verified against a real re-capture; the Benefits summary still had two
+defects, both fixed with synthetic fixtures:
+
+- **Label prefixes stripped on EVERY bullet.** The `<Label>:` strip counted `&` as a word, so a
+  five-token label (`Parental Leave & Family Support:`, `Meals & Home Office Support:`) exceeded the
+  word cap and survived as a prefix while shorter labels were stripped. Connector tokens (`&`, `and`,
+  `of`, `the`) no longer count toward the cap; the strip stays anchored at the bullet START, so a
+  mid-sentence `Note:`-style clause is never treated as a label (pinned).
+- **Never a mid-word `…`.** The miner's hard 600-char slice chopped the summary mid-word
+  (`Mental & Physical He…`) and happened to cut the most distinctive detail (no-cost therapy) while
+  generic stipend wording survived. The miner no longer slices characters (it drops whole ITEMS past a
+  generous guard); the writer enforces a sentence-bounded budget (~480 chars) by dropping whole
+  LEAST-DISTINCTIVE sentences (generic perk wording scores low, concrete details — figures, leave
+  weeks, no-cost therapy, insurance — score high), preserving order among the keepers.
+
+Suite: 408 → 410 green.
+
 ## 2026-07-29 — First live re-capture review: six content fixes to the JOB SNAPSHOT contract
 
 The first real re-capture through the new format rendered structurally correct output but failed the

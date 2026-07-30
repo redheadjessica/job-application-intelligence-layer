@@ -424,12 +424,15 @@ def mine_benefits_equity(text: str) -> tuple[Optional[str], Optional[str]]:
             if is_bullet:
                 saw_bullet = True
             items.append(line)
-            if len(items) >= 8:
+            if len(items) >= 10:
                 break
+        # Never slice mid-word/mid-sentence: an over-long section drops whole ITEMS
+        # from the end (the writer applies the real sentence-bounded budget, keeping
+        # the most distinctive details).
+        while len(items) > 1 and len("; ".join(items)) > 900:
+            items.pop()
         if items:
             benefits = "; ".join(items)
-            if len(benefits) > 600:
-                benefits = benefits[:597].rstrip() + "…"
     if not benefits:
         # No Benefits section to mine — but an eligibility/mention sentence naming benefits
         # still means the employer referenced them ("Mentioned", never "Not posted").

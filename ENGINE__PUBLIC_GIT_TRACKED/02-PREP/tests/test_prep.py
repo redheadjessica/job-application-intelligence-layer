@@ -2193,11 +2193,12 @@ _GROW_SHAPED_BENEFITS_BODY = (
     "Full Time Employee Benefits:\n\n"
     "- Comprehensive Health Coverage: Medical, dental, and vision insurance, plus life "
     "and disability coverage.\n\n"
-    "- Parental Support: Up to 18 weeks of paid parental leave and a new-child stipend.\n\n"
+    "- Parental Leave & Family Support: Up to 18 weeks of paid parental leave and a "
+    "new-child stipend.\n\n"
     "- Financial Wellness: 401(k) program and equity opportunities.\n\n"
     "- Time Off: Flexible PTO, 12 paid holidays, and a winter break week.\n\n"
-    "- Stipends: Home-office, meal, development, and wellness stipends.\n\n"
-    "- Mental Health: No-cost therapy and wellness app memberships.\n\n"
+    "- Meals & Home Office Support: Home-office, meal, development, and wellness stipends.\n\n"
+    "- Mental & Physical Health: No-cost therapy and wellness app memberships.\n\n"
     "- Perks: Pet insurance discounts and commuter benefits.\n\n"
     "How to apply:\nSend us your application.\n" + ("x " * 60))
 
@@ -2221,13 +2222,67 @@ def test_whole_labeled_benefits_section_is_summarized_not_truncated():
                    "wellness stipends",
                    "No-cost therapy"):
         assert needle in line, needle
-    # Label prefixes and bullet markers are stripped; sentences are period-separated.
-    for gone in ("Comprehensive Health Coverage:", "Parental Support:",
-                 "Financial Wellness:", "- "):
+    # EVERY bullet's label prefix is stripped — including multi-word labels
+    # containing `&` — along with bullet markers; sentences are period-separated.
+    for gone in ("Comprehensive Health Coverage:", "Parental Leave & Family Support:",
+                 "Financial Wellness:", "Meals & Home Office Support:",
+                 "Mental & Physical Health:", "Perks:", "- "):
         assert gone not in line, gone
     assert line.count(". ") >= 4 and line.endswith(".")
     # The next section's content never bleeds in.
     assert "Send us your application" not in line
+
+
+def test_benefits_summary_truncates_at_sentence_boundaries_keeping_distinctive_details():
+    """Live-run defects (second review): the summary ended `Mental & Physical He…`
+    — a hard char cap chopping mid-word — and the cut dropped the distinctive
+    no-cost-therapy detail while generic stipend wording survived. An over-budget
+    summary must drop whole LEAST-DISTINCTIVE sentences, never slice characters."""
+    long_body = (
+        "About the role\nResponsibilities include shipping product.\n\n"
+        "Full Time Employee Benefits:\n\n"
+        "- Comprehensive Health Coverage: Medical, dental, and vision insurance, plus "
+        "life and disability coverage for you and your dependents.\n\n"
+        "- Parental Leave & Family Support: Up to 18 weeks of paid parental leave and a "
+        "new child stipend to support your growing family.\n\n"
+        "- Meals & Home Office Support: Stipends for home office setup and ongoing funds "
+        "for meals, with tailored perks for both remote and in-office employees.\n\n"
+        "- Time Off: Flexible PTO, 12 paid holidays, and a full winter break week.\n\n"
+        "- Growth: Annual stipends to put towards personal and professional growth "
+        "opportunities of your choosing.\n\n"
+        "- Mental & Physical Health: No-cost therapy through the employer's platform "
+        "and wellness-app memberships.\n\n"
+        "- Perks: Tailored perks, wellness discounts, and other supportive offerings.\n\n"
+        + ("x " * 60))
+    out = pc.build_output_text("http://x", "PM", "Acme", long_body,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 150,000",
+                                     "working_location": "Remote"},
+                               methods_tried=["ats"])
+    line = next(l for l in out.splitlines() if l.startswith("Benefits:"))
+    # Never a mid-word cut, never an ellipsis; always ends at a sentence boundary.
+    assert "…" not in line
+    assert line.endswith(".")
+    assert "He." not in line and "He " not in line  # the observed mid-word chop shape
+    # The budget is enforced by dropping whole sentences...
+    assert len(line) <= len("Benefits: ") + 500
+    # ...and the distinctive concrete detail SURVIVES while generic perk wording drops.
+    assert "No-cost therapy through the employer's platform" in line
+    assert "Tailored perks, wellness discounts" not in line
+    # Every sentence in the output is one of the cleaned source sentences, whole.
+    for sentence in line[len("Benefits: "):].rstrip(".").split(". "):
+        assert sentence in long_body or sentence[0].upper() + sentence[1:] in long_body
+
+
+def test_mid_sentence_colon_clauses_are_not_stripped_as_labels():
+    """The label strip applies only at the START of a bullet — a mid-sentence
+    `Note:`-style clause is content, not a label."""
+    assert pc._strip_bullet_and_label(
+        "- Health Coverage: Full medical. Note: details vary by state."
+    ) == "Full medical. Note: details vary by state."
+    assert pc._strip_bullet_and_label(
+        "Coverage begins day one. Note: details vary by state."
+    ) == "Coverage begins day one. Note: details vary by state."
 
 
 def test_additional_compensation_never_emits_bullet_junk():
