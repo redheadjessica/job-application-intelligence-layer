@@ -17,13 +17,16 @@ from datetime import datetime, timezone
 from html import unescape as html_unescape
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+from zoneinfo import ZoneInfo
 
 from ats_fetchers import (
     ATS_HOST_KEYWORDS,
+    MENTIONED_NO_DETAILS,
     UUID_RE,
     _greenhouse_ids,
     _linkedin_job_id,
     _prettify_slug,
+    mine_benefits_equity,
     parse_office_cadence,
     question_provides_employer_comp,
     question_provides_working_location,
@@ -712,8 +715,9 @@ def _prose_compensation_all(body: str) -> list[dict]:
 
     Collecting all of them (this used to stop at the first match) is what lets a
     multi-zone prose posting feed the full applicable-bands envelope instead of
-    collapsing to whichever band happened to appear first. The verbatim `line` is what
-    populates the EMPLOYER-PROVIDED SOURCE block when no structured field carried comp.
+    collapsing to whichever band happened to appear first. The verbatim `line` is
+    preserved machine-readably (via field_status into the manifest); the capture's
+    Base Salary bullets are built from these values when no structured field carried comp.
     """
     if not body:
         return []
@@ -852,7 +856,7 @@ def _prose_city_states(body: str, limit: int = 6) -> list[str]:
 
 def _prose_working_location_detail(body: str) -> tuple[str | None, str | None]:
     """(value, verbatim_source_line) for the job location/cadence written into the JD
-    prose. The verbatim line is what fills the EMPLOYER-PROVIDED SOURCE block when no
+    prose. The verbatim line rides into the manifest via field_status when no
     structured location field exists."""
     if not body:
         return None, None
@@ -1049,159 +1053,563 @@ def missing_hard_fields(field_status: dict | None) -> list[str]:
 
 
 # --------------------------------------------------------------------------- #
-# Output text + quarantine stubs
+# Output text + quarantine stubs — the human-readable capture contract
+# (JOB SNAPSHOT format, spec 2026-07-29). Section banners are all-caps with an
+# underline whose length matches the banner text: `=` for the four content
+# sections before the body, `-` for the CAPTURE blocks after it. Every field
+# label is Title Case; per-field states use the honest-distinction phrases
+# ("Employer Did Not Mention <X>." / "Could Not Verify." / "Conflicting
+# Employer Information: <A> vs <B>." / "<X> Mentioned, but Details Were Not
+# Provided." / "Not Specified"). The manifest `field_status` remains the
+# machine record; the txt keeps one machine-anchored line family
+# (`Job Posted At:` / `Job Updated At:`), which norm_contracts.py parses.
 # --------------------------------------------------------------------------- #
-_STATUS_LABEL = {
-    FOUND: "found", NOT_POSTED: "not posted", CAPTURE_FAILED: "capture failed",
-    CONFLICTING: "conflicting",
+_ET_TZ = ZoneInfo("America/New_York")
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _banner(title: str, ch: str) -> list[str]:
+    return [title, ch * len(title)]
+
+
+def _human_date(iso) -> str:
+    """`2026-06-13` -> `June 13, 2026`; absent/unparseable -> `Unknown` (never fabricated)."""
+    s = str(iso or "").strip()
+    if not s:
+        return "Unknown"
+    try:
+        d = datetime.strptime(s[:10], "%Y-%m-%d")
+    except ValueError:
+        return "Unknown"
+    return f"{d.strftime('%B')} {d.day}, {d.year}"
+
+
+def capture_timestamp(value) -> str:
+    """OUR capture moment, rendered for humans in Eastern Time (DST-aware via
+    zoneinfo America/New_York): `July 29, 2026 at 4:06 PM ET`. A historical
+    date-only value renders `July 29, 2026 — Time Unavailable` — a time is
+    never invented for a capture that only recorded a date."""
+    s = str(value or "").strip()
+    if not s:
+        s = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    if _ISO_DATE_RE.fullmatch(s):
+        d = datetime.strptime(s, "%Y-%m-%d")
+        return f"{d.strftime('%B')} {d.day}, {d.year} — Time Unavailable"
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        # Unparseable timestamp: fall back to any date prefix rather than inventing a time.
+        m = re.match(r"\d{4}-\d{2}-\d{2}", s)
+        return capture_timestamp(m.group(0)) if m else "Unknown"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    loc = dt.astimezone(_ET_TZ)
+    hour = loc.hour % 12 or 12
+    ampm = "AM" if loc.hour < 12 else "PM"
+    return f"{loc.strftime('%B')} {loc.day}, {loc.year} at {hour}:{loc.minute:02d} {ampm} ET"
+
+
+# Machine source tokens -> human names for the CAPTURE DETAILS `Source:` line.
+_SOURCE_HUMAN = {
+    "ashby-posting-api": "Ashby",
+    "greenhouse-boards-api": "Greenhouse",
+    "lever-postings-api": "Lever",
+    "rippling-ats-api": "Rippling",
+    "workable-api": "Workable",
+    "workday-cxs-api": "Workday",
+    "linkedin-guest": "LinkedIn (Guest)",
+    "requests/html": "Employer Page",
+    "playwright/html": "Rendered Employer Page",
+}
+_METHOD_HUMAN = {
+    "ats": "ATS API", "requests": "Direct Fetch", "playwright": "Rendered Page",
+    "greenhouse-embedded": "Embedded Greenhouse Recovery",
 }
 
 
-def _apply_office_cadence(meta: dict, questions: list) -> tuple[str | None, str | None]:
+def _human_source(source: str) -> str:
+    s = str(source or "").strip()
+    if not s:
+        return "Employer Page"
+    base, _, qualifier = s.partition(" (")
+    human = _SOURCE_HUMAN.get(s) or _SOURCE_HUMAN.get(base.strip())
+    if human:
+        if qualifier and s not in _SOURCE_HUMAN:
+            qual = qualifier.rstrip(")").strip()
+            return f"{human} ({qual.title() if qual.islower() else qual})"
+        return human
+    return s
+
+
+def _human_method(method: str) -> str:
+    m = str(method or "").strip()
+    return _METHOD_HUMAN.get(m) or _human_source(m) if m else ""
+
+
+def _apply_office_cadence(meta: dict, questions: list) -> tuple[str | None, str | None, str | None]:
     """If a kept question carries an office-attendance requirement, fold its full
-    eligible-metro list + cadence into the working-location string (verbatim; no
-    candidate-city mapping — vetting does that from jail.config.json)."""
+    eligible-metro list into the working-location string and surface the cadence
+    separately (verbatim-ish; no candidate-city mapping — vetting does that from
+    jail.config.json). Returns (working_location, cadence, cadence_raw)."""
     working = meta.get("working_location") or meta.get("location")
+    cadence = meta.get("cadence")
     cadence_raw = meta.get("cadence_raw")
     for q in questions or []:
         parsed = parse_office_cadence(q)
         if not parsed:
             continue
         metros = parsed.get("metros") or []
-        cadence = parsed.get("cadence")
         if metros:
             metro_str = "; ".join(metros)
             working = f"{working}; {metro_str}" if working else metro_str
             # Dedupe while preserving order.
             working = "; ".join(dict.fromkeys(p.strip() for p in working.split(";") if p.strip()))
-        if cadence:
-            working = f"{working} — {cadence}" if working else cadence
+        cadence = cadence or parsed.get("cadence")
         cadence_raw = cadence_raw or parsed.get("verbatim")
-    return working, cadence_raw
+    return working, cadence, cadence_raw
+
+
+# --------------------------------------------------------------------------- #
+# Miner-level extraction corrections (all offline) — employment from body prose,
+# office-cadence prose fallback, additional-compensation mention splitting.
+# --------------------------------------------------------------------------- #
+_EXEMPT_RE = re.compile(r"(?i)\bfull[-\s]?time\b[,\s]+(?:and\s+)?exempt\b")
+_EMPLOYMENT_PROSE_RE = re.compile(
+    r"(?i)\b(full|part)[-\s]?time\b(\s*,\s*(non[-\s]?)?exempt\b)?")
+_EMPLOYMENT_CONTEXT = ("position", "role", "employment", "employee", "schedule",
+                       "status", "exempt", "opportunity")
+
+
+def _mine_employment(body: str) -> str | None:
+    """An explicit employment-type statement written in the JD prose (e.g. a
+    `Full Time, Exempt` line) when no structured field carried one. Requires
+    employment context on the same line — a marketing sentence that merely says
+    "full-time" is never enough. Returns None rather than inferring."""
+    for raw in (body or "").splitlines():
+        line = re.sub(r"\s+", " ", raw).strip()
+        if not line:
+            continue
+        m = _EMPLOYMENT_PROSE_RE.search(line)
+        if not m:
+            continue
+        has_exempt = bool(m.group(2))
+        low = line.lower()
+        if not has_exempt and not any(k in low for k in _EMPLOYMENT_CONTEXT):
+            continue
+        kind = f"{m.group(1).capitalize()} Time"
+        if has_exempt:
+            kind += ", Non-Exempt" if m.group(3) else ", Exempt"
+        return kind
+    return None
+
+
+def _format_employment(structured, body: str) -> str:
+    """The WORK DETAILS `Employment:` value. Maps structured tokens to readable
+    Title Case (`FullTime` -> `Full Time`), appends `, Exempt` when the body
+    states it, and falls back to an explicit body statement when the structured
+    field is bare. `Not Specified` when the employer stated nothing."""
+    s = str(structured or "").strip()
+    if s:
+        s = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", s)
+        s = re.sub(r"[_\-]+", " ", s)
+        s = re.sub(r"\s+", " ", s).strip()
+        s = " ".join(w if any(c.isupper() for c in w[1:]) else w.capitalize()
+                     for w in s.split(" "))
+        if "exempt" not in s.lower() and _EXEMPT_RE.search(body or ""):
+            s += ", Exempt"
+        return s
+    return _mine_employment(body) or "Not Specified"
+
+
+_DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+_WORD_NUM = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7}
+_OFFICE_DAYS_RE = re.compile(
+    r"(?i)\b(at least\s+|a minimum of\s+|minimum of\s+)?(one|two|three|four|five|\d)\s*\+?\s*"
+    r"days?\s+(?:per|a|each)\s+week")
+
+
+def _format_cadence(text: str | None) -> str | None:
+    """A stated office cadence rendered in the spec's shape:
+    `three days per week: Tuesday, Wednesday, Thursday` -> `3 Days Per Week, Tuesday–Thursday`;
+    `at least 2 days per week` -> `At Least 2 Days Per Week`. Never infers a
+    cadence that was not stated (returns None)."""
+    s = str(text or "").strip()
+    if not s:
+        return None
+    m = _OFFICE_DAYS_RE.search(s)
+    if not m:
+        # A stated cadence in another shape (e.g. "8 days per month") passes through as-is.
+        return s
+    n = _WORD_NUM.get(m.group(2).lower(), None)
+    if n is None:
+        try:
+            n = int(m.group(2))
+        except ValueError:
+            return s
+    open_ended = bool(m.group(1)) or "+" in m.group(0)
+    base = f"{'At Least ' if open_ended else ''}{n} Day{'s' if n != 1 else ''} Per Week"
+    # Named days immediately following the cadence ("...: Tuesday, Wednesday, Thursday").
+    tail = s[m.end():m.end() + 120]
+    named = [d for d in _DAY_NAMES if re.search(rf"(?i)\b{d}\b", tail)]
+    if named:
+        idxs = [_DAY_NAMES.index(d) for d in named]
+        if len(named) >= 2 and idxs == list(range(idxs[0], idxs[0] + len(idxs))):
+            days = f"{named[0]}–{named[-1]}"
+        else:
+            days = ", ".join(named)
+        return f"{base}, {days}"
+    return base
+
+
+def _mine_office_expectation(body: str) -> str | None:
+    """Prose fallback for the Office Expectation field: an explicit in-office
+    cadence written in the JD body (e.g. "onsite ... three days per week:
+    Tuesday, Wednesday, Thursday"). Returns the formatted cadence, or None —
+    a cadence the employer never stated is NEVER inferred."""
+    if not body:
+        return None
+    m = _OFFICE_DAYS_RE.search(body)
+    if not m:
+        return None
+    # Format from the match onward so named days after the cadence are captured.
+    return _format_cadence(body[m.start():m.start() + 160])
+
+
+def _oxford_join(items: list[str]) -> str:
+    items = [i for i in items if i]
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return ", ".join(items[:-1]) + f", and {items[-1]}"
+
+
+# Eligibility/mention sentences that reference additional-compensation components.
+_ADDL_MENTION_RE = re.compile(
+    r"(?i)\b(?:does\s+not\s+include|doesn'?t\s+include|not\s+include|excludes?|"
+    r"exclusive\s+of|in\s+addition\s+to|(?:may|might|could|can|will|are|is)\s+(?:also\s+)?be\s+"
+    r"eligible(?:\s+for)?|eligibility\s+for)\b")
+_ADDL_COMP_TOKENS = (
+    (re.compile(r"(?i)\bbonus(es)?\b"), "Bonus"),
+    (re.compile(r"(?i)\bcommissions?\b"), "Commission"),
+    (re.compile(r"(?i)\b(equity|stock options?|rsus?|restricted stock)\b"), "Equity"),
+    (re.compile(r"(?i)\btravel credits?\b"), "Employee Travel Credits"),
+)
+
+
+def _mine_additional_comp_mentions(body: str) -> list[str]:
+    """Additional-compensation components the employer MENTIONED (eligibility or
+    disclaimer sentences) without publishing specifics — split out of the old
+    `Equity:` shoehorn. Returns ordered unique component names."""
+    out: list[str] = []
+    for raw in re.split(r"(?<=[.!?])\s+|\n", body or ""):
+        sentence = raw.strip()
+        if not sentence or not _ADDL_MENTION_RE.search(sentence):
+            continue
+        for rx, name in _ADDL_COMP_TOKENS:
+            if rx.search(sentence) and name not in out:
+                out.append(name)
+    return out
+
+
+def _additional_compensation_value(meta: dict, body: str) -> str:
+    """The COMPENSATION `Additional Compensation:` value — bonus/commission/equity
+    eligibility, never merged into base salary. A real equity description passes
+    through verbatim; bare mentions collapse to the honest-distinction phrase."""
+    equity = meta.get("equity")
+    if equity is None and body:
+        _b, equity = mine_benefits_equity(body)
+    parts: list[str] = []
+    mentions = _mine_additional_comp_mentions(body or "")
+    if equity and equity != MENTIONED_NO_DETAILS:
+        detail = str(equity).strip()
+        if detail and detail[-1] not in ".!?":
+            detail += "."
+        parts.append(detail)
+        mentions = [m for m in mentions if m != "Equity"]
+    elif equity == MENTIONED_NO_DETAILS and "Equity" not in mentions:
+        mentions.append("Equity")
+    if mentions:
+        parts.append(f"{_oxford_join(mentions)} Mentioned, but Details Were Not Provided.")
+    if not parts:
+        return "Employer Did Not Mention Additional Compensation."
+    return " ".join(parts)
+
+
+def _benefits_value(meta: dict, body: str) -> str:
+    """The COMPENSATION `Benefits:` value: period-separated short sentences from a
+    mined benefits section, the honest mention phrase, or the did-not-mention
+    phrase — never `Not Posted` when the employer did reference benefits."""
+    benefits = meta.get("benefits")
+    if benefits is None and body:
+        benefits, _e = mine_benefits_equity(body)
+    if not benefits:
+        return "Employer Did Not Mention Benefits."
+    if benefits == MENTIONED_NO_DETAILS:
+        return "Mentioned, but Details Were Not Provided."
+    items = [i.strip().rstrip(".") for i in str(benefits).split(";") if i.strip()]
+    if not items:
+        return "Employer Did Not Mention Benefits."
+    sentences = ". ".join(i[0].upper() + i[1:] if i else i for i in items)
+    return sentences + ("" if sentences.endswith(("…", ".")) else ".")
+
+
+_K_AMOUNT_RE = re.compile(r"\$\s?(\d{1,3}(?:\.\d+)?)\s?[kK]\b")
+
+
+def _expand_dollar_amounts(text: str) -> str:
+    """`$236K` -> `$236,000` — Base Salary bullets carry full dollar amounts."""
+    return _K_AMOUNT_RE.sub(lambda m: f"${int(round(float(m.group(1)) * 1000)):,}", text)
+
+
+def _base_salary_bullets(compensation, fs: dict) -> list[str]:
+    """One bullet per geo/level band, full dollar amounts, USD-tagged."""
+    segments: list[str] = []
+    if compensation:
+        segments = [p.strip() for p in re.split(r"\s*[·•]\s*", str(compensation)) if p.strip()]
+    elif fs.get("compensation_prose_all"):
+        segments = [str(v).strip() for v in fs["compensation_prose_all"] if str(v).strip()]
+    out: list[str] = []
+    for seg in segments:
+        seg = _expand_dollar_amounts(seg)
+        if "usd" not in seg.lower() and "$" in seg:
+            seg = f"{seg} USD"
+        out.append(seg)
+    return out
+
+
+def _conflict_phrase(sources) -> str:
+    values = [str(v).strip() for _s, v in (sources or []) if str(v or "").strip()]
+    if len(values) >= 2:
+        return f"Conflicting Employer Information: {values[0]} vs {values[1]}."
+    return "Conflicting Employer Information: Two Sources Disagree (Both Kept in the Manifest)."
+
+
+_V_MARK = {FOUND: "✓", NOT_POSTED: "—", CAPTURE_FAILED: "✗", CONFLICTING: "⚠ Conflicting"}
+
+
+def _verification_line(fs: dict) -> str:
+    def mark(field):
+        return _V_MARK.get(fs.get(field), "✗")
+    return (f"Verification: Job Description {mark('description')} | "
+            f"Compensation {mark('compensation')} | Working Location {mark('working_location')}")
+
+
+def _capture_details_lines(*, captured, apply_url, source, posting_id, methods, fs) -> list[str]:
+    lines = _banner("CAPTURE DETAILS", "-")
+    lines.append(f"Captured: {capture_timestamp(captured)}")
+    lines.append(f"Application URL: {apply_url}")
+    lines.append(f"Source: {source}")
+    lines.append(f"Posting ATS ID: {posting_id}")
+    lines.append(f"Methods Checked: {methods}")
+    lines.append(_verification_line(fs))
+    return lines
+
+
+def _capture_update_lines(capture_update: dict) -> list[str]:
+    lines = _banner("CAPTURE UPDATE DETAILS", "-")
+    lines.append(f"Re-Captured: {capture_timestamp(capture_update.get('re_captured'))}")
+    notes = capture_update.get("notes") or "Previous Capture Was Not Available for Comparison."
+    lines.append(f"Additional Notes: {notes}")
+    return lines
+
+
+# --------------------------------------------------------------------------- #
+# Re-fetch comparison + best-verified merge (revisions #4 and #5)
+# --------------------------------------------------------------------------- #
+_BODY_MARKER_RE = re.compile(r"--- JOB TEXT START ---\n(.*)\n--- JOB TEXT END ---", re.S)
+
+# The material regions a re-fetch comparison reads. Line-set membership per region
+# (normalized), NEVER body length: chrome-only churn changes no region.
+_MATERIAL_REGIONS = (
+    ("Responsibilities", ("responsib", "what you'll do", "what you will do",
+                          "what you own", "you will")),
+    ("Qualifications", ("qualificat", "requirement", "who you are",
+                        "looking for", "experience")),
+    ("Compensation", ("$", "salary", "compensation", "pay range", "bonus", "equity")),
+    ("Working Location", ("location", "remote", "hybrid", "office", "onsite", "on-site")),
+    ("Office Cadence", ("days per week", "days a week", "in person", "in-person")),
+    ("Application Questions", ("?",)),
+)
+
+
+def body_from_capture(text: str | None) -> str | None:
+    """The body between the stable markers of a written capture, or None."""
+    m = _BODY_MARKER_RE.search(str(text or ""))
+    if not m:
+        return None
+    return m.group(1).strip("\n")
+
+
+def _material_lines(body: str) -> list[str]:
+    return [re.sub(r"\s+", " ", ln).strip().lower()
+            for ln in str(body or "").splitlines() if ln.strip()]
+
+
+def _region_set(lines: list[str], keys: tuple) -> set:
+    return {ln for ln in lines if any(k in ln for k in keys)}
+
+
+def material_change_notes(old_body: str | None, new_body: str | None) -> str:
+    """The CAPTURE UPDATE DETAILS `Additional Notes:` sentence, from a NORMALIZED
+    CONTENT comparison of the material regions (responsibilities / qualifications /
+    comp / location / cadence / questions) — never body length. Chrome-only churn
+    is `No Material Changes Detected.`"""
+    if old_body is None:
+        return "Previous Capture Was Not Available for Comparison."
+    old_lines, new_lines = _material_lines(old_body), _material_lines(new_body or "")
+    changed = [name for name, keys in _MATERIAL_REGIONS
+               if _region_set(old_lines, keys) != _region_set(new_lines, keys)]
+    if changed:
+        return f"Material Changes Detected In: {', '.join(changed)}."
+    return "No Material Changes Detected."
+
+
+def body_would_degrade(old_body: str | None, new_body: str | None) -> bool:
+    """True when replacing the existing body with a new fetch would LOSE a better
+    capture (revision #4): the new body fails classification (truncated /
+    contaminated / blocked shell) or drops material regions the old body carried.
+    A genuine employer edit — same regions present, different content — is NOT
+    degradation."""
+    if not (old_body or "").strip():
+        return False
+    old_st, _ = classify(old_body)
+    new_st, _ = classify(new_body or "")
+    if old_st == USABLE and new_st != USABLE:
+        return True
+    if old_st != USABLE:
+        return False
+    old_lines, new_lines = _material_lines(old_body), _material_lines(new_body or "")
+    for _name, keys in _MATERIAL_REGIONS:
+        if _region_set(old_lines, keys) and not _region_set(new_lines, keys):
+            return True
+    return False
 
 
 def build_output_text(url: str, title: str, company: str, body_text: str, *,
                       meta: dict | None = None, questions: list | None = None,
                       field_status: dict | None = None, methods_tried: list | None = None,
-                      captured: str | None = None) -> str:
-    """Dual-preservation layout: a provenance line, a NORMALIZED block (for
-    vetting) with per-field statuses + a completeness line + optional conflicts,
-    an APPLICATION QUESTIONS block (kept questions only, verbatim), a verbatim
-    EMPLOYER-PROVIDED SOURCE block, then the full job text between the stable
-    START/END markers. Parseable and stable (golden-file tested)."""
+                      captured: str | None = None, capture_update: dict | None = None) -> str:
+    """The human-readable capture contract (JOB SNAPSHOT format): JOB SNAPSHOT /
+    WORK DETAILS / COMPENSATION / APPLICATION QUESTIONS WORTH PREPARING sections,
+    the full job text byte-for-byte between the stable START/END markers, then
+    CAPTURE DETAILS below the END marker (and CAPTURE UPDATE DETAILS only on a
+    genuine re-fetch — pass `capture_update` with `original_captured` /
+    `re_captured` / `notes`). `captured` is the FULL fetched-at timestamp
+    (ISO with TZ), rendered in Eastern Time. Golden-file tested."""
     meta = meta or {}
     questions = questions if questions is not None else (meta.get("questions") or [])
     fs = field_status or assess_completeness(meta, body_text, questions)
 
-    apply_url = meta.get("apply_url") or "n/a"
-    source = meta.get("source") or "requests/html"
-    posting_id = meta.get("posting_id") or "n/a"
-    methods = ", ".join(dict.fromkeys(methods_tried or [])) or (meta.get("method") or source)
-    captured = captured or datetime.now(timezone.utc).date().isoformat()
+    apply_url = meta.get("apply_url") or "Not Available"
+    source = _human_source(meta.get("source") or "requests/html")
+    posting_id = meta.get("posting_id") or "Not Available"
+    methods = ", ".join(dict.fromkeys(
+        _human_method(m) for m in (methods_tried or []) if m))
+    if not methods:
+        methods = _human_method(meta.get("method") or meta.get("source") or "") or "Not Recorded"
+    captured_ts = captured or datetime.now(timezone.utc).isoformat(timespec="seconds")
+    original_captured = captured_ts
+    if capture_update and capture_update.get("original_captured"):
+        original_captured = capture_update["original_captured"]
 
     workplace = meta.get("workplace") or ("Remote" if meta.get("remote") else None)
-    working_location, cadence_raw = _apply_office_cadence(meta, questions)
+    working_location, cadence, _cadence_raw = _apply_office_cadence(meta, questions)
     compensation = meta.get("compensation")
-    benefits = meta.get("benefits")
-    equity = meta.get("equity")
 
-    # When a field was found only in the JD prose (no structured value), surface that
-    # prose figure on the line and mark it "(from description)" so the value shown
-    # matches the found status and what the scorer reads.
-    comp_from_prose = not compensation and fs.get("compensation_source") == "description"
-    if comp_from_prose:
+    # When a field was found only in the JD prose (no structured value), the prose
+    # figure IS the employer's published value — surface it.
+    if not compensation and fs.get("compensation_source") == "description":
         compensation = fs.get("compensation_prose")
-    loc_from_prose = not working_location and fs.get("working_location_source") == "description"
-    if loc_from_prose:
+    if not working_location and fs.get("working_location_source") == "description":
         working_location = fs.get("working_location_prose")
 
-    def _stat(field: str) -> str:
-        return f"[{_STATUS_LABEL.get(fs.get(field), 'unknown')}]"
-
-    def _val(v, status_field, from_prose=False):
-        if v:
-            return f"{v} (from description)" if from_prose else str(v)
-        st = fs.get(status_field)
-        return "Not posted" if st == NOT_POSTED else ("Could not verify" if st == CAPTURE_FAILED else "n/a")
+    def _honest(value, field: str, label: str) -> str:
+        if value:
+            return str(value)
+        st = fs.get(field)
+        if st == CONFLICTING:
+            key = "compensation_sources" if field == "compensation" else "location_sources"
+            return _conflict_phrase(fs.get(key) or meta.get(key))
+        if st == NOT_POSTED:
+            return f"Employer Did Not Mention {label}."
+        return "Could Not Verify."
 
     lines: list[str] = []
-    lines.append(f"URL: {url}")
-    lines.append(f"Application URL: {apply_url}")
+    lines += _banner("JOB SNAPSHOT", "=")
     lines.append(f"Company: {company}")
     lines.append(f"Role: {title}")
-    lines.append(f"Source: {source} · Posting ID: {posting_id} · Captured: {captured} · Methods tried: {methods}")
-    # When the employer published a posting date, say so. `Captured:` above is OUR fetch date
-    # and was previously the only date in the file, so nothing downstream could tell a
-    # week-old posting from a nine-month-old one. Omitted entirely when unknown — never a
-    # fabricated or inferred date.
-    posted_date = meta.get("posted_date")
-    updated_date = meta.get("updated_date")
-    if posted_date:
-        posted_line = f"Posted: {posted_date}"
-        if updated_date and updated_date != posted_date:
-            posted_line += f" · Updated: {updated_date}"
-        lines.append(posted_line)
+    lines.append(f"Job Posting URL: {url}")
+    # Always present — `Unknown` when the source exposed no date, never fabricated.
+    lines.append(f"Job Posted At: {_human_date(meta.get('posted_date'))}")
+    lines.append(f"Job Updated At: {_human_date(meta.get('updated_date'))}")
     lines.append("")
-    lines.append("== NORMALIZED (for vetting) ==")
-    lines.append(f"Employment Type: {meta.get('employment_type') or 'n/a'}")
-    lines.append(f"Workplace: {workplace or 'n/a'}")
-    lines.append(f"Working Location: {_val(working_location, 'working_location', loc_from_prose)}   {_stat('working_location')}")
-    lines.append(f"Compensation: {_val(compensation, 'compensation', comp_from_prose)}   {_stat('compensation')}")
-    lines.append(f"Benefits: {benefits or 'Not posted'}")
-    lines.append(f"Equity: {equity or 'Not posted'}")
-    lines.append(
-        f"Completeness: title {'✓' if fs.get('title') == FOUND else '✗'} · "
-        f"description {'✓' if fs.get('description') == FOUND else '✗'} · "
-        f"compensation {_STATUS_LABEL.get(fs.get('compensation'), 'unknown')} · "
-        f"working-location {_STATUS_LABEL.get(fs.get('working_location'), 'unknown')}"
-    )
-    for c in (fs.get("conflicts") or []):
-        lines.append(f"[CONFLICT]: {c}")
+    lines += _banner("WORK DETAILS", "=")
+    lines.append(f"Employment: {_format_employment(meta.get('employment_type'), body_text)}")
+    lines.append(f"Work Arrangement: {workplace or 'Not Explicitly Stated'}")
+    if fs.get("working_location") == CONFLICTING:
+        loc_value = _conflict_phrase(fs.get("location_sources") or meta.get("location_sources"))
+    else:
+        loc_value = _honest(working_location, "working_location", "Working Location")
+    lines.append(f"Working Location(s): {loc_value}")
+    office = _format_cadence(cadence) or _mine_office_expectation(body_text)
+    lines.append(f"Office Expectation: {office or 'Not Specified'}")
     lines.append("")
-    lines.append("== APPLICATION QUESTIONS (thoughtful / job-material only) ==")
+    lines += _banner("COMPENSATION", "=")
+    bullets = [] if fs.get("compensation") == CONFLICTING else _base_salary_bullets(compensation, fs)
+    if bullets:
+        lines.append("Base Salary:")
+        for b in bullets:
+            lines.append(f"  - {b}")
+    else:
+        lines.append(f"Base Salary: {_honest(None, 'compensation', 'Compensation')}")
+    lines.append(f"Additional Compensation: {_additional_compensation_value(meta, body_text)}")
+    lines.append(f"Benefits: {_benefits_value(meta, body_text)}")
+    lines.append("")
+    lines += _banner("APPLICATION QUESTIONS WORTH PREPARING", "=")
     if questions:
         for i, q in enumerate(questions, 1):
-            req = "required" if q.get("required") else "optional"
-            qtype = q.get("source_type") or q.get("type") or "text"
-            help_txt = f" — {q['help']}" if q.get("help") else ""
-            opts = q.get("options") or []
-            opt_str = "  (options: " + " / ".join(f'"{o}"' for o in opts) + ")" if opts else ""
+            req = "[Required]" if q.get("required") else "[Optional]"
             label = _strip_wrapping_quotes(q.get("label", "").strip())
-            lines.append(f'{i}. [{qtype}, {req}] "{label}"{help_txt}{opt_str}')
+            lines.append(f"{i}. {label} {req}")
+            if q.get("help"):
+                lines.append(f"   [Context: {q['help']}]")
+            opts = [str(o) for o in (q.get("options") or [])]
+            if opts:
+                lines.append("   [Options: " + " / ".join(f'"{o}"' for o in opts) + "]")
+            parsed = parse_office_cadence(q)
+            if parsed:
+                metros = parsed.get("metros") or []
+                if metros and metros != opts:
+                    lines.append(f"   [Locations: {'; '.join(metros)}]")
+                if parsed.get("cadence"):
+                    lines.append(f"   [Office Expectation: {_format_cadence(parsed['cadence'])}]")
+            if q.get("address"):
+                lines.append(f"   [Address: {q['address']}]")
     else:
-        lines.append("(none kept)")
-    lines.append("")
-    lines.append("== EMPLOYER-PROVIDED SOURCE (verbatim; the durable archive) ==")
-    # When no structured field carried comp/location, the verbatim archive falls back to the
-    # employer's own PROSE LINE that the value was mined from. These used to render as empty
-    # quotes even when the body was full of comp/location language (an Airbnb regression):
-    # the durable archive must not look blank when the employer did publish the wording.
-    comp_verbatim = meta.get("compensation_raw") or fs.get("compensation_prose_verbatim") or ""
-    loc_verbatim = meta.get("location_raw") or fs.get("working_location_prose_verbatim") or ""
-    cadence_verbatim = cadence_raw
-    if not cadence_verbatim:
-        prose_line = fs.get("working_location_prose_verbatim") or ""
-        if prose_line and _CADENCE_RE.search(prose_line):
-            cadence_verbatim = prose_line
-    lines.append(f'Compensation (verbatim): "{comp_verbatim}"')
-    lines.append(f'Locations/Addresses (verbatim): "{loc_verbatim}"')
-    lines.append(f'Office cadence (verbatim): "{cadence_verbatim or ""}"')
-    # Present only when the Application URL above was replaced by a canonical ATS deep link
-    # because the employer's own apply URL was a listing/search page that merely redirects.
-    if meta.get("employer_apply_url"):
-        lines.append(f'Employer apply page (verbatim): {meta["employer_apply_url"]}')
+        lines.append("None Found.")
     lines.append("")
     lines.append("--- JOB TEXT START ---")
     lines.append("")
     lines.append(body_text)
     lines.append("")
     lines.append("--- JOB TEXT END ---")
+    lines.append("")
+    lines += _capture_details_lines(captured=original_captured, apply_url=apply_url,
+                                    source=source, posting_id=posting_id, methods=methods,
+                                    fs=fs)
+    if capture_update:
+        lines.append("")
+        lines += _capture_update_lines(capture_update)
     return "\n".join(lines) + "\n"
 
 
 def thin_text(url: str, title: str, company: str, body_text: str, reason: str, ts: str,
               *, meta: dict | None = None, questions: list | None = None,
-              field_status: dict | None = None, methods_tried: list | None = None) -> str:
+              field_status: dict | None = None, methods_tried: list | None = None,
+              capture_update: dict | None = None) -> str:
     return (
         f"# QUARANTINED — THIN FETCH (needs your review)\n"
         f"# Reason: {reason}\n"
@@ -1210,20 +1618,39 @@ def thin_text(url: str, title: str, company: str, body_text: str, reason: str, t
         f"#   paste the full job text below the marker, then re-run prep (it will pick it up),\n"
         f"#   OR move this file into 'All Job Posts (full text)/' if it's actually fine.\n\n"
         + build_output_text(url, title, company, body_text, meta=meta, questions=questions,
-                            field_status=field_status, methods_tried=methods_tried)
+                            field_status=field_status, methods_tried=methods_tried,
+                            captured=ts, capture_update=capture_update)
     )
 
 
 def failed_text(url: str, error: str, ts: str) -> str:
-    return (
+    """A failed capture keeps only the SNAPSHOT, the body markers (empty, ready
+    for a manual paste), and CAPTURE DETAILS — same banners as a real capture."""
+    fs = {"description": CAPTURE_FAILED, "compensation": CAPTURE_FAILED,
+          "working_location": CAPTURE_FAILED}
+    lines = [
         f"# FAILED FETCH (no usable content)\n"
-        f"# URL: {url}\n"
         f"# Error: {error}\n"
-        f"# Fetched: {ts}\n"
         f"# What to do: re-run prep to retry this URL, or paste the full job text below\n"
-        f"#   the marker and move this file into 'All Job Posts (full text)/'.\n\n"
-        f"--- JOB TEXT START ---\n\n\n--- JOB TEXT END ---\n"
-    )
+        f"#   the marker and move this file into 'All Job Posts (full text)/'.\n",
+    ]
+    lines += _banner("JOB SNAPSHOT", "=")
+    lines.append("Company: Unknown")
+    lines.append("Role: Unknown Title")
+    lines.append(f"Job Posting URL: {url}")
+    lines.append("Job Posted At: Unknown")
+    lines.append("Job Updated At: Unknown")
+    lines.append("")
+    lines.append("--- JOB TEXT START ---")
+    lines.append("")
+    lines.append("")
+    lines.append("")
+    lines.append("--- JOB TEXT END ---")
+    lines.append("")
+    lines += _capture_details_lines(captured=ts, apply_url="Not Available",
+                                    source="Not Available", posting_id="Not Available",
+                                    methods="Not Recorded", fs=fs)
+    return "\n".join(lines) + "\n"
 
 
 # --------------------------------------------------------------------------- #
@@ -1413,7 +1840,11 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
              "has_compensation": None, "has_working_location": None,
              # Employer posting dates (plain YYYY-MM-DD, or None when the source has none) —
              # the rankings `Posted` column reads these back out of the capture.
-             "posted_date": None, "updated_date": None}
+             "posted_date": None, "updated_date": None,
+             # ATS posting id (when the source exposed one) + per-entry capture history —
+             # prior fetched_at/source/ats-id records so CAPTURE UPDATE DETAILS can be
+             # regenerated faithfully and the ORIGINAL Captured survives later re-fetches.
+             "posting_id": None, "capture_history": []}
         d.update(kw)
         return d
 
@@ -1436,8 +1867,22 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
             entries.append(carried)
             continue
 
-        # Retrying this URL: remove any prior file so we never orphan/duplicate.
+        # Genuine re-fetch of a previously-manifested capture: preserve the prior body
+        # (best-verified merge + the CAPTURE UPDATE DETAILS content comparison need it)
+        # BEFORE removing the prior file so we never orphan/duplicate.
+        prior_body = None
         if prev:
+            for rel in (prev.get("output_path"), prev.get("quarantine_path")):
+                if not rel:
+                    continue
+                fp = batch_root / rel
+                try:
+                    if fp.exists():
+                        prior_body = body_from_capture(fp.read_text(encoding="utf-8",
+                                                                    errors="replace"))
+                        break
+                except OSError:
+                    continue
             _remove_if_exists(prev.get("output_path"), batch_root)
             _remove_if_exists(prev.get("quarantine_path"), batch_root)
             for fn, owner in list(taken.items()):
@@ -1505,13 +1950,53 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                     res, status, reason, field_status, field_gap = (
                         res_rec, status_r, reason_r, field_status_r, gap_r)
 
+        # Best-verified merge on a re-fetch (revision #4): never let a truncated /
+        # contaminated / blocked new fetch replace a better existing body. The prior
+        # body wins when the new one demonstrably degrades it; the new fetch's
+        # structured fields still win field-by-field below (posted/updated dates are
+        # back-filled from the prior entry only when the new source lost them).
+        kept_prior_body = False
+        if prior_body and body_would_degrade(prior_body, res.get("body") or ""):
+            res = dict(res)
+            res["body"] = prior_body
+            res["ok"] = True
+            if not (res.get("title") or "").strip() or res.get("title") == "Unknown Title":
+                res["title"] = prev.get("title") or res.get("title")
+            if not (res.get("company") or "").strip() or res.get("company") == "Unknown":
+                res["company"] = prev.get("company") or res.get("company")
+            kept_prior_body = True
+            status, reason, field_status = _evaluate(res)
+
+        # A genuine re-fetch of a previously-manifested URL gets a CAPTURE UPDATE
+        # DETAILS block: the ORIGINAL Captured is preserved (first capture-history
+        # record, falling back to the prior entry's fetched_at) and Additional Notes
+        # come from a normalized-content comparison of the material regions — never
+        # body length (revision #5).
+        capture_update = None
+        history = []
+        if prev:
+            history = [h for h in (prev.get("capture_history") or []) if isinstance(h, dict)]
+            history.append({"fetched_at": prev.get("fetched_at"),
+                            "source": prev.get("method"),
+                            "posting_id": prev.get("posting_id")})
+            original_captured = (history[0].get("fetched_at") or prev.get("fetched_at"))
+            if prior_body is None:
+                notes = "Previous Capture Was Not Available for Comparison."
+            elif kept_prior_body:
+                notes = ("No Material Changes Detected. The New Fetch Was Degraded, so the "
+                         "Prior Job Text Was Kept.")
+            else:
+                notes = material_change_notes(prior_body, res.get("body") or "")
+            capture_update = {"original_captured": original_captured,
+                              "re_captured": ts, "notes": notes}
+
         if status == FAILED:
             fn = failed_filename(url, norm)
             out = dirs["failed"] / fn
             out.write_text(failed_text(url, reason, ts), encoding="utf-8")
             entries.append(base_entry(url, norm, status=FAILED, method=res.get("method"),
                                       error=reason, notes=f"methods tried: {', '.join(methods_tried)}",
-                                      methods_tried=methods_tried,
+                                      methods_tried=methods_tried, capture_history=history,
                                       quarantine_path=_rel(out, batch_root)))
             continue
 
@@ -1535,17 +2020,28 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
         missing = missing_hard_fields(field_status)
         has_comp = field_status.get("compensation") == FOUND
         has_loc = field_status.get("working_location") == FOUND
+        # Field-by-field best-verified merge: a re-fetch whose source lost the posting
+        # dates never erases the previously verified ones.
+        if prev:
+            if not meta.get("posted_date") and prev.get("posted_date"):
+                meta["posted_date"] = prev["posted_date"]
+            if not meta.get("updated_date") and prev.get("updated_date"):
+                meta["updated_date"] = prev["updated_date"]
 
         fn = unique_filename(company, title, norm, taken, url)
         taken[fn] = norm
         out_text = build_output_text(url, title, company, body, meta=meta, questions=questions,
-                                     field_status=field_status, methods_tried=methods_tried)
+                                     field_status=field_status, methods_tried=methods_tried,
+                                     captured=ts, capture_update=capture_update)
         if status == USABLE:
             out = dirs["source"] / fn
             out.write_text(out_text, encoding="utf-8")
             note_bits = []
             if len(methods_tried) > 1:
                 note_bits.append(f"usable after fallback (tried: {', '.join(methods_tried)})")
+            if kept_prior_body:
+                note_bits.append("re-fetch degraded the body — kept the prior job text "
+                                 "(best-verified merge)")
             if field_status.get("title") == CAPTURE_FAILED:
                 note_bits.append("job title capture failed — the page gave only site branding "
                                  "and no real role title could be recovered")
@@ -1559,12 +2055,15 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                                       has_working_location=has_loc,
                                       posted_date=meta.get("posted_date"),
                                       updated_date=meta.get("updated_date"),
+                                      posting_id=meta.get("posting_id"),
+                                      capture_history=history,
                                       output_path=_rel(out, batch_root)))
         else:  # THIN
             out = dirs["needs_review"] / fn
             out.write_text(thin_text(url, title, company, body, reason, ts, meta=meta,
                                      questions=questions, field_status=field_status,
-                                     methods_tried=methods_tried), encoding="utf-8")
+                                     methods_tried=methods_tried,
+                                     capture_update=capture_update), encoding="utf-8")
             entries.append(base_entry(url, norm, status=THIN, method=method, company=company,
                                       title=title, char_count=len(body), notes=reason,
                                       field_status=field_status, missing_fields=missing,
@@ -1572,6 +2071,8 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                                       has_working_location=has_loc,
                                       posted_date=meta.get("posted_date"),
                                       updated_date=meta.get("updated_date"),
+                                      posting_id=meta.get("posting_id"),
+                                      capture_history=history,
                                       quarantine_path=_rel(out, batch_root)))
 
     # Soft-flag possible same company/title duplicates among usable posts (keep both).

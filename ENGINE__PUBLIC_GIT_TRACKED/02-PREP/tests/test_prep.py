@@ -176,7 +176,8 @@ def test_conflicting_sources_kept_and_flagged():
     assert fs["conflicts"] and "compensation" in fs["conflicts"][0]
     out = pc.build_output_text("http://x", "PM", "Acme", "Responsibilities...",
                                meta=meta, field_status=fs, methods_tried=["ats"])
-    assert "[CONFLICT]" in out
+    assert "Conflicting Employer Information:" in out
+    assert "100,000" in out and "180,000" in out  # both readings preserved
 
 
 # 9 --------------------------------------------------------------------------
@@ -186,7 +187,8 @@ def test_golden_output_is_stable():
     out = pc.build_output_text(
         "https://jobs.ashbyhq.com/betterup/fa0a5d05-39f9-47d5-9fc9-0a0540ff9018",
         res["title"], res["company"], res["text"], meta=res, questions=kept,
-        field_status=fs, methods_tried=["ats", "playwright"], captured="2026-07-29")
+        field_status=fs, methods_tried=["ats", "playwright"],
+        captured="2026-07-29T20:06:00+00:00")
     golden = (FIXTURES / "golden_betterup_output.txt").read_text(encoding="utf-8")
     assert out == golden
 
@@ -358,15 +360,15 @@ def test_embedded_greenhouse_recovery_no_job_id_is_noop(monkeypatch):
 
 # 15 -------------------------------------------------------------------------
 def test_question_label_trailing_quote_not_doubled():
-    """POLISH: a verbatim label that already ends in a stray double-quote must not
-    render a doubled trailing quote (the Bloomerang question-2 bug)."""
+    """POLISH: a verbatim label carrying a stray wrapping double-quote must not
+    render it (the Bloomerang question-2 bug, carried into the unquoted format)."""
     q = {"label": 'How are you using modern AI tools for accelerating delivery?"',
          "type": "textarea", "source_type": "LongText", "required": True,
          "name": "q", "names": ["q"], "options": []}
     out = pc.build_output_text("http://x", "PM", "Acme", "Responsibilities...",
                                questions=[q], methods_tried=["ats"])
-    assert 'delivery?""' not in out
-    assert 'delivery?"' in out
+    assert 'delivery?"' not in out
+    assert "1. How are you using modern AI tools for accelerating delivery? [Required]" in out
 
 
 # 16 -------------------------------------------------------------------------
@@ -458,10 +460,11 @@ def test_prose_compensation_found_when_no_structured_comp():
     assert fs.get("compensation_source") == "description"
     assert "174,000" in fs.get("compensation_prose", "")
     assert pc.missing_hard_fields(fs) == []  # no longer a false capture_failed
-    # And the normalized Compensation line shows the prose figure, marked as such.
+    # And the Base Salary bullets carry the prose figure (the employer's own value).
     out = pc.build_output_text("http://x", "Staff Engineer", "Acme", body,
                                meta=meta, field_status=fs, methods_tried=["requests"])
-    assert "174,000" in out and "(from description)" in out
+    assert "Base Salary:" in out and "174,000" in out
+    assert "Could Not Verify." not in out.split("COMPENSATION")[1].split("Additional")[0]
 
 
 def test_prose_compensation_variants():
@@ -1352,19 +1355,23 @@ def test_benefits_and_equity_mentioned_without_details_is_not_not_posted():
     out = pc.build_output_text("http://x", "PM", "Airbnb", body,
                                meta={"title": "PM", "benefits": benefits, "equity": equity},
                                field_status={"conflicts": []}, methods_tried=["requests"])
-    assert "Equity: Mentioned (no details)" in out
-    assert "Benefits: Mentioned (no details)" in out
-    assert "Equity: Not posted" not in out and "Benefits: Not posted" not in out
+    # The equity/bonus/travel-credit eligibility lives in Additional Compensation,
+    # split out of the old Equity shoehorn — honest mention phrasing, never "Not Posted".
+    assert ("Additional Compensation: Bonus, Equity, and Employee Travel Credits "
+            "Mentioned, but Details Were Not Provided.") in out
+    assert "Benefits: Mentioned, but Details Were Not Provided." in out
+    assert "Not Posted" not in out and "Not posted" not in out
 
 
-def test_a_posting_that_says_nothing_still_reports_not_posted():
+def test_a_posting_that_says_nothing_still_reports_did_not_mention():
     """The third state must not swallow the genuine "employer published nothing" case."""
     benefits, equity = af.mine_benefits_equity(
         "About the role\nResponsibilities include shipping product every quarter.")
     assert benefits is None and equity is None
     out = pc.build_output_text("http://x", "PM", "Acme", "Responsibilities...",
                                meta={"title": "PM"}, field_status={"conflicts": []})
-    assert "Benefits: Not posted" in out and "Equity: Not posted" in out
+    assert "Benefits: Employer Did Not Mention Benefits." in out
+    assert "Additional Compensation: Employer Did Not Mention Additional Compensation." in out
 
 
 def test_comp_disclaimer_sentence_is_never_surfaced_as_the_equity_value():
@@ -1379,7 +1386,7 @@ def test_comp_disclaimer_sentence_is_never_surfaced_as_the_equity_value():
     assert "4,000 restricted stock units" in equity2
 
 
-def test_verbatim_source_fields_are_populated_from_prose_when_structured_is_absent():
+def test_prose_derived_fields_populate_the_capture_when_structured_is_absent():
     body = af._html_to_text(_airbnb_html())
     meta = {"title": "Product Manager, Incubations", "source": "requests/html",
             "structured_source": False, "compensation": None, "compensation_raw": None,
@@ -1390,10 +1397,12 @@ def test_verbatim_source_fields_are_populated_from_prose_when_structured_is_abse
     assert "San Francisco, CA" in fs["working_location_prose_verbatim"]
     out = pc.build_output_text(AIRBNB_URL, "Product Manager, Incubations", "Airbnb", body,
                                meta=meta, field_status=fs, methods_tried=["requests"])
-    assert 'Compensation (verbatim): ""' not in out
-    assert 'Locations/Addresses (verbatim): ""' not in out
-    # The prose line carries a cadence ("3 days per week"), so cadence isn't blank either.
-    assert 'Office cadence (verbatim): ""' not in out
+    # The employer's own prose values fill the sections — never a blank/quoted-empty field.
+    assert "Base Salary:" in out and "220,000" in out
+    assert "San Francisco, CA" in out.split("WORK DETAILS")[1].split("COMPENSATION")[0]
+    # The prose states a "3 days per week" cadence — mined into Office Expectation.
+    assert "Office Expectation: 3 Days Per Week" in out
+    assert ': ""' not in out  # no empty quoted fields anywhere in the new contract
 
 
 def test_ote_and_total_comp_no_longer_qualify_a_base_salary_range():
@@ -1430,7 +1439,8 @@ def test_conflicting_is_reachable_when_ats_and_prose_envelopes_are_disjoint():
     assert labels == ["greenhouse-boards-api", "description"]
     assert "236,000" in values[0] and "110,000" in values[1]
     out = pc.build_output_text("http://x", "PM", "Acme", body, meta=meta, field_status=fs)
-    assert "[CONFLICT]" in out
+    assert "Conflicting Employer Information:" in out
+    assert "Compensation ⚠ Conflicting" in out  # the Verification line flags it too
 
 
 def test_identical_figures_in_ats_and_prose_do_not_false_flag_a_conflict():
@@ -1520,23 +1530,36 @@ def test_jsonld_date_posted_is_captured_for_generic_pages():
     assert jp["posted_date"] == "2026-05-02" and jp["updated_date"] == "2026-05-09"
 
 
-def test_posted_provenance_line_is_emitted_and_omitted_correctly():
+def test_posted_and_updated_lines_are_always_present_and_human_readable():
     base = dict(title="PM", source="greenhouse-boards-api")
     out = pc.build_output_text("http://x", "PM", "Acme", "Responsibilities...",
                                meta={**base, "posted_date": "2026-06-13",
                                      "updated_date": "2026-06-20"},
                                field_status={"conflicts": []}, captured="2026-07-29")
-    assert "Posted: 2026-06-13 · Updated: 2026-06-20" in out
-    # No update (or an update equal to the posted date) -> just the posted date.
-    same = pc.build_output_text("http://x", "PM", "Acme", "Responsibilities...",
-                                meta={**base, "posted_date": "2026-06-13",
-                                      "updated_date": "2026-06-13"},
-                                field_status={"conflicts": []}, captured="2026-07-29")
-    assert "Posted: 2026-06-13\n" in same and "Updated" not in same
-    # No posted date at all -> the whole line is omitted (never a fabricated date).
+    assert "Job Posted At: June 13, 2026" in out
+    assert "Job Updated At: June 20, 2026" in out
+    # No posted/updated date at all -> the lines are STILL present, honestly `Unknown`
+    # (replaces the legacy omit-when-unknown behavior; never a fabricated date).
     none = pc.build_output_text("http://x", "PM", "Acme", "Responsibilities...",
                                 meta=base, field_status={"conflicts": []}, captured="2026-07-29")
-    assert "Posted:" not in none
+    assert "Job Posted At: Unknown" in none
+    assert "Job Updated At: Unknown" in none
+    # The legacy `Posted:` provenance line is gone from newly written captures.
+    assert "\nPosted:" not in out and "\nPosted:" not in none
+
+
+def test_posted_and_updated_are_distinct_from_captured():
+    """Job Posted At / Job Updated At are the EMPLOYER's dates (JOB SNAPSHOT);
+    Captured is OUR fetch moment (CAPTURE DETAILS, in ET) — never conflated."""
+    out = pc.build_output_text("http://x", "PM", "Acme", "Responsibilities...",
+                               meta={"title": "PM", "posted_date": "2026-06-13",
+                                     "updated_date": "2026-06-20"},
+                               field_status={"conflicts": []},
+                               captured="2026-07-29T20:06:00+00:00")
+    head, _, tail = out.partition("--- JOB TEXT START ---")
+    assert "Job Posted At: June 13, 2026" in head and "Captured:" not in head
+    assert "Captured: July 29, 2026 at 4:06 PM ET" in tail
+    assert "June 13, 2026" not in tail.split("Captured:")[1].splitlines()[0]
 
 
 def test_manifest_records_the_posting_dates(tmp_path):
@@ -1555,8 +1578,9 @@ def test_manifest_records_the_posting_dates(tmp_path):
     entry = manifest["entries"][0]
     assert entry["posted_date"] == "2026-06-13"
     assert entry["updated_date"] == "2026-06-20"
-    assert "Posted: 2026-06-13 · Updated: 2026-06-20" in (
-        src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
+    written = (src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
+    assert "Job Posted At: June 13, 2026" in written
+    assert "Job Updated At: June 20, 2026" in written
 
 
 # ===========================================================================
@@ -1584,12 +1608,15 @@ def test_listing_page_apply_urls_become_canonical_deep_links(listing_url):
     assert af.greenhouse_apply_url_is_listing_page(listing_url, _GH_JOB_ID) is True
     res = _gh_result(listing_url)
     assert res["apply_url"] == f"https://job-boards.greenhouse.io/acmeboard/jobs/{_GH_JOB_ID}"
-    # The employer URL is preserved verbatim — nothing is lost.
+    # The employer URL is preserved in the fetch result (manifest-side) — nothing is
+    # lost — but the capture itself carries only Job Posting URL + Application URL
+    # (no duplicative `Employer Apply Page:` field, per the 2026-07-29 spec).
     assert res["employer_apply_url"] == listing_url
     out = pc.build_output_text("http://original", res["title"], res["company"], res["text"],
                                meta=res, questions=[], methods_tried=["ats"])
     assert f"Application URL: https://job-boards.greenhouse.io/acmeboard/jobs/{_GH_JOB_ID}" in out
-    assert f"Employer apply page (verbatim): {listing_url}" in out
+    assert listing_url not in out.split("Job Posting URL:")[1]
+    assert "Employer Apply Page" not in out and "Employer apply page" not in out
 
 
 @pytest.mark.parametrize("deep_link", [
@@ -1826,7 +1853,7 @@ def test_unrecoverable_title_is_a_loud_capture_failure_not_a_branding_filename(t
     assert entry["field_status"]["title"] == pc.CAPTURE_FAILED
     assert "title capture failed" in entry["notes"]
     written = (src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
-    assert "title ✗" in written
+    assert "Role: Unknown Title" in written  # loud placeholder, never a branding string
     report = (tmp_path / "0 - Prep Report" / "prep-report.md").read_text(encoding="utf-8")
     assert "JOB TITLE could not be captured" in report
 
@@ -1864,3 +1891,303 @@ def test_html_comments_never_leak_into_the_captured_body_text():
     body = _meta_body()
     assert "DURABLE REGRESSION FIXTURE" not in body
     assert body.splitlines()[0] == "Meta Careers"
+
+
+# ===========================================================================
+# The human-readable capture contract (JOB SNAPSHOT format, spec 2026-07-29).
+# All fixtures below are synthetic/public-safe (revision #9).
+# ===========================================================================
+_SYNTH_BODY = ("About the role\nResponsibilities include shipping product.\n"
+               "Qualifications: 5+ years of experience.\n"
+               "The base salary range for this role is $150,000 - $180,000 annually.\n"
+               + ("value delivered. " * 50))
+
+
+def _synth_out(**overrides):
+    kwargs = dict(meta={"title": "PM", "source": "greenhouse-boards-api",
+                        "structured_source": True, "compensation": "USD 150,000–180,000",
+                        "working_location": "Remote", "posted_date": "2026-06-13",
+                        "updated_date": "2026-06-20", "posting_id": "12345",
+                        "apply_url": "https://example.com/apply"},
+                  methods_tried=["ats"], captured="2026-07-29T20:06:00+00:00")
+    kwargs.update(overrides)
+    return pc.build_output_text("https://example.com/job/1", "PM", "Acme",
+                                _SYNTH_BODY, **kwargs)
+
+
+_TITLE_CASE_LABELS = [
+    "Company:", "Role:", "Job Posting URL:", "Job Posted At:", "Job Updated At:",
+    "Employment:", "Work Arrangement:", "Working Location(s):", "Office Expectation:",
+    "Base Salary:", "Additional Compensation:", "Benefits:",
+    "Captured:", "Application URL:", "Source:", "Posting ATS ID:", "Methods Checked:",
+    "Verification:",
+]
+
+
+def test_every_field_label_is_title_case_and_present():
+    out = _synth_out()
+    for label in _TITLE_CASE_LABELS:
+        assert f"\n{label}" in out or out.startswith(label), f"missing label: {label}"
+    # None of the implementation-language leftovers survive.
+    for gone in ("== NORMALIZED", "== APPLICATION QUESTIONS", "== EMPLOYER-PROVIDED",
+                 "[found]", "[not posted]", "[capture failed]", "[capture_failed]",
+                 "[conflicting]", "(verbatim)", "Employment Type:", "Workplace:",
+                 "Completeness:", "(none kept)", "n/a"):
+        assert gone not in out, f"legacy fragment survived: {gone}"
+
+
+def test_sections_appear_in_the_exact_specified_order():
+    out = _synth_out()
+    order = ["JOB SNAPSHOT", "WORK DETAILS", "COMPENSATION",
+             "APPLICATION QUESTIONS WORTH PREPARING",
+             "--- JOB TEXT START ---", "--- JOB TEXT END ---", "CAPTURE DETAILS"]
+    positions = [out.index(s) for s in order]
+    assert positions == sorted(positions)
+    # Banner underlines match their banner text exactly.
+    lines = out.splitlines()
+    for banner, ch in [("JOB SNAPSHOT", "="), ("WORK DETAILS", "="), ("COMPENSATION", "="),
+                       ("APPLICATION QUESTIONS WORTH PREPARING", "="),
+                       ("CAPTURE DETAILS", "-")]:
+        i = lines.index(banner)
+        assert lines[i + 1] == ch * len(banner), banner
+
+
+def test_capture_details_sits_after_the_end_marker():
+    out = _synth_out()
+    assert out.index("CAPTURE DETAILS") > out.index("--- JOB TEXT END ---")
+    assert "CAPTURE UPDATE DETAILS" not in out  # never on a first capture
+
+
+def test_et_conversion_is_dst_aware_january_and_july():
+    # July: UTC-4 (EDT).
+    assert pc.capture_timestamp("2026-07-29T20:06:00+00:00") == "July 29, 2026 at 4:06 PM ET"
+    # January: UTC-5 (EST) — same UTC wall time renders an hour earlier.
+    assert pc.capture_timestamp("2026-01-29T20:06:00+00:00") == "January 29, 2026 at 3:06 PM ET"
+    # Morning + midnight edges.
+    assert pc.capture_timestamp("2026-07-29T04:30:00+00:00") == "July 29, 2026 at 12:30 AM ET"
+
+
+def test_date_only_historical_captured_never_invents_a_time():
+    assert pc.capture_timestamp("2026-07-29") == "July 29, 2026 — Time Unavailable"
+    out = _synth_out(captured="2026-07-29")
+    assert "Captured: July 29, 2026 — Time Unavailable" in out
+    assert "12:00 AM" not in out
+
+
+def test_benefits_render_as_period_separated_short_sentences():
+    out = _synth_out(meta={"title": "PM", "structured_source": True,
+                           "compensation": "USD 150,000",
+                           "working_location": "Remote",
+                           "benefits": "Medical, dental, and vision insurance; "
+                                       "Flexible paid time off; 401(k) self contribution"})
+    assert ("Benefits: Medical, dental, and vision insurance. "
+            "Flexible paid time off. 401(k) self contribution.") in out
+
+
+def test_required_marker_sits_at_the_question_end_and_context_is_bracketed_lines():
+    qs = [
+        {"label": "Why do you want this role?", "type": "textarea", "required": True,
+         "help": "2-3 sentences is plenty.", "name": "q1", "names": ["q1"], "options": []},
+        {"label": "Pick a start month.", "type": "select", "required": False,
+         "name": "q2", "names": ["q2"], "options": ["June", "July"]},
+    ]
+    out = _synth_out(questions=qs)
+    assert "1. Why do you want this role? [Required]" in out
+    assert "2. Pick a start month. [Optional]" in out
+    # Bracketed context lines are SEPARATE indented lines, never inline.
+    assert "\n   [Context: 2-3 sentences is plenty.]" in out
+    assert '\n   [Options: "June" / "July"]' in out
+    assert "[Required]\n" in out and "? [Required] " not in out
+
+
+def test_no_questions_renders_none_found():
+    out = _synth_out(questions=[])
+    section = out.split("APPLICATION QUESTIONS WORTH PREPARING")[1].split("---")[0]
+    assert "None Found." in section
+
+
+def test_office_cadence_prose_fallback_shapes_named_days():
+    body = ("About the role\nResponsibilities include shipping product.\n"
+            "This role works onsite from our NYC or San Francisco hub location three "
+            "days per week: Tuesday, Wednesday, Thursday.\n" + ("x " * 60))
+    assert pc._mine_office_expectation(body) == "3 Days Per Week, Tuesday–Thursday"
+    out = pc.build_output_text("http://x", "PM", "Acme", body,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 150,000",
+                                     "working_location": "NYC; San Francisco"},
+                               methods_tried=["ats"])
+    assert "Office Expectation: 3 Days Per Week, Tuesday–Thursday" in out
+
+
+def test_office_cadence_is_never_inferred_when_unstated():
+    out = _synth_out()
+    assert "Office Expectation: Not Specified" in out
+    # Non-consecutive named days list, and open-ended minimums, keep their shape.
+    assert pc._format_cadence("at least 2 days per week") == "At Least 2 Days Per Week"
+    assert pc._format_cadence(
+        "two days per week: Monday, Wednesday") == "2 Days Per Week, Monday, Wednesday"
+
+
+def test_employment_full_time_exempt_mined_from_prose_when_structured_is_bare():
+    body = ("About the role\nResponsibilities include shipping product.\n"
+            "Full Time, Exempt\n" + ("x " * 60))
+    out = pc.build_output_text("http://x", "PM", "Acme", body,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 150,000",
+                                     "working_location": "Remote"},
+                               methods_tried=["ats"])
+    assert "Employment: Full Time, Exempt" in out
+    # Structured CamelCase maps to readable Title Case.
+    out2 = _synth_out(meta={"title": "PM", "structured_source": True,
+                            "employment_type": "FullTime",
+                            "compensation": "USD 150,000", "working_location": "Remote"})
+    assert "Employment: Full Time" in out2
+    # Marketing prose alone ("we're a full-time remote company") is never enough.
+    assert pc._mine_employment("We love being a full-time remote company.") is None
+
+
+def test_labeled_benefits_section_is_mined_into_sentences():
+    body = ("About the role\nResponsibilities include shipping product.\n"
+            "Full Time Employee Benefits:\n"
+            "- Comprehensive health insurance\n"
+            "- Flexible working hours\n"
+            "- 401(k) with company match\n" + ("x " * 60))
+    benefits, _e = af.mine_benefits_equity(body)
+    assert benefits and "Comprehensive health insurance" in benefits
+    out = pc.build_output_text("http://x", "PM", "Acme", body,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 150,000",
+                                     "working_location": "Remote"},
+                               methods_tried=["ats"])
+    assert ("Benefits: Comprehensive health insurance. Flexible working hours. "
+            "401(k) with company match.") in out
+
+
+def test_base_salary_and_additional_compensation_stay_separated():
+    body = ("About the role\nResponsibilities include shipping product.\n"
+            "You may also be eligible for a discretionary bonus and equity.\n" + ("x " * 60))
+    out = pc.build_output_text("http://x", "PM", "Acme", body,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 232,000–282,000",
+                                     "working_location": "Remote"},
+                               methods_tried=["ats"])
+    comp_section = out.split("COMPENSATION")[1].split("APPLICATION QUESTIONS")[0]
+    base = comp_section.split("Additional Compensation:")[0]
+    assert "232,000" in base and "bonus" not in base.lower() and "equity" not in base.lower()
+    assert ("Additional Compensation: Bonus and Equity Mentioned, but Details "
+            "Were Not Provided.") in out
+
+
+def test_base_salary_bullets_expand_k_amounts_to_full_dollars():
+    out = _synth_out(meta={"title": "PM", "structured_source": True,
+                           "compensation": "Zone A: $236K – $296K · Zone B: $213K – $266K",
+                           "working_location": "Remote"},
+                     field_status={"compensation": pc.FOUND,
+                                   "working_location": pc.FOUND,
+                                   "description": pc.FOUND, "conflicts": []})
+    assert "  - Zone A: $236,000 – $296,000 USD" in out
+    assert "  - Zone B: $213,000 – $266,000 USD" in out
+    assert "$236K" not in out
+
+
+def test_body_is_preserved_byte_for_byte_between_the_markers():
+    body = ("Odd   spacing\tand\ttabs\n\n\n== fake heading ==\nJob Posted At: 1999-01-01\n"
+            "Responsibilities include everything.\n" + ("x " * 60))
+    out = pc.build_output_text("http://x", "PM", "Acme", body,
+                               meta={"title": "PM", "structured_source": True,
+                                     "compensation": "USD 150,000",
+                                     "working_location": "Remote"},
+                               methods_tried=["ats"])
+    assert pc.body_from_capture(out) == body
+
+
+# ---- Re-fetch: CAPTURE UPDATE DETAILS + best-verified merge -----------------
+def _refetch_manifest(tmp_path, first_fetch, second_fetch):
+    src = _batch_source(tmp_path)
+    url = "https://example.com/job/refetch"
+    pc.process_urls([url], src, first_fetch)
+    manifest = pc.process_urls([url], src, second_fetch, force=True)
+    return src, manifest["entries"][0]
+
+
+def _fetch_result(body, comp="USD 150,000", posted="2026-06-13"):
+    def fetch(u):
+        return {"ok": True, "title": "PM", "company": "Acme", "body": body,
+                "method": "ats", "error": None,
+                "meta": {"title": "PM", "source": "greenhouse-boards-api",
+                         "structured_source": True, "compensation": comp,
+                         "working_location": "Remote", "posted_date": posted},
+                "questions": []}
+    return fetch
+
+
+def test_first_capture_has_no_update_details_and_a_refetch_gets_one(tmp_path):
+    src = _batch_source(tmp_path)
+    url = "https://example.com/job/one"
+    manifest = pc.process_urls([url], src, _fetch_result(_SYNTH_BODY))
+    first = (src / Path(manifest["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
+    assert "CAPTURE UPDATE DETAILS" not in first
+    original_captured_line = next(l for l in first.splitlines() if l.startswith("Captured:"))
+    # Verified re-fetch of the SAME url -> UPDATE DETAILS present, original Captured kept.
+    manifest2 = pc.process_urls([url], src, _fetch_result(_SYNTH_BODY), force=True)
+    entry = manifest2["entries"][0]
+    second = (src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
+    assert "CAPTURE UPDATE DETAILS" in second
+    assert second.index("CAPTURE UPDATE DETAILS") > second.index("CAPTURE DETAILS")
+    assert original_captured_line in second          # original Captured never overwritten
+    assert "Re-Captured:" in second
+    assert "Additional Notes: No Material Changes Detected." in second
+    # The manifest carries the capture-history record for future re-fetches.
+    assert entry["capture_history"] and entry["capture_history"][0]["fetched_at"]
+
+
+def test_material_content_diff_not_length_drives_additional_notes(tmp_path):
+    old = ("About the role\nResponsibilities include shipping product.\n"
+           "The base salary range for this role is $150,000 - $180,000 annually.\n"
+           + ("filler words here. " * 40))
+    # Same material content, VERY different length (chrome churn) -> no material change.
+    chrome_only = old + "\nCookie notice\nSite map\nFollow us on social media\n" + ("nav " * 200)
+    assert pc.material_change_notes(old, chrome_only) == "No Material Changes Detected."
+    # Nearly identical length but the salary changed -> material change, named.
+    edited = old.replace("$150,000 - $180,000", "$160,000 - $190,000")
+    notes = pc.material_change_notes(old, edited)
+    assert notes.startswith("Material Changes Detected In:")
+    assert "Compensation" in notes
+    # End-to-end through a re-fetch.
+    _src, entry = _refetch_manifest(
+        tmp_path, _fetch_result(old), _fetch_result(edited, comp="USD 160,000–190,000"))
+    out = (_src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
+    assert "Material Changes Detected In:" in out and "Compensation" in out
+
+
+def test_best_field_merge_never_degrades_a_better_body(tmp_path):
+    good = ("About the role\nResponsibilities include shipping product.\n"
+            "Qualifications: 5+ years of experience.\n"
+            "The base salary range for this role is $150,000 - $180,000 annually.\n"
+            + ("value delivered. " * 60))
+    shell = "Please enable JavaScript to continue. Sign in to apply."
+    src, entry = _refetch_manifest(tmp_path, _fetch_result(good), _fetch_result(shell))
+    assert entry["status"] == pc.USABLE
+    out = (src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
+    # The better existing body survives the degraded re-fetch, and the notes say so.
+    assert pc.body_from_capture(out) == good
+    assert "kept the prior job text" in entry["notes"]
+    assert "Prior Job Text Was Kept" in out
+    # Posting dates verified earlier survive a re-fetch whose source lost them.
+    src2 = _batch_source(tmp_path / "b2")
+    url = "https://example.com/job/dates"
+    pc.process_urls([url], src2, _fetch_result(good, posted="2026-06-13"))
+    m2 = pc.process_urls([url], src2, _fetch_result(good, posted=None), force=True)
+    assert m2["entries"][0]["posted_date"] == "2026-06-13"
+    out2 = (src2 / Path(m2["entries"][0]["output_path"]).name).read_text(encoding="utf-8")
+    assert "Job Posted At: June 13, 2026" in out2
+
+
+def test_a_genuine_employer_edit_does_replace_the_body(tmp_path):
+    old = ("About the role\nResponsibilities include shipping product.\n"
+           "The base salary range for this role is $150,000 - $180,000 annually.\n"
+           + ("value delivered. " * 60))
+    new = old.replace("shipping product", "shipping product and running discovery")
+    src, entry = _refetch_manifest(tmp_path, _fetch_result(old), _fetch_result(new))
+    out = (src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
+    assert pc.body_from_capture(out) == new  # a real edit is not "degradation"

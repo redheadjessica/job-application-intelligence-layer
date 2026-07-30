@@ -1,27 +1,32 @@
-URL: https://jobs.ashbyhq.com/betterup/fa0a5d05-39f9-47d5-9fc9-0a0540ff9018
-Application URL: https://jobs.ashbyhq.com/betterup/fa0a5d05-39f9-47d5-9fc9-0a0540ff9018/application
+JOB SNAPSHOT
+============
 Company: Betterup
 Role: Principal Product Manager
-Source: ashby-posting-api · Posting ID: fa0a5d05-39f9-47d5-9fc9-0a0540ff9018 · Captured: 2026-07-29 · Methods tried: ats, playwright
-Posted: 2026-03-25
+Job Posting URL: https://jobs.ashbyhq.com/betterup/fa0a5d05-39f9-47d5-9fc9-0a0540ff9018
+Job Posted At: March 25, 2026
+Job Updated At: Unknown
 
-== NORMALIZED (for vetting) ==
-Employment Type: FullTime
-Workplace: Hybrid
-Working Location: Austin, TX; San Francisco, CA; New York, NY; Arlington, VA; San Francisco Bay Area; New York City; Washington, D.C. — at least 2 days per week   [found]
-Compensation: Zone A: SF Bay Area / NYC $236K – $296K · Zone B: Austin / D.C. $213K – $266K   [found]
+WORK DETAILS
+============
+Employment: Full Time
+Work Arrangement: Hybrid
+Working Location(s): Austin, TX; San Francisco, CA; New York, NY; Arlington, VA; San Francisco Bay Area; New York City; Washington, D.C.
+Office Expectation: At Least 2 Days Per Week
+
+COMPENSATION
+============
+Base Salary:
+  - Zone A: SF Bay Area / NYC $236,000 – $296,000 USD
+  - Zone B: Austin / D.C. $213,000 – $266,000 USD
+Additional Compensation: Bonus and Equity Mentioned, but Details Were Not Provided.
 Benefits: At BetterUp, we are committed to living out our mission every day and that starts with providing benefits that allow our employees to care for themselves, support their families, and give back to their community.
-Equity: Mentioned (no details)
-Completeness: title ✓ · description ✓ · compensation found · working-location found
 
-== APPLICATION QUESTIONS (thoughtful / job-material only) ==
-1. [LongText, required] "BetterUp's mission is to help people everywhere pursue their lives with greater clarity, purpose, and passion. How does this mission resonate with you, and what specifically draws you to this role?"
-2. [ValueSelect, required] "I understand that this role requires me to live within 45 miles of one of the following offices and attend in person at least 2 days per week. Which office are you closest to?"  (options: "San Francisco Bay Area" / "New York City" / "Austin, TX" / "Washington, D.C.")
-
-== EMPLOYER-PROVIDED SOURCE (verbatim; the durable archive) ==
-Compensation (verbatim): "$213K – $296K • Multiple Ranges; Zone A: SF Bay Area / NYC $236K – $296K; Zone B: Austin / D.C. $213K – $266K"
-Locations/Addresses (verbatim): "Austin, Texas, United States; San Francisco, California, United States; New York City, New York, United States"
-Office cadence (verbatim): "I understand that this role requires me to live within 45 miles of one of the following offices and attend in person at least 2 days per week. Which office are you closest to?"
+APPLICATION QUESTIONS WORTH PREPARING
+=====================================
+1. BetterUp's mission is to help people everywhere pursue their lives with greater clarity, purpose, and passion. How does this mission resonate with you, and what specifically draws you to this role? [Required]
+2. I understand that this role requires me to live within 45 miles of one of the following offices and attend in person at least 2 days per week. Which office are you closest to? [Required]
+   [Options: "San Francisco Bay Area" / "New York City" / "Austin, TX" / "Washington, D.C."]
+   [Office Expectation: At Least 2 Days Per Week]
 
 --- JOB TEXT START ---
 
@@ -174,3 +179,12 @@ Protecting your privacy and treating your personal information with care is very
 #LI-Hybrid
 
 --- JOB TEXT END ---
+
+CAPTURE DETAILS
+---------------
+Captured: July 29, 2026 at 4:06 PM ET
+Application URL: https://jobs.ashbyhq.com/betterup/fa0a5d05-39f9-47d5-9fc9-0a0540ff9018/application
+Source: Ashby
+Posting ATS ID: fa0a5d05-39f9-47d5-9fc9-0a0540ff9018
+Methods Checked: ATS API, Rendered Page
+Verification: Job Description ✓ | Compensation ✓ | Working Location ✓

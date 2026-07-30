@@ -11,6 +11,64 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-29 — The capture preamble becomes a human-readable contract (JOB SNAPSHOT format), migrated atomically
+
+The saved job-post `.txt` header spoke implementation language (`== NORMALIZED (for vetting) ==`,
+`[found]` / `[capture_failed]` status tags, `[LongText, required]` question grammar, empty
+`(verbatim): ""` fields) at the person who has to read it before applying. A read-only audit swept the
+repo first and found the migration surface was tiny: exactly ONE mechanical parser of the preamble
+existed anywhere (`norm_contracts.posted_date_from_capture`'s `^Posted:` regex), one golden fixture, one
+test capture template, and two LLM prompt surfaces (`vet-jobs.js` scoring rules, the tailor spec's
+questions gate). Nothing splits on the body markers to recover metadata, and all re-run/dedup logic is
+manifest-driven — so the human-readable labels could safely BECOME the stable parsing contract, with
+every consumer and test migrated in the same commit (never a committed intermediate where the format
+changed before its readers).
+
+- **Writer** (`prep_common.build_output_text` + thin/failed variants): JOB SNAPSHOT / WORK DETAILS /
+  COMPENSATION / APPLICATION QUESTIONS WORTH PREPARING sections (all-caps banners, underline length
+  matching the banner; Title Case labels), the body byte-for-byte between the unchanged START/END
+  markers, and CAPTURE DETAILS moved BELOW the END marker. Honest per-field distinctions replace the
+  status tags: `Employer Did Not Mention <X>.` / `Could Not Verify.` / `Conflicting Employer
+  Information: <A> vs <B>.` / `<X> Mentioned, but Details Were Not Provided.` / `Not Specified` — and a
+  `Verification: Job Description ✓ | Compensation ✓ | Working Location ✓` line (✗ / — / ⚠ per state).
+  No empty quoted fields; no duplicative `Employer Apply Page` field (that URL stays manifest-only).
+- **Dates became first-class and honest.** `Job Posted At:` / `Job Updated At:` are ALWAYS present as
+  human dates (`June 13, 2026`), `Unknown` when the source exposed none — replacing omit-when-unknown.
+  `Captured:` now carries the full fetch timestamp rendered in Eastern Time via zoneinfo
+  (`July 29, 2026 at 4:06 PM ET`, DST-aware); a date-only historical capture renders
+  `— Time Unavailable` rather than inventing a time.
+- **Re-fetches get a CAPTURE UPDATE DETAILS block** — only on a genuine re-fetch of a
+  previously-manifested URL. The original `Captured` is preserved (the manifest now keeps a small
+  per-entry capture-history record so it survives future re-fetches), `Re-Captured` is the new moment,
+  and `Additional Notes` comes from a normalized-content comparison of the material regions
+  (responsibilities/qualifications/comp/location/cadence/questions) — never body length, so chrome-only
+  churn honestly reads `No Material Changes Detected.` A field-by-field best-verified merge means a
+  truncated/blocked new fetch can never replace a better existing body or erase verified posting dates.
+- **Miner-level extraction corrections** (offline): employment statements mined from body prose when the
+  structured field is bare (`Full Time, Exempt`), an office-cadence prose fallback that renders exact
+  stated cadences (`3 Days Per Week, Tuesday–Thursday`) and never infers an unstated one, labeled
+  benefits sections (`Full Time Employee Benefits:`) mined into period-separated sentences, and
+  bonus/equity/travel-credit eligibility split out of the old `Equity:` shoehorn into
+  `Additional Compensation` with the mentioned-without-details state.
+- **Parsers migrated with legacy compatibility.** `posted_date_from_capture` accepts BOTH the legacy
+  `Posted: ISO` line and the new `Job Posted At:` human/ISO forms (`Unknown` → blank), plus a matching
+  `updated_date_from_capture`; the search is now bounded to the pre-`--- JOB TEXT START ---` region
+  (closing the latent risk of an in-body `Posted:`-style line winning — LinkedIn writes such lines
+  inside bodies), falling back to whole-file only for marker-less hand-made captures. Verified against a
+  real prior batch's rankings CSV (copied to scratchpad, read-only): recomputed Posted values matched
+  the sheet exactly.
+- **Prompt/spec surfaces rewritten**: `vet-jobs.js` comp + location scoring rules now anchor on the
+  COMPENSATION / WORK DETAILS sections and the honest-distinction phrases (also killing a latent
+  `[capture_failed]`-with-underscore vs `[capture failed]`-with-space prompt/file mismatch); the tailor
+  spec's answer-drafting gate is now "an APPLICATION QUESTIONS WORTH PREPARING section containing
+  questions (not `None Found.`)".
+- **Tests**: golden BetterUp fixture regenerated deliberately; ~20 pinned tests migrated; new regression
+  coverage (section order + banner underlines, Title Case labels, CAPTURE DETAILS after END, update
+  block only on verified re-fetch, DST-aware ET conversion for January AND July, date-only →
+  Time Unavailable, period-separated benefits, question `[Required]` grammar + bracketed context lines,
+  cadence/benefits/employment mining, comp separation, body preservation, legacy `Posted:` parsing both
+  ways, body-region bounding, no-degradation merge, content-diff-not-length notes). Suite: 377 → 401.
+
 ## 2026-07-29 — Status joins the mechanically-enforced contracts (spelling drift silently unstyled cells)
 
 Found by a user reading her own sheet. Three rows held `Apply Eventually: Apply if Time` — lowercase

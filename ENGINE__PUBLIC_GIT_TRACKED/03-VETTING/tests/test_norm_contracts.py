@@ -571,7 +571,40 @@ def test_xlsx_comp_cells_recolored_by_midpoint_rule(tmp_path):
 # saved sheet. Filled by the same back-fill mechanism as the other contract columns,
 # so regenerating an OLD rankings CSV picks the date up too.
 # --------------------------------------------------------------------------- #
-CAPTURE_TEMPLATE = """URL: https://example.com/job/1
+# The CURRENT capture layout (JOB SNAPSHOT format, 2026-07-29): `Job Posted At:` is a
+# human date inside the pre-body snapshot; CAPTURE DETAILS sits below the END marker.
+CAPTURE_TEMPLATE = """JOB SNAPSHOT
+============
+Company: {company}
+Role: Senior PM
+Job Posting URL: https://example.com/job/1
+{posted}
+Job Updated At: Unknown
+
+WORK DETAILS
+============
+Employment: Full Time
+Work Arrangement: Remote
+Working Location(s): Remote
+Office Expectation: Not Specified
+
+--- JOB TEXT START ---
+body
+--- JOB TEXT END ---
+
+CAPTURE DETAILS
+---------------
+Captured: July 29, 2026 at 4:06 PM ET
+Application URL: https://example.com/job/1
+Source: Greenhouse
+Posting ATS ID: 1
+Methods Checked: ATS API
+Verification: Job Description ✓ | Compensation ✓ | Working Location ✓
+"""
+
+# The LEGACY layout — old batches must keep filling the Posted column without re-fetching,
+# so the dual-regex path is pinned in BOTH directions.
+LEGACY_CAPTURE_TEMPLATE = """URL: https://example.com/job/1
 Application URL: https://example.com/job/1
 Company: {company}
 Role: Senior PM
@@ -586,24 +619,96 @@ body
 """
 
 
-def write_capture(batch_root, company, posted="Posted: 2026-06-13"):
+def write_capture(batch_root, company, posted="Job Posted At: June 13, 2026",
+                  template=CAPTURE_TEMPLATE):
     src = batch_root / "3 - Source Material" / "All Job Posts (full text)"
     src.mkdir(parents=True, exist_ok=True)
     path = src / f"{company.lower()}.txt"
-    path.write_text(CAPTURE_TEMPLATE.format(company=company, posted=posted), encoding="utf-8")
+    path.write_text(template.format(company=company, posted=posted), encoding="utf-8")
     return path
 
 
-def test_posted_is_read_out_of_the_capture_provenance_line(tmp_path):
+def write_legacy_capture(batch_root, company, posted="Posted: 2026-06-13"):
+    return write_capture(batch_root, company, posted=posted, template=LEGACY_CAPTURE_TEMPLATE)
+
+
+def test_posted_is_read_out_of_the_current_snapshot_line(tmp_path):
     write_capture(tmp_path, "Acme")
     rankings = tmp_path / "1 - Rankings"
     rankings.mkdir()
     assert norm_contracts.posted_date_from_capture("acme.txt", base_dir=rankings) == "2026-06-13"
-    # Absent line / absent file -> blank, never a guess.
-    write_capture(tmp_path, "NoDate", posted="")
+    # `Unknown` / absent line / absent file -> blank, never a guess.
+    write_capture(tmp_path, "NoDate", posted="Job Posted At: Unknown")
     assert norm_contracts.posted_date_from_capture("nodate.txt", base_dir=rankings) == ""
+    write_capture(tmp_path, "MissingLine", posted="")
+    assert norm_contracts.posted_date_from_capture("missingline.txt", base_dir=rankings) == ""
     assert norm_contracts.posted_date_from_capture("missing.txt", base_dir=rankings) == ""
     assert norm_contracts.posted_date_from_capture("", base_dir=rankings) == ""
+    # An ISO value on the current line parses too (parser accepts both forms).
+    write_capture(tmp_path, "IsoDate", posted="Job Posted At: 2026-06-14")
+    assert norm_contracts.posted_date_from_capture("isodate.txt", base_dir=rankings) == "2026-06-14"
+
+
+def test_posted_is_still_read_out_of_a_legacy_capture(tmp_path):
+    """Old-format captures (provenance `Posted:` line) keep filling the rankings
+    Posted column — no re-fetch needed to regenerate an old batch."""
+    write_legacy_capture(tmp_path, "Acme")
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    assert norm_contracts.posted_date_from_capture("acme.txt", base_dir=rankings) == "2026-06-13"
+    write_legacy_capture(tmp_path, "NoDate", posted="")
+    assert norm_contracts.posted_date_from_capture("nodate.txt", base_dir=rankings) == ""
+
+
+def test_posted_search_is_bounded_to_the_pre_body_region(tmp_path):
+    """A fake `Job Posted At:` / `Posted:` line INSIDE the job body (LinkedIn-style
+    in-body metadata) must never win — only the snapshot region counts."""
+    src = tmp_path / "3 - Source Material" / "All Job Posts (full text)"
+    src.mkdir(parents=True, exist_ok=True)
+    decoy_body = ("body text\nJob Posted At: January 1, 1999\nPosted: 1999-01-01\nmore text")
+    (src / "decoy.txt").write_text(
+        CAPTURE_TEMPLATE.format(company="Decoy", posted="Job Posted At: Unknown")
+        .replace("body", decoy_body), encoding="utf-8")
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    assert norm_contracts.posted_date_from_capture("decoy.txt", base_dir=rankings) == ""
+    # Real snapshot date + in-body decoy: the snapshot line wins.
+    (src / "real.txt").write_text(
+        CAPTURE_TEMPLATE.format(company="Real", posted="Job Posted At: June 13, 2026")
+        .replace("body", decoy_body), encoding="utf-8")
+    assert norm_contracts.posted_date_from_capture("real.txt", base_dir=rankings) == "2026-06-13"
+    # A hand-made capture with NO body marker still parses (whole-file fallback).
+    (src / "handmade.txt").write_text("Job Posted At: June 15, 2026\npasted text",
+                                      encoding="utf-8")
+    assert norm_contracts.posted_date_from_capture("handmade.txt", base_dir=rankings) == "2026-06-15"
+
+
+def test_updated_date_reader_accepts_both_formats(tmp_path):
+    src = tmp_path / "3 - Source Material" / "All Job Posts (full text)"
+    src.mkdir(parents=True, exist_ok=True)
+    (src / "cur.txt").write_text(
+        CAPTURE_TEMPLATE.format(company="Cur", posted="Job Posted At: June 13, 2026")
+        .replace("Job Updated At: Unknown", "Job Updated At: June 20, 2026"),
+        encoding="utf-8")
+    (src / "leg.txt").write_text(
+        LEGACY_CAPTURE_TEMPLATE.format(
+            company="Leg", posted="Posted: 2026-06-13 · Updated: 2026-06-21"),
+        encoding="utf-8")
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    assert norm_contracts.updated_date_from_capture("cur.txt", base_dir=rankings) == "2026-06-20"
+    assert norm_contracts.updated_date_from_capture("leg.txt", base_dir=rankings) == "2026-06-21"
+    assert norm_contracts.updated_date_from_capture("missing.txt", base_dir=rankings) == ""
+
+
+def test_human_capture_dates_parse_to_iso():
+    assert norm_contracts._parse_capture_date("June 13, 2026") == "2026-06-13"
+    assert norm_contracts._parse_capture_date("February 2, 2026") == "2026-02-02"
+    assert norm_contracts._parse_capture_date("2026-06-13") == "2026-06-13"
+    assert norm_contracts._parse_capture_date("2026-06-13T09:05:32-04:00") == "2026-06-13"
+    assert norm_contracts._parse_capture_date("Unknown") == ""
+    assert norm_contracts._parse_capture_date("") == ""
+    assert norm_contracts._parse_capture_date("not a date") == ""
 
 
 def test_status_spelling_drift_is_repaired_to_the_dropdown_value():
@@ -655,13 +760,13 @@ def test_capture_search_never_escapes_its_own_batch(tmp_path):
     last-resort filename search may step up to its own batch root, but no further."""
     reviews = tmp_path / "__READY_TO_REVIEW__"
     ours, theirs = reviews / "07-29-26", reviews / "06-02-26"
-    write_capture(theirs, "Acme", posted="Posted: 1999-01-01")
+    write_capture(theirs, "Acme", posted="Job Posted At: January 1, 1999")
     ours.mkdir(parents=True)
     # base_dir is the BATCH ROOT here, so its parent is the reviews root holding every other
     # batch. Our batch has no such capture; the neighbour's must NOT be picked up.
     assert norm_contracts.posted_date_from_capture("acme.txt", base_dir=ours) == ""
     # Once it exists in OUR batch, the same lookup resolves — the bound is on breadth, not depth.
-    write_capture(ours, "Acme", posted="Posted: 2026-07-29")
+    write_capture(ours, "Acme", posted="Job Posted At: July 29, 2026")
     assert norm_contracts.posted_date_from_capture("acme.txt", base_dir=ours) == "2026-07-29"
     # And from the rankings subfolder, stepping up to the batch root is still allowed.
     rankings = ours / "1 - Rankings"

@@ -338,7 +338,11 @@ def filter_questions(questions: list[dict]) -> list[dict]:
 # --------------------------------------------------------------------------- #
 # Benefits / equity prose mining (SOFT — fine to come back "Not posted")
 # --------------------------------------------------------------------------- #
-_BENEFITS_HEADING_RE = re.compile(r"(?im)^[\s#>*_\-]*(benefits?|perks?( & benefits)?|what we offer)\b[:\s]*$")
+# Accepts labeled variants too ("Full Time Employee Benefits:", "Employee Benefits",
+# "Our Benefits") — a short qualifier before the keyword is still a benefits heading.
+_BENEFITS_HEADING_RE = re.compile(
+    r"(?im)^[\s#>*_\-]*(?:(?:full[-\s]?time|part[-\s]?time|employee|our|us|team|your)\s+){0,3}"
+    r"(benefits?|perks?( & benefits)?|what we offer)\b[:\s]*$")
 _EQUITY_RE = re.compile(r"(?i)([^.\n]*\b(equity|stock options?|RSUs?|restricted stock|ESPP)\b[^.\n]*)")
 
 # THIRD STATE — "Mentioned (no details)" (2026-07-29 spec).

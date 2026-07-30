@@ -42,7 +42,7 @@ That means:
 
 This version of the system is focused on **resume generation and resume setup only**.
 
-Cover letters are out of scope for this workflow. **Application-answer drafting IS in scope, narrowly** (added 2026-07-29): when the job file carries a captured "== APPLICATION QUESTIONS ==" block, draft lightweight best-effort answers for the compose-a-response questions only — see "Proposed Answers to Application Questions" below.
+Cover letters are out of scope for this workflow. **Application-answer drafting IS in scope, narrowly** (added 2026-07-29): when the job file's "APPLICATION QUESTIONS WORTH PREPARING" section actually contains questions (not "None Found."), draft lightweight best-effort answers for the compose-a-response questions only — see "Proposed Answers to Application Questions" below.
 
 The current goal is to make the resume workflow work end-to-end:
 - work inside the current job batch under `__READY_TO_REVIEW__PRIVATE_GITIGNORED/MM-DD-YY/` (the job file is provided to you)
@@ -298,7 +298,7 @@ Use full article text when available; if content is unavailable, label the recom
 
 **Routing — match picks to the role's domain and seniority, and check the Selected-Writing combos table in `02-resume-index.md` if present before recommending a non-standard set.** Lead with the piece most closely aligned to the role's domain, keep the set from over-narrowing for broader roles, and use the documented combos as a starting point rather than deviating without checking the table.
 
-**Cover letters remain out of scope for this workflow.** **Application-answer drafting is now in scope, narrowly** — only for the compose-a-response questions in a captured "== APPLICATION QUESTIONS ==" block (see "Proposed Answers to Application Questions"); do not draft routine/work-auth/visa/comp-expectation answers. Do not insert cover-letter production or length rules into the resume workflow as though they are implemented. Reusable narrative material (motivation, company connection, why the problem matters, location context) may be preserved under **Narrative & Cover-Letter Inputs** in `01-profile.md` for a future module, but the agent does not generate cover letters now.
+**Cover letters remain out of scope for this workflow.** **Application-answer drafting is now in scope, narrowly** — only for the compose-a-response questions in a captured "APPLICATION QUESTIONS WORTH PREPARING" section that actually contains questions, not "None Found." (see "Proposed Answers to Application Questions"); do not draft routine/work-auth/visa/comp-expectation answers. Do not insert cover-letter production or length rules into the resume workflow as though they are implemented. Reusable narrative material (motivation, company connection, why the problem matters, location context) may be preserved under **Narrative & Cover-Letter Inputs** in `01-profile.md` for a future module, but the agent does not generate cover letters now.
 
 ## Tailor the Most Prominent Content Most
 The most prominent, earliest content (the top of page one — whatever the candidate's structure places there) is where tailoring happens most and changes most often.
@@ -447,7 +447,7 @@ This file should contain the full actionable output for the run, in this order (
 4. Summary Options
 5. Skills Recommendation
 6. Selected Writing / Projects recommendation (if the candidate has a Voice/portfolio family)
-7. Proposed Answers to Application Questions (ONLY if the job file has a captured "== APPLICATION QUESTIONS ==" block — see the section rules below; omit the section entirely otherwise)
+7. Proposed Answers to Application Questions (ONLY if the job file's "APPLICATION QUESTIONS WORTH PREPARING" section contains questions — not "None Found."; see the section rules below; omit the section entirely otherwise)
 8. Content Opportunity (ONLY if the candidate opted in at intake — see Step 9.5; omit the section entirely for candidates who didn't)
 
 **Bottom — context and diagnostics:**
@@ -459,8 +459,8 @@ This file should contain the full actionable output for the run, in this order (
 14. Read Log (last)
 
 ### "Proposed Answers to Application Questions" — when and how (added 2026-07-29)
-Prep may capture a narrow set of **thoughtful** application questions into a "== APPLICATION QUESTIONS ==" block at the top of the job `.txt` (only compose-a-response questions and ones that reveal job location/cadence/employer-comp; routine/identity/EEO/work-auth/visa/comp-expectation questions are already excluded upstream and must NOT be reintroduced). If that block exists:
-- Read the NORMALIZED header (Working Location / Compensation / Benefits) in Step 1 rather than only re-deriving from body prose.
+Prep may capture a narrow set of **thoughtful** application questions into the "APPLICATION QUESTIONS WORTH PREPARING" section near the top of the job `.txt` (only compose-a-response questions and ones that reveal job location/cadence/employer-comp; routine/identity/EEO/work-auth/visa/comp-expectation questions are already excluded upstream and must NOT be reintroduced). If that section contains questions (a section reading "None Found." gates this off):
+- Read the WORK DETAILS and COMPENSATION sections (Working Location(s) / Office Expectation / Base Salary / Benefits) in Step 1 rather than only re-deriving from body prose.
 - For each **compose-a-response** question (essays like "what made you apply", "how does our mission resonate", "which AI tools do you use"), draft ONE lightweight, best-effort answer in the candidate's established voice, sourced ONLY from the existing canon (`01-profile.md`, `04-experience-bank.md`, `03-approved-truths-and-boundary-rules.md`, `cover-letter/voice-spec.md` + `anecdote-bank.md`). A useful first draft is enough — the candidate reviews/copies it manually. Do NOT build new integrations or pull in large external material.
 - Do NOT draft answers for questions that merely reveal job facts (office-cadence, comp) — those inform the resume/location analysis, not this section.
 - Autonomous contract (never block): if an answer would depend on an unverified fact, write the conservative version and route the uncertainty into "Questions for the candidate" — never fabricate. Respect `03-approved-truths-and-boundary-rules.md`.

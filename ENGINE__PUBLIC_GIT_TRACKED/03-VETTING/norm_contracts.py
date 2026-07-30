@@ -70,6 +70,7 @@ import csv
 import json
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # ---- Working Location colors — EXACT hexes from the spec (uppercase for openpyxl). ----
@@ -604,17 +605,52 @@ H_MISSIONNOTES = "Mission Fit Notes"           # the column it must sit before
 # --------------------------------------------------------------------------- #
 # Posted — the employer's own publication date, read back out of the capture
 #
-# Every capture written by prep carries a `Posted: YYYY-MM-DD` provenance line when its ATS
-# published one (the only other date in a capture is `Captured:`, our fetch date). This
-# column surfaces it in the rankings so a nine-month-old posting is visible at a glance.
-# Deliberately a STATIC ISO date, not an age/"days open" computation: a saved spreadsheet
-# with a computed age silently goes stale and starts lying; a date never does.
+# Current captures carry a `Job Posted At:` line in the JOB SNAPSHOT section (a human
+# date like `June 13, 2026`, or `Unknown` when the source exposed none); legacy captures
+# carry `Posted: YYYY-MM-DD`. BOTH are accepted so old batches regenerate their Posted
+# column without re-fetching. This column surfaces the date in the rankings so a
+# nine-month-old posting is visible at a glance. Deliberately a STATIC ISO date, not an
+# age/"days open" computation: a saved spreadsheet with a computed age silently goes
+# stale and starts lying; a date never does.
+#
+# The search is BOUNDED to the region before `--- JOB TEXT START ---`: LinkedIn (and
+# other) fetchers write `Posted:`/`Location:`-style lines INSIDE the body, and a body
+# line must never win over the capture's own snapshot line. Only when the marker is
+# absent (hand-made legacy captures) does the search fall back to the whole file.
 #
 # Back-filled by reading each row's `Job File` capture — the same mechanism as the other
 # contract columns, so regenerating an OLD rankings CSV populates it too.
 # --------------------------------------------------------------------------- #
-_POSTED_LINE_RE = re.compile(r"^Posted:\s*(\d{4}-\d{2}-\d{2})", re.M)
+_POSTED_LINE_RE = re.compile(r"^Posted:\s*(\d{4}-\d{2}-\d{2})", re.M)          # legacy
+_JOB_POSTED_AT_RE = re.compile(r"^Job Posted At:\s*(.+?)\s*$", re.M)           # current
+_JOB_UPDATED_AT_RE = re.compile(r"^Job Updated At:\s*(.+?)\s*$", re.M)
+_BODY_START_MARKER = "--- JOB TEXT START ---"
 _CAPTURE_SUBDIR = ("3 - Source Material", "All Job Posts (full text)")
+
+
+def _parse_capture_date(raw):
+    """A capture-date value -> ISO `YYYY-MM-DD`. Accepts the human form
+    (`June 13, 2026`) and ISO (with or without a time part); `Unknown`/blank/
+    unparseable -> "" (never a guess)."""
+    s = str(raw or "").strip()
+    if not s or s.lower() == "unknown":
+        return ""
+    m = re.match(r"^(\d{4}-\d{2}-\d{2})", s)
+    if m:
+        return m.group(1)
+    try:
+        return datetime.strptime(s, "%B %d, %Y").strftime("%Y-%m-%d")
+    except ValueError:
+        return ""
+
+
+def _capture_head(text):
+    """The pre-body region of a capture (everything before the JOB TEXT START
+    marker). Falls back to the whole file only when the marker is absent, so
+    hand-made legacy captures keep working."""
+    if _BODY_START_MARKER in text:
+        return text.split(_BODY_START_MARKER, 1)[0]
+    return text
 
 
 def _resolve_capture_path(job_file, base_dir=None):
@@ -659,8 +695,10 @@ def _resolve_capture_path(job_file, base_dir=None):
 
 
 def posted_date_from_capture(job_file, base_dir=None):
-    """The `Posted: YYYY-MM-DD` date from a capture, or "" when the file or line is absent
-    (a posting whose ATS published no date must stay blank, never a guess)."""
+    """The employer's publication date from a capture as ISO `YYYY-MM-DD`, or ""
+    when the file or line is absent / `Unknown` (a posting whose ATS published no
+    date must stay blank, never a guess). Reads the current `Job Posted At:` line
+    first, then the legacy `Posted:` line — both bounded to the pre-body region."""
     path = _resolve_capture_path(job_file, base_dir)
     if not path:
         return ""
@@ -668,7 +706,30 @@ def posted_date_from_capture(job_file, base_dir=None):
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return ""
-    m = _POSTED_LINE_RE.search(text)
+    head = _capture_head(text)
+    m = _JOB_POSTED_AT_RE.search(head)
+    if m:
+        return _parse_capture_date(m.group(1))
+    m = _POSTED_LINE_RE.search(head)
+    return m.group(1) if m else ""
+
+
+def updated_date_from_capture(job_file, base_dir=None):
+    """The employer's last-update date (`Job Updated At:` / legacy `· Updated:`)
+    as ISO `YYYY-MM-DD`, "" when absent or `Unknown`. Same bounding rules as
+    `posted_date_from_capture`."""
+    path = _resolve_capture_path(job_file, base_dir)
+    if not path:
+        return ""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    head = _capture_head(text)
+    m = _JOB_UPDATED_AT_RE.search(head)
+    if m:
+        return _parse_capture_date(m.group(1))
+    m = re.search(r"·\s*Updated:\s*(\d{4}-\d{2}-\d{2})", head)  # legacy provenance line
     return m.group(1) if m else ""
 
 
