@@ -45,7 +45,9 @@ candidate-relative interpretation of location/comp happens later, at vetting.
 from __future__ import annotations
 
 import html
+import json
 import re
+from pathlib import Path
 from typing import Optional
 from urllib.parse import parse_qs, unquote, urlparse
 
@@ -2413,6 +2415,91 @@ def employer_declared_name(html_text: Optional[str] = None,
     # Third source: the <title>'s trailing branding wrapper. Many careers pages declare
     # neither JSON-LD nor og:site_name, yet spell the company correctly right here.
     return company_from_page_title(src)
+
+
+# --------------------------------------------------------------------------- #
+# Brand-casing recovery (B9) — ATS-hosted postings whose only company signal is a
+# board token ("openloophealth") get a capitalize-first guess ("Openloophealth").
+# Priority order for the real casing:
+#   1. a structured employer name (ATS field / JSON-LD / declared page name) — those
+#      routes already exist and win before this is consulted;
+#   2. the employer's identity as stated in the JD body itself ("About OpenLoop",
+#      a copyright footer, a signature line);
+#   3. the tracked alias map (brand-casing.json — generic infrastructure, seeded
+#      only with shapes the tests need);
+#   4. the capitalize-first token as-is. With no casing evidence, current behavior
+#      STANDS — never guess camel casing (BetterUp/OpenAI/YouTube/ClassDojo/
+#      iHeartMedia-style brands must not be damaged by a wrong "repair").
+# --------------------------------------------------------------------------- #
+# Generic suffixes a BOARD TOKEN often carries beyond the brand itself
+# ("openloophealth" -> brand "OpenLoop" + descriptor "health").
+_BRAND_TOKEN_SUFFIXES = ("health", "healthcare", "hq", "inc", "labs", "app", "co",
+                         "careers", "jobs", "team", "hiring", "io", "ai")
+_BRAND_ALIAS_PATH = Path(__file__).with_name("brand-casing.json")
+_BRAND_WORD_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9&.\-]{2,}\b")
+
+
+def _brand_key(text) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(text or "").lower())
+
+
+def load_brand_aliases(path=None) -> dict:
+    try:
+        data = json.loads(Path(path or _BRAND_ALIAS_PATH).read_text(encoding="utf-8"))
+        return {k: v for k, v in data.items()
+                if isinstance(k, str) and isinstance(v, str) and not k.startswith("_")}
+    except Exception:
+        return {}
+
+
+def _token_accept_keys(token: str) -> set:
+    """The brand keys a body word may match for this token: the full token, plus the
+    token minus ONE generic suffix (never so much that a short unrelated word could
+    match — "better" must never claim "betterup")."""
+    key = _brand_key(token)
+    accept = {key}
+    for suffix in _BRAND_TOKEN_SUFFIXES:
+        if key.endswith(suffix) and len(key) - len(suffix) >= 4:
+            accept.add(key[: -len(suffix)])
+    return accept
+
+
+def brand_casing_from_body(token: str, body: str) -> Optional[str]:
+    """The employer's own casing of its name, as evidenced by the JD body — or None.
+    A candidate word must (a) match the token family (full key, or the key minus a
+    generic suffix) and (b) carry REAL casing information: an internal capital, or
+    consistent non-capitalize-first casing. A body that only ever writes the
+    capitalize-first form adds nothing, and None means the caller keeps the token."""
+    accept = _token_accept_keys(token)
+    counts: dict[str, int] = {}
+    for m in _BRAND_WORD_RE.finditer(str(body or "")):
+        word = m.group(0).strip(".-")
+        if _brand_key(word) not in accept:
+            continue
+        counts[word] = counts.get(word, 0) + 1
+    if not counts:
+        return None
+    # Prefer the most frequent form; internal-capital forms outrank on ties.
+    best = max(counts, key=lambda w: (counts[w], any(c.isupper() for c in w[1:])))
+    if not any(c.isupper() for c in best[1:]) and best == best.capitalize():
+        return None   # only the capitalize-first form appears — no new information
+    if best.islower() or best.isupper():
+        return None   # all-lower/all-upper body styling is layout, not brand casing
+    return best
+
+
+def recover_brand_casing(company, body: str, alias_map: Optional[dict] = None) -> Optional[str]:
+    """The properly-cased company name for a token-shaped guess, or None to keep the
+    current value. Only fires for a single word with no internal capitals (a name
+    that already carries casing or spacing is left alone)."""
+    name = str(company or "").strip()
+    if not name or " " in name or any(c.isupper() for c in name[1:]):
+        return None
+    evidenced = brand_casing_from_body(name, body)
+    if evidenced:
+        return evidenced
+    aliases = alias_map if alias_map is not None else load_brand_aliases()
+    return aliases.get(_brand_key(name))
 
 
 def should_check_employer_name(url: str, company) -> bool:

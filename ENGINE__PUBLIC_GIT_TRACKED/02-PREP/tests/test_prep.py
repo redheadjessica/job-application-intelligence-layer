@@ -4649,3 +4649,91 @@ def test_the_canonical_cli_validates_its_arguments(tmp_path):
         capture_output=True, text=True)
     assert res2.returncode != 0
     assert "invalid choice" in res2.stderr
+
+
+# ===========================================================================
+# B9 — ATS-hosted brand-casing recovery. The live class: board token
+# `openloophealth` title-cased into `Openloophealth` while the body plainly
+# says "OpenLoop". Priority: structured name > body evidence > alias map >
+# capitalize-first (which STANDS when no casing evidence exists — camel brands
+# are never guessed).
+# ===========================================================================
+_OPENLOOP_BODY = ("About the role\nResponsibilities include shipping product.\n"
+                  "About OpenLoop\nOpenLoop was founded to bring healing anywhere. "
+                  "Our telehealth support solutions are thoughtfully designed.\n"
+                  "© 2026 OpenLoop. All rights reserved.\n" + ("value delivered. " * 60))
+
+
+def test_the_openloophealth_class_recovers_its_casing_from_the_body():
+    assert af.brand_casing_from_body("openloophealth", _OPENLOOP_BODY) == "OpenLoop"
+    assert af.recover_brand_casing("Openloophealth", _OPENLOOP_BODY) == "OpenLoop"
+
+
+def test_body_recovery_end_to_end_through_process_urls(tmp_path):
+    src = _batch_source(tmp_path)
+
+    def fetch(u):
+        return {"ok": True, "title": "Product Manager", "company": "Openloophealth",
+                "body": _OPENLOOP_BODY, "method": "ats", "error": None,
+                "meta": {"title": "Product Manager", "source": "ashby-posting-api",
+                         "structured_source": True, "compensation": "USD 150,000",
+                         "working_location": "Remote"}, "questions": []}
+
+    manifest = pc.process_urls(["https://jobs.ashbyhq.com/openloophealth/"
+                                "4ccf1e87-0317-4dca-949d-f7cb4f76fad7"],
+                               src, fetch, registry_path=tmp_path / "reg.json")
+    entry = manifest["entries"][0]
+    assert entry["company"] == "OpenLoop"
+    assert Path(entry["output_path"]).name == "openloop__product-manager.txt"
+    written = (src / Path(entry["output_path"]).name).read_text(encoding="utf-8")
+    assert "Company: OpenLoop" in written
+
+
+@pytest.mark.parametrize("token,camel", [
+    ("betterup", "BetterUp"), ("openai", "OpenAI"), ("youtube", "YouTube"),
+    ("classdojo", "ClassDojo"), ("iheartmedia", "iHeartMedia"),
+])
+def test_camel_brands_recover_only_with_body_evidence(token, camel):
+    """With body evidence the employer's own camel casing wins; with NO evidence
+    the capitalize-first token stands — never a guess."""
+    body = (f"About the role\nResponsibilities include shipping product.\n"
+            f"About {camel}\n{camel} builds tools people love.\n"
+            + ("value delivered. " * 60))
+    assert af.recover_brand_casing(token.capitalize(), body) == camel
+    silent = ("About the role\nResponsibilities include shipping product.\n"
+              + ("value delivered. " * 60))
+    assert af.recover_brand_casing(token.capitalize(), silent) is None
+
+
+def test_short_words_can_never_claim_a_longer_token():
+    """'Better' must never rename 'betterup': suffix stripping is limited to the
+    generic descriptor list, never arbitrary prefixes."""
+    body = ("About the role\nBetter products ship faster. Responsibilities include "
+            "shipping product.\n" + ("value delivered. " * 60))
+    assert af.brand_casing_from_body("betterup", body) is None
+    assert af.recover_brand_casing("Betterup", body) is None
+
+
+def test_already_cased_or_multiword_names_are_left_alone():
+    assert af.recover_brand_casing("BetterUp", "BetterUp everywhere") is None
+    assert af.recover_brand_casing("Help Scout", "Help Scout everywhere") is None
+    assert af.recover_brand_casing("", "anything") is None
+
+
+def test_the_alias_map_is_the_layer_between_body_evidence_and_the_token():
+    aliases = {"acmeco": "AcmeCo"}
+    silent = "About the role\nResponsibilities include shipping.\n" + ("x " * 60)
+    # Body evidence missing -> alias map answers.
+    assert af.recover_brand_casing("Acmeco", silent, alias_map=aliases) == "AcmeCo"
+    # Body evidence WINS over the alias map.
+    body = "About AcmeCO\nAcmeCO ships.\nResponsibilities include shipping.\n" + ("x " * 60)
+    assert af.recover_brand_casing("Acmeco", body, alias_map={"acmeco": "WrongName"}) == "AcmeCO"
+    # The shipped map is generic infrastructure: no real seeds beyond the README.
+    shipped = af.load_brand_aliases()
+    assert shipped == {}
+
+
+def test_all_caps_body_styling_is_layout_not_brand_casing():
+    body = ("ABOUT OPENLOOPHEALTH\nOPENLOOPHEALTH IS HIRING.\n"
+            "Responsibilities include shipping product.\n" + ("x " * 60))
+    assert af.brand_casing_from_body("openloophealth", body) is None

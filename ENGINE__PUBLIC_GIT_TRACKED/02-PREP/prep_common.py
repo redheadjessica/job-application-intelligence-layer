@@ -29,6 +29,7 @@ from ats_fetchers import (
     MENTIONED_NO_DETAILS,
     employer_declared_name,
     fetch_employer_declared_name,
+    recover_brand_casing,
     should_check_employer_name,
     UUID_RE,
     _EQUITY_SPECIFICS_RE,
@@ -3347,6 +3348,14 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
                                             fetcher=employer_name_fetcher)
         if declared:
             meta["employer_declared_name"] = declared
+        else:
+            # B9: an ATS-hosted token-shaped guess ("Openloophealth") recovers its
+            # real casing from the JD body's own identity statements, then the
+            # tracked alias map. With no evidence, capitalize-first stands — camel
+            # brands are never guessed.
+            cased = recover_brand_casing(company, body)
+            if cased:
+                company = cased
         company, title = normalize_capture_identity(
             company, title, url=url, jsonld=meta.get("jsonld_identity"),
             html=meta.get("raw_html"), body=body, declared_name=declared)

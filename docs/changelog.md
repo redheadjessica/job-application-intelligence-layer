@@ -11,6 +11,21 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-30 — B9: brand casing recovered from the employer's own words, never guessed
+
+An ATS-hosted posting whose only company signal is a board token got a capitalize-first guess
+("openloophealth" → "Openloophealth") while the body plainly wrote "OpenLoop". Recovery now runs at
+the identity choke point, in strict priority order: (1) a structured employer name (the existing
+ATS-field / JSON-LD / declared-page routes, which win before this is consulted); (2) the JD body's
+OWN identity statements ("About OpenLoop", the copyright footer, a signature line) — a candidate
+word must match the token family (the full key, or the key minus one generic descriptor suffix, so
+"Better" can never claim "betterup") and carry REAL casing information (all-caps layout styling and
+capitalize-first-only bodies add nothing); (3) a small tracked alias map (`brand-casing.json`,
+generic infrastructure shipped EMPTY — body evidence always outranks it); (4) the capitalize-first
+token stands. Anti-fixtures pin that BetterUp / OpenAI / YouTube / ClassDojo / iHeartMedia-style
+camel brands recover only WITH body evidence and are never damaged by a guess without it.
+Suite: 663 → 674 green.
+
 ## 2026-07-30 — B4: one canonical prep CLI, engines composed rather than forked
 
 `02-PREP/prep.py` is now THE entry point: `--engine auto|requests|playwright`. **auto** (default) is

@@ -1,0 +1,3 @@
+{
+  "_README": "Brand-casing alias map (B9): board-token key -> the company's own display casing. Generic infrastructure — consulted only when a company name is a bare token-shaped guess AND the JD body itself offers no casing evidence. Keys are lowercase alphanumeric. Seed entries only when a real capture needs one and the body carries no signal; body evidence always wins over this map."
+}
