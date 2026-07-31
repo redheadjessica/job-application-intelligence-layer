@@ -456,9 +456,10 @@ This file should contain the full actionable output for the run, in this order (
 9. Job Analysis
 10. Gap Check
 11. Strategic Evidence Opportunities / Inferred Relevance Questions / Hidden Story Prompts
-12. Final Risks / Notes
-13. Suggested System Updates
-14. Read Log (last)
+12. Resume Comparison Ledger (the audit trail for the base-vs-improved scores — see Step 9.8)
+13. Final Risks / Notes
+14. Suggested System Updates
+15. Read Log (last)
 
 ### "Application Question Drafts" — when and how (B11, 2026-07-30; replaces "Proposed Answers to Application Questions")
 
@@ -1173,6 +1174,85 @@ Rules:
 - Be honest about effort and risk — don't recommend a heavy lift for a marginal gain.
 
 When you do recommend one, give exactly: **proposed title**, **why it helps for this specific role**, **which existing writing it builds from (if any)**, **worth doing now vs. wait**, **effort (low / medium / high)**, and **risk** (too junior / too personal / too off-topic / too much work / etc.).
+
+---
+
+## Step 9.8 — The Resume Comparison Pass (base vs. improved)
+
+**Runs last, after every recommendation above is final.** It answers one question the ranking cannot: *would implementing these recommendations materially change what this employer sees, or is the base already doing the work?* The candidate uses the answer to decide which jobs deserve hand-tailoring and which can be applied to with the base as-is.
+
+Produce two scores and one sentence:
+
+- **Base Resume Score** — how strongly the **actual selected base resume** would position the candidate for **this specific job**, exactly as that file stands today.
+- **Improved Resume Score** — how strongly the resume would position them if **every recommendation in this output were implemented**.
+- **Why It Improves** — one or two sentences naming the changes responsible for the gap. This is the only part that reaches the spreadsheet.
+
+### Read the actual resume, never the index
+
+The Resume-Base Reading Rule above (work from `02-resume-index.md`'s bullet previews) is the right default for *drafting* recommendations and the **wrong** input for *scoring* the base. The index is prose a human wrote **about** the resume; scoring it grades the description instead of the document, and some anchors carry only a one-paragraph gist.
+
+So: resolve the readable artifact first.
+
+```bash
+.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/resume_artifacts.py "<base path from 02-resume-index.md>"
+```
+
+It returns the authoritative file to read (a `.pages` base is scored from its **PDF sibling**, since Pages cannot be read directly), plus a status:
+
+- `ok` — read it and score normally.
+- `stale` — the `.pages` was edited after the PDF was exported, so the PDF may be missing recent manual edits. Score it anyway, and **say so in Final Risks / Notes**: the base score is a lower bound.
+- `no-readable-pdf` / `not-found` — **do not score, and do not estimate.** Omit `base_resume_score`, `improved_resume_score` and `why_it_improves` from your return entirely, leaving the tracker cells blank, and state plainly in **Final Risks / Notes** which file was missing and that exporting a PDF beside the `.pages` will fix it. A number guessed from the index is indistinguishable in the spreadsheet from one measured off the document — that is precisely the confusion this rule prevents.
+
+If the index's path is wrong (usually punctuation drift in a folder name — a missing comma), resolve the real path, use it, and note the correction under **Suggested System Updates** so the index gets fixed. Do not silently work around it.
+
+### Scale — 0–100, in steps of five only
+
+Never emit 82 or 84; emit 80 or 85. Two model-produced scores each carry a few points of session-to-session drift, so finer granularity is false precision that invites a decision the numbers cannot support.
+
+| Band | What the resume does |
+|---|---|
+| 0–20 | Presents a fundamentally weak or hard-pass candidacy |
+| 25–40 | Important central requirements absent or badly obscured |
+| 45–60 | Plausible candidacy, but important fit is unclear or underexpressed |
+| 65–80 | Strong, competitive presentation |
+| 85–95 | Exceptional alignment and evidence presentation |
+| 100 | The truthful available candidacy presented about as ideally as possible |
+
+These score **employer perception of the document**, not writing polish.
+
+### Score both in ONE pass, against the same ledger
+
+Derive the job's hiring thesis and its thesis-defining central requirements **once**, then grade each central twice — once against the base, once against the improved version. Scoring them separately, or scoring the improved version by itself, produces two numbers that are not comparable and a delta that means nothing.
+
+Score the **concrete artifacts**, not your own enthusiasm for your recommendations: the improved version is the paste-ready summary you chose, the actual final bullet lists, the skills block, the writing selections and the structural changes — assembled and read as a document. "These recommendations are valuable" is not evidence; the assembled page is.
+
+**Relationship to `How They May See Your Profile`:** none, mechanically. That score is judged from the candidate's canonical profile and the posting and reads no resume at all. It is **not a ceiling** — a resume pass may surface job-specific evidence the profile pass understated, and the improved score may legitimately exceed it. No special explanation is owed when it does.
+
+**Hard invariant: improved is never below base.** The improved version is the *best available* option, and retaining the base unchanged is always available. If the recommendations would not help, the improved score **equals** the base score and the delta is 0 — a legitimate, useful result that tells the candidate to send the base as-is. Tailoring also cannot manufacture qualifications or close a genuine experience gap; a weak candidacy stays weak.
+
+### How evidence accrues
+
+Do **not** apply a flat "one point per capability" rule. Distinct, credible, relevant evidence for the same capability legitimately reinforces — for an AI-builder role, personally building a product with AI, partnering with a data-science team on AI-powered opportunities, writing or speaking publicly about AI, demonstrable hands-on tool fluency, and the right terminology in summary/skills each communicate a *different* dimension of credibility, and a resume showing several is genuinely stronger than one showing one.
+
+The distinction that matters is **distinct evidence vs. repeated assertion**. Restating the same unsupported claim in the summary, the skills block and three bullets adds very little; three different experiences demonstrating the capability add a lot.
+
+Weigh all of: evidence depth · source diversity · what a human actually sees when skimming (top-third placement, bullet order) · ATS legibility and terminology · narrative coherence · **and anything stronger the proposed changes displace**. A change that adds a keyword by cutting a stronger bullet can lower the improved score.
+
+Never reward keyword stuffing or awkward repetition — an ATS-legible resume a human finds grating scores *worse*, not better.
+
+### Proposed new content
+
+When Step 9.5 recommends a piece **and** you judge that writing it and including it would materially strengthen the resume, the improved score **may** assume it is written and included — the score is an upper bound on what full implementation achieves.
+
+When it does, **`Why It Improves` must say so explicitly**, in plain language ("…assumes the proposed [topic] piece is written and linked"). The candidate needs to know that part of the delta is contingent on work they have not done yet, and will not materialize if they skip it. Do not create a second conditional score; one number, disclosed.
+
+Cover letters are irrelevant here — this compares resumes only.
+
+### The ledger, and what reaches the spreadsheet
+
+Write the full audit trail into the **Resume Comparison Ledger** section (bottom of the output): the hiring thesis, each thesis-defining central with its base grade and improved grade, what changed between them, any displacement, and one line for the new-content assumption if you made one. This is a **recommendation-time estimate**, not durable learning — the standing prohibition on learning-ledger/source-update sections in this file still applies.
+
+The spreadsheet gets only the two scores, the derived delta, and the one-or-two-sentence `Why It Improves`. Never paste the ledger into that cell.
 
 ---
 

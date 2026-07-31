@@ -714,9 +714,112 @@ H_PRACTNOTES = "Comp + Lifestyle Fit Notes"
 H_PRACTSCORE_DEFAULT = "Comp + Lifestyle Fit Score"  # default label of the score it annotates
 H_MISSIONNOTES = "Your Desire Score Notes"           # the column it must sit before
 
+# --------------------------------------------------------------------------- #
+# The resume-comparison block (2026-07-31). Four columns, always appended TOGETHER
+# at the end of the contract, written only by the tailor step via update_rankings_row.py.
+#
+# These answer a question the four ranking dimensions structurally cannot: the existing
+# `How They May See Your Profile` is scored from the candidate's canonical PROFILE and the
+# posting, and never reads a resume at all. These two read the ACTUAL selected base resume
+# artifact and the concrete proposed tailored version, and their delta is the only number
+# that says whether tailoring this job would materially change what the employer sees.
+#
+# `How They May See Your Profile` is NOT a ceiling on them: a resume-level pass can surface
+# job-specific evidence the profile-level pass understated, so Improved may legitimately
+# exceed it. The one hard invariant is Improved >= Base, because "improved" means the BEST
+# available version — which includes keeping the base unchanged (delta 0) when the proposed
+# edits would not help.
+# --------------------------------------------------------------------------- #
+H_BASE_SCORE = "Base Resume Score"
+H_IMPROVED_SCORE = "Improved Resume Score"
+H_DELTA = "Resume Improvement Delta"
+H_WHY_IMPROVES = "Why It Improves"
+# The three NUMERIC members, in contract order. `Why It Improves` is prose and is excluded.
+RESUME_SCORE_COLUMNS = (H_BASE_SCORE, H_IMPROVED_SCORE, H_DELTA)
+# All four, for callers that append/locate the block as a unit.
+RESUME_COMPARISON_COLUMNS = RESUME_SCORE_COLUMNS + (H_WHY_IMPROVES,)
+# Scores are deliberately COARSE — only multiples of five. Two LLM-produced scores each carry
+# a few points of session drift, so 82-vs-84 is false precision that invites a decision the
+# numbers cannot actually support. Five-point granularity makes the delta honest.
+RESUME_SCORE_STEP = 5
+
+
+def parse_resume_score(value):
+    """A resume-comparison cell -> int, or None when blank. Raises ValueError on anything
+    that is neither. Blank is a legitimate state (the comparison pass has not run, or the
+    base PDF could not be read), so it must be told apart from a malformed number."""
+    s = str(value if value is not None else "").strip()
+    if not s:
+        return None
+    try:
+        return int(s)
+    except ValueError:
+        raise ValueError(f"{s!r} is not a whole number")
+
+
+def validate_resume_comparison(base, improved, delta, why=""):
+    """Contract check for one row's resume-comparison block. Returns a list of error strings
+    (empty = valid). Pure: no I/O, so update_rankings_row.py can call it BEFORE writing and
+    validate_rankings_rows can call it on an existing file.
+
+    The invariants, and why each exists:
+      * all three numeric cells blank together, or all three present — a half-written block
+        would read as "we scored this and the improvement was nothing".
+      * 0-100 and a multiple of five — the agreed coarse scale (see RESUME_SCORE_STEP).
+      * improved >= base — "improved" means the BEST available version, and keeping the base
+        unchanged is always available, so a negative delta is definitionally impossible.
+      * delta == improved - base — the column is stored, not computed by the spreadsheet, so
+        it can drift; this is the check that catches a hand-edit or a bad agent return.
+      * a scored row must carry its short `Why It Improves` prose — the numbers are only
+        trustworthy if the reason is visible next to them.
+    """
+    errors = []
+    vals = {}
+    for label, raw in ((H_BASE_SCORE, base), (H_IMPROVED_SCORE, improved), (H_DELTA, delta)):
+        try:
+            vals[label] = parse_resume_score(raw)
+        except ValueError as e:
+            errors.append(f"{label}: {e}")
+            vals[label] = "invalid"
+    if any(v == "invalid" for v in vals.values()):
+        return errors
+
+    present = [k for k, v in vals.items() if v is not None]
+    if not present:
+        return errors                      # not yet scored — the normal pre-tailor state
+    if len(present) != 3:
+        missing = [k for k, v in vals.items() if v is None]
+        errors.append(
+            f"resume-comparison block is half-written: {', '.join(present)} set but "
+            f"{', '.join(missing)} blank — all three are written together or not at all")
+        return errors
+
+    b, i, d = vals[H_BASE_SCORE], vals[H_IMPROVED_SCORE], vals[H_DELTA]
+    for label, v in ((H_BASE_SCORE, b), (H_IMPROVED_SCORE, i)):
+        if not 0 <= v <= 100:
+            errors.append(f"{label} {v} is outside 0-100")
+        if v % RESUME_SCORE_STEP:
+            errors.append(f"{label} {v} is not a multiple of {RESUME_SCORE_STEP}")
+    if i < b:
+        errors.append(
+            f"{H_IMPROVED_SCORE} {i} is below {H_BASE_SCORE} {b} — the improved version is the "
+            f"BEST available option, and retaining the base unchanged is always available")
+    if d != i - b:
+        errors.append(f"{H_DELTA} {d} != {H_IMPROVED_SCORE} {i} - {H_BASE_SCORE} {b} ({i - b})")
+    if d < 0:
+        errors.append(f"{H_DELTA} {d} is negative")
+    if d % RESUME_SCORE_STEP:
+        errors.append(f"{H_DELTA} {d} is not a multiple of {RESUME_SCORE_STEP}")
+    if not str(why or "").strip():
+        errors.append(
+            f"{H_WHY_IMPROVES} is blank on a scored row — a delta without its one-line reason "
+            f"is not auditable")
+    return errors
+
 
 # --------------------------------------------------------------------------- #
-# THE 27-COLUMN CONTRACT (order authoritative, approved 2026-07-30)
+# THE 32-COLUMN CONTRACT (order authoritative; 27 approved 2026-07-30, +ATS Last Updated
+# Date 2026-07-31, +the four-column resume-comparison block 2026-07-31)
 #
 # One definition, shared by the CSV migration pass and the XLSX build. `vet-jobs.js` writes this
 # same order; ANY older CSV is migrated to it in place (rename -> drop -> insert -> reorder),
@@ -753,6 +856,10 @@ CONTRACT_TEMPLATE = [
     H_PRACTNOTES,
     H_LANEFIT, H_COMPFIT, H_DATACOMPLETE, H_JOBFILE,
     "Tailored? (Base Resume)", "Cover Letter Drafted?",
+    # The resume-comparison block, appended as a unit after the cover-letter column so the
+    # tracker's existing left-to-right reading order is untouched. Blank until the tailor
+    # step's comparison pass writes them via update_rankings_row.py.
+    H_BASE_SCORE, H_IMPROVED_SCORE, H_DELTA, H_WHY_IMPROVES,
 ]
 # Legacy header -> final header. EXACT matches only, so "Comp + Lifestyle Fit Notes" is never
 # caught by the "Comp + Lifestyle Fit" score rename.
@@ -775,7 +882,7 @@ DROPPED_COLUMNS = (H_LOCFIT_LEGACY,)
 
 
 def resolve_contract_headers(existing_headers=None, score_labels=None):
-    """The exact 28 final headers for a given file: literals from the template, with each score
+    """The exact 32 final headers for a given file: literals from the template, with each score
     slot resolved to the label that file already uses (default or legacy spelling), else the
     engine default. `score_labels` (from score-dimensions.json) overrides the defaults."""
     existing = list(existing_headers or [])
@@ -1214,6 +1321,13 @@ def validate_rankings_rows(rows, csv_path=None, fix=None, out=print):
                         f"{H_DATACOMPLETE} (Comp-Fit-shaped value re-derived)", n)
                 else:
                     err(f"Data Completeness {dc!r} is outside its vocabulary")
+            # The resume-comparison block. Blank on every row until the tailor step's
+            # comparison pass runs, so this only fires on a written or hand-edited block.
+            for msg in validate_resume_comparison(cell(row, H_BASE_SCORE),
+                                                  cell(row, H_IMPROVED_SCORE),
+                                                  cell(row, H_DELTA),
+                                                  cell(row, H_WHY_IMPROVES)):
+                err(msg)
         # Job File must resolve to a capture when the batch layout is present.
         # A copy of the CSV elsewhere (no captures beside it) is only a notice.
         jf = cell(row, H_JOBFILE)

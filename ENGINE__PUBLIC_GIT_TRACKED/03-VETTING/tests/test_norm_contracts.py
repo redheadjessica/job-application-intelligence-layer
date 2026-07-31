@@ -372,6 +372,8 @@ EXPECTED_CONTRACT = [
     "Your Desire Score Notes", "Comp + Lifestyle Fit Notes",
     "Lane Fit", "Comp Fit", "Data Completeness", "Job File",
     "Tailored? (Base Resume)", "Cover Letter Drafted?",
+    "Base Resume Score", "Improved Resume Score", "Resume Improvement Delta",
+    "Why It Improves",
 ]
 
 # The REAL legacy rescore shape verified on disk: 27 columns, WITH `Location Fit`, WITHOUT
@@ -391,11 +393,11 @@ LEGACY_XLSX_HEADERS = (LEGACY_CSV_HEADERS[:-1] + ["Data Completeness"]
                        + LEGACY_CSV_HEADERS[-1:])
 
 
-def test_the_contract_is_exactly_the_approved_28_columns():
+def test_the_contract_is_exactly_the_approved_32_columns():
     """The order is authoritative: this test is the tripwire for an accidental reorder,
     rename, or added column anywhere in the engine."""
     assert HEADERS == EXPECTED_CONTRACT
-    assert len(HEADERS) == 28
+    assert len(HEADERS) == 32
     assert "Location Fit" not in HEADERS      # removed as redundant with Working Location
     assert norm_contracts.H_POSTED == "ATS First Posted Date"
     assert norm_contracts.H_UPDATED == "ATS Last Updated Date"
@@ -1014,8 +1016,8 @@ def test_an_unrecognized_extra_column_is_never_dropped(tmp_path):
     norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
-    assert rows[0][:28] == HEADERS
-    assert rows[0][28] == "My Own Column"
+    assert rows[0][:len(HEADERS)] == HEADERS
+    assert rows[0][len(HEADERS)] == "My Own Column"
     assert by_name(rows[0], rows[1])["My Own Column"] == "keep me"
 
 
@@ -1106,7 +1108,7 @@ def _csv_headers(csv_path):
 def test_csv_and_xlsx_schemas_are_identical_for_every_input_shape(tmp_path, shape):
     """PARITY: a current CSV, the real legacy 27-column shape (WITH Location Fit, WITHOUT Data
     Completeness), and a CSV missing several columns must all yield the SAME 27-column CSV and
-    the SAME 28-column XLSX — with every value still under its own header."""
+    the SAME 32-column XLSX — with every value still under its own header."""
     d = tmp_path / shape
     (d / "1 - Rankings").mkdir(parents=True)
     csv_path = d / "1 - Rankings" / "b-rankings.csv"

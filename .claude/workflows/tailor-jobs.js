@@ -94,6 +94,13 @@ const CONFIRM_SCHEMA = {
     role: { type: 'string', description: 'the CANONICAL role — the part of the canonicalizer output after "Company - "' },
     recommended_base: { type: 'string' },
     open_questions: { type: 'integer' },
+    // The resume-comparison pass. Omitted entirely when the base artifact could not be read —
+    // a blank block in the tracker is the honest way to say "not scored", and an estimate made
+    // from the resume index's prose preview would be indistinguishable from a real measurement.
+    base_resume_score: { type: 'integer', description: '0-100, multiple of 5, from the ACTUAL base file' },
+    improved_resume_score: { type: 'integer', description: '0-100, multiple of 5, never below base' },
+    why_it_improves: { type: 'string', description: 'one or two sentences naming the changes behind the delta' },
+    base_artifact_status: { type: 'string', description: 'ok | stale | no-readable-pdf | not-found' },
   },
 }
 
@@ -155,6 +162,14 @@ re-derive, don't ratify the old draft.`,
 const jobFileOf = (p) => String(p || '').split('/').pop()
 const urlOf = (t) => { const m = /https?:\/\/\S+/.exec(String(t || '')); return m ? m[0] : null }
 
+// A complete resume-comparison block. Checked here rather than trusted from the agent because a
+// partial block is worse than none: written into the tracker it reads as a finished comparison
+// whose improvement happened to be zero.
+const hasComparison = (t) => (
+  Number.isInteger(t.base_resume_score) && Number.isInteger(t.improved_resume_score)
+  && String(t.why_it_improves || '').trim() !== ''
+)
+
 // A job whose batch could not be resolved has nowhere for the writeback to land. That used to
 // be invisible: the workflow reported success while the Tailored?/Cover Letter columns silently
 // stayed empty. Same failure class as a manifest wipe — surface it in the RESULT.
@@ -181,6 +196,11 @@ if (tailored.length) {
       `--job-file ${shq(jobFileOf(t.abs_path))}`,
       url ? `--url ${shq(url)}` : '',
       `--base ${shq(t.recommended_base)}`,
+      // All three or none — update_rankings_row.py rejects a half-written block outright, and
+      // derives the delta itself so the stored value can never disagree with its operands.
+      hasComparison(t) ? `--base-score ${t.base_resume_score}` : '',
+      hasComparison(t) ? `--improved-score ${t.improved_resume_score}` : '',
+      hasComparison(t) ? `--why ${shq(t.why_it_improves)}` : '',
     ].filter(Boolean).join(' ')
   })
   if (cmds.length) {

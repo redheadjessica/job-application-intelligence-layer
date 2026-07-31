@@ -43,7 +43,7 @@ import norm_contracts  # noqa: E402 — shared output-contract normalizers + col
 try:
     from openpyxl import Workbook
     from openpyxl.comments import Comment
-    from openpyxl.formatting.rule import CellIsRule
+    from openpyxl.formatting.rule import CellIsRule, FormulaRule
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
     from openpyxl.worksheet.datavalidation import DataValidation
@@ -62,7 +62,13 @@ H_TITLE = "Job Post Title + Link"
 H_WORKLOC = "Working Location"
 H_COMPRANGE = "Comp Range"
 H_POSTED = norm_contracts.H_POSTED    # "ATS First Posted Date" (static date or `Unknown`)
-H_UPDATED = norm_contracts.H_UPDATED  # "ATS Last Updated Date" (static date or BLANK)
+H_UPDATED = norm_contracts.H_UPDATED  # "ATS Last Updated Date" (static date or `Unknown`)
+# The resume-comparison block — written by the tailor step, blank until then.
+H_BASE_SCORE = norm_contracts.H_BASE_SCORE
+H_IMPROVED_SCORE = norm_contracts.H_IMPROVED_SCORE
+H_DELTA = norm_contracts.H_DELTA
+H_WHY_IMPROVES = norm_contracts.H_WHY_IMPROVES
+RESUME_SCORE_COLUMNS = norm_contracts.RESUME_SCORE_COLUMNS
 H_JOBFILE = "Job File"
 H_LANEFIT = "Lane Fit"
 H_COMPFIT = "Comp Fit"
@@ -172,7 +178,17 @@ WIDTHS = {
     "Top Reasons Notes": 46, "Top Concerns Notes": 46, "Job File": 28,
     "Tailored? (Base Resume)": 26,
     H_LANEFIT: 22, H_COMPFIT: 16, H_DATACOMPLETE: 24, "Cover Letter Drafted?": 12,
+    H_BASE_SCORE: 13, H_IMPROVED_SCORE: 15, H_DELTA: 14, H_WHY_IMPROVES: 52,
 }
+
+# The DELTA gets its own scale, deliberately NOT the 0-100 sub-score ramp: a delta lives in
+# roughly 0-40, so the shared ramp would paint every honest result in the "<50" failure red and
+# invert the column's meaning. Neutral at zero (the base is already doing the work — a fine
+# outcome, not a bad one), warming as the gap widens.
+DELTA_NEUTRAL = "EDEDED"   # 0 — nothing to gain; grey, not red
+DELTA_SMALL = "FFF2CC"     # 5-10 — marginal
+DELTA_MEDIUM = "FCE5CD"    # 15-25 — worth a look
+DELTA_LARGE = "F8CBAD"     # 30+ — the base is materially underselling
 # Score-column widths, keyed by dimension (not by the dynamic label string) — applied at runtime
 # once the effective labels are resolved, since the label text itself may change per-run.
 SCORE_WIDTHS_BY_KEY = {"final": 13, "market": 30, "desire": 11, "style": 12, "practicality": 16}
@@ -382,6 +398,42 @@ def solid(hex_color):
     return PatternFill(start_color=hex_color, end_color=hex_color, fill_type="solid")
 
 
+def apply_resume_comparison_formatting(ws, col_letter, header, last_data_row):
+    """Conditional formatting for ONE resume-comparison score column.
+
+    Defined here and reused by update_rankings_row.py, which adds these columns to an already
+    hand-finished workbook in place — one definition, so the ramp cannot differ depending on
+    whether the workbook was regenerated or updated."""
+    rng = f"{col_letter}2:{col_letter}{last_data_row}"
+    # BLANK GUARD, and it must come first. Unlike the five ranking scores, these are blank on
+    # every job that has not been tailored yet, and Excel compares an empty cell as zero — so
+    # `=0` and `<50` would both match a blank. A leading stopIfTrue rule with no fill halts
+    # evaluation on empty cells, leaving them genuinely unpainted.
+    ws.conditional_formatting.add(
+        rng, FormulaRule(formula=[f'LEN(TRIM({col_letter}2))=0'], stopIfTrue=True))
+    if header == H_DELTA:
+        # The delta gets its own scale — see the DELTA_* constants for why the 0-100 ramp is
+        # wrong for a 0-40 quantity whose zero is a perfectly good outcome.
+        bands = [("greaterThanOrEqual", ["30"], DELTA_LARGE),
+                 ("between", ["15", "29"], DELTA_MEDIUM),
+                 ("between", ["5", "14"], DELTA_SMALL),
+                 ("equal", ["0"], DELTA_NEUTRAL)]
+    else:
+        # Base and improved are employer-perception scores on the same mental scale as the
+        # sub-scores, so they share that ramp and the pair reads as a color shift.
+        bands = [("greaterThanOrEqual", ["85"], SCORE_BUCKETS[0][1]),
+                 ("between", ["80", "84"], SCORE_BUCKETS[1][1]),
+                 ("between", ["75", "79"], SCORE_BUCKETS[2][1]),
+                 ("between", ["70", "74"], SCORE_BUCKETS[3][1]),
+                 ("between", ["65", "69"], SCORE_BUCKETS[4][1]),
+                 ("between", ["60", "64"], SCORE_BUCKETS[5][1]),
+                 ("between", ["50", "59"], SCORE_BUCKETS[6][1]),
+                 ("greaterThanOrEqual", ["0"], SCORE_BUCKETS[7][1])]
+    for op, formula, hexc in bands:
+        ws.conditional_formatting.add(
+            rng, CellIsRule(operator=op, formula=formula, fill=solid(hexc), stopIfTrue=True))
+
+
 # The human-managed columns. THE RULE (2026-07-30): a column is yours to fill in ONLY when its
 # header carries an explicit marker — `[You Fill In]`, `[You Change]`, or `[You Add]`. A bare `?`
 # in a header does NOT mean human-managed: `Tailored? (Base Resume)` and `Cover Letter Drafted?`
@@ -397,7 +449,8 @@ def pipeline_filled_columns(headers):
     """Columns whose header ends in `?` but which the PIPELINE fills — the exception the
     Instructions tab has to state explicitly, or the `?` reads as an invitation."""
     return [h for h in headers
-            if h in ("Tailored? (Base Resume)", "Cover Letter Drafted?")]
+            if h in ("Tailored? (Base Resume)", "Cover Letter Drafted?")
+            or h in norm_contracts.RESUME_COMPARISON_COLUMNS]
 
 
 def build_column_guide(headers):
@@ -415,6 +468,23 @@ def build_column_guide(headers):
            "leave them alone and they will populate themselves.", False),
         ("Everything else is AI-scored or machine-derived and is re-derived on every "
          "regeneration, so edits there are overwritten.", False),
+        ("", False),
+        ("Base / Improved / Delta: how much tailoring would actually help", True),
+        ("These three are blank until a job is tailored. \"" + norm_contracts.H_BASE_SCORE
+         + "\" reads the actual base resume that was selected, and \""
+         + norm_contracts.H_IMPROVED_SCORE + "\" reads the version that would exist if every "
+           "tailoring recommendation were implemented. Both are scored 0-100 in steps of 5, in "
+           "one pass against the same job, so the difference between them is comparable even "
+           "though each number carries some judgment.", False),
+        ("\"" + norm_contracts.H_DELTA + "\" is simply improved minus base, and it is never "
+         "negative — the tailored version can always keep the base as-is. A delta of 0 means the "
+         "base already says everything this job needs to hear; a large delta means the base is "
+         "underselling real evidence. \"" + norm_contracts.H_WHY_IMPROVES + "\" says in a "
+         "sentence what accounts for the gap.", False),
+        ("These do not feed the FINAL Weighted Score, and they are not capped by \"How They May "
+         "See Your Profile\" — that score is judged from your profile and the posting and never "
+         "looks at a resume, so a resume can occasionally show a job-specific strength it missed.",
+         False),
         ("", False),
     ]
 
@@ -533,7 +603,9 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         str(input_csv), cfg,
         score_labels={k: label_of.get(k) for k in norm_contracts.SCORE_SLOTS})
 
-    headers, records = read_records(input_csv, SCORE_COLS)
+    # The resume-comparison scores are int-parsed alongside the five ranking scores so their
+    # conditional formatting fires — a cell left as a string never matches a CellIsRule.
+    headers, records = read_records(input_csv, SCORE_COLS + list(RESUME_SCORE_COLUMNS))
     # Residual on-read normalization (belt-and-suspenders; a no-op after the pass above).
     for rec in records:
         if H_WORKLOC in rec:
@@ -600,6 +672,7 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         H_PRACTNOTES, "Your Desire Score Notes", "Profile Score Notes", "Top Reasons Notes",
         "Top Concerns Notes",
         "Job File", "Tailored? (Base Resume)", H_LANEFIT, H_COMPFIT,
+        H_WHY_IMPROVES,
     }
     base_font = Font(name=FONT, size=10, color="000000")
     link_font = Font(name=FONT, size=10, color="0563C1", underline="single")
@@ -705,6 +778,10 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
                 CellIsRule(operator="lessThan", formula=["50"], fill=solid(SCORE_BUCKETS[7][1]), stopIfTrue=True),
             ]:
                 ws.conditional_formatting.add(rng, rule)
+        for s in RESUME_SCORE_COLUMNS:
+            if s not in letter:
+                continue
+            apply_resume_comparison_formatting(ws, letter[s], s, last_data_row)
         fcol = letter[H_FINAL]
         frng = f"{fcol}2:{fcol}{last_data_row}"
         for rule in [

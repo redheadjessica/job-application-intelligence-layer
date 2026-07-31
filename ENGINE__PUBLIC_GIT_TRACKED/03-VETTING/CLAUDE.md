@@ -27,7 +27,7 @@ Everything candidate-specific — lanes, comp floor, location, dealbreakers, str
 
 Structured numeric preferences (comp target/floor, home metro + aliases, lanes) live in `jail.config.json` (also from `/intake`). The scorer inlines it as `<preferences>` to sharpen `practicality_score`.
 
-**The rankings output is a fixed 28-column contract (2026-07-30; `ATS Last Updated Date` added 2026-07-31).** The order is authoritative and
+**The rankings output is a fixed 32-column contract (2026-07-30; `ATS Last Updated Date` added 2026-07-31; the four-column resume-comparison block added 2026-07-31).** The order is authoritative and
 defined ONCE, in `norm_contracts.CONTRACT_TEMPLATE` + `resolve_contract_headers()`; `vet-jobs.js`
 writes it, `normalize_rankings_csv` MIGRATES any older CSV to it in place (rename → drop → insert →
 reorder, joined by header NAME so no column's data can shift), and `make_rankings_xlsx.py` shares the
@@ -47,6 +47,24 @@ scoring, ranking, or prioritization**, and **only** columns marked `[You Fill In
 (`Tailored? (Base Resume)` and `Cover Letter Drafted?` are written by the pipeline via
 `update_rankings_row.py`, which accepts both header generations on read). A column a user added
 themselves is never dropped by the migration.
+
+**The resume-comparison block (`Base Resume Score` · `Improved Resume Score` · `Resume Improvement
+Delta` · `Why It Improves`) judges the DOCUMENT, not the job.** Every other score in this file judges
+the posting or the candidate; in particular `How They May See Your Profile` is scored from the
+canonical profile plus the posting and **never opens a resume**. These four say what the actual
+selected base resume communicates versus what the fully-tailored version would, so the candidate can
+tell "worth hand-tailoring" from "rename the base and send it". They are written ONLY by the tailor
+step's Step 9.8 comparison pass, via `update_rankings_row.py`; blank means not yet scored. Four rules
+are enforced in code (`norm_contracts.validate_resume_comparison()`), not by prompt: the three numeric
+cells are written **all-or-nothing**; both scores are 0–100 and **multiples of five** (finer
+granularity is drift, not signal); **improved is never below base** (the improved version may always
+retain the base unchanged, so a delta of 0 is a legitimate answer meaning "send it as-is"); and the
+stored delta must equal improved minus base. The block **never feeds `FINAL Weighted Score`**, and
+`How They May See Your Profile` is **not a ceiling** on it — a resume pass can surface job-specific
+evidence the profile pass understated. The base score must come from the ACTUAL resume artifact
+(`04-TAILOR/resume_artifacts.py` resolves a `.pages` base to its authoritative PDF sibling and flags
+stale exports); when no readable artifact exists the cells stay **blank and are never estimated**,
+because a guessed number and a measured one are indistinguishable once they are in the spreadsheet.
 
 **Captures arrive in the JOB SNAPSHOT format, with ORIGINAL vs LATEST capture details.** Prep writes a
 human-readable preamble — `JOB SNAPSHOT` (incl. `Job Posted At:` / `Job Updated At:`, always present,

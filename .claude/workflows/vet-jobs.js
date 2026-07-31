@@ -516,6 +516,17 @@ const HEADERS = [
   // base-resume name), 'Cover Letter Drafted?' by the cover-letter workflow (then `Yes`). The `?`
   // in these two headers is NOT a human-managed marker — only [You Fill In]/[You Change]/[You Add].
   'Tailored? (Base Resume)', 'Cover Letter Drafted?',
+  // The resume-comparison block (2026-07-31), appended as a unit at the end so the tracker's
+  // existing reading order is untouched. ALL FOUR are blank at vet time and stay blank until
+  // the tailor step's comparison pass writes them via update_rankings_row.py.
+  //
+  // These are NOT a fifth ranking dimension and never feed the FINAL Weighted Score. The four
+  // scored dimensions judge the JOB; `How They May See Your Profile` in particular is scored
+  // from the candidate's canonical profile and the posting, and reads no resume at all. This
+  // block judges the DOCUMENT: what the actual selected base resume communicates vs. what the
+  // fully-tailored version would, with the delta as the only number that says whether tailoring
+  // this job is worth the effort. `How They May See Your Profile` is not a ceiling on them.
+  'Base Resume Score', 'Improved Resume Score', 'Resume Improvement Delta', 'Why It Improves',
 ]
 // The CSV is CLEAN DATA ONLY — header + one row per job, in final-score order. No section-divider
 // rows and no pre-grouping: that keeps the data sortable (no merged cells) and lets a user paste
@@ -534,6 +545,8 @@ function dataCells(r) {
     r.top_reasons, r.top_concerns, r.scope_fit_notes, r.mission_fit_notes,
     r.comp_lifestyle_fit_notes,
     laneFitStr(r.lane_fit), r._comp_fit, r._completeness, r.job_file, '', '',
+    // Resume-comparison block — written later by the tailor step, never at vet time.
+    '', '', '', '',
   ]
 }
 const csvLines = [HEADERS.map(csvCell).join(',')]
@@ -551,6 +564,15 @@ const complSummary = incompleteRows.length
   : `> ✓ Data completeness: all captures complete.\n`
 const mdParts = [`# Job Rankings\n\n${rows.length} jobs scored, highest priority first.\n${complSummary}${qNote}`]
 const fmtScore = (v) => v === null || v === undefined ? '—' : v
+// The resume-comparison line is OMITTED at vet time rather than printed as em-dashes: it is blank
+// for every job until that job is tailored, and 55 placeholder lines would be pure noise. The
+// tailor step inserts the real line into this Markdown in place (update_rankings_row.py), which is
+// what keeps the CSV, XLSX and Markdown from disagreeing. Guarded here so a caller that does have
+// the values (a re-vet after tailoring) still renders them.
+const resumeCompLine = (r) => (
+  r.base_resume_score === null || r.base_resume_score === undefined ? ''
+    : `\n- **Resume improvement:** base ${r.base_resume_score} → improved ${r.improved_resume_score} (delta +${r.resume_improvement_delta}).${r.why_it_improves ? ` ${r.why_it_improves}` : ''}`
+)
 for (const r of rows) {
   mdParts.push(
 `## ${fmtScore(r.final_score)} — ${r.company}: ${r.title_and_link.split(' | ')[0]}${r.content_verified === false ? '  ⚠️ NOT SCORED — SEE BELOW' : ''}
@@ -564,7 +586,7 @@ for (const r of rows) {
 - **Scope fit:** ${r.scope_fit_notes}
 - **Top reasons:** ${r.top_reasons}
 - **Top concerns:** ${r.top_concerns}
-- **File:** ${r.job_file}
+- **File:** ${r.job_file}${resumeCompLine(r)}
 `)
 }
 const mdContent = mdParts.join('\n')
@@ -588,6 +610,27 @@ const metaContent = JSON.stringify({
   market: { label: LABELS.market, definition: DIMS.market.definition, weight_pct: Math.round(W.market * 100) },
   style: { label: LABELS.style, definition: DIMS.style.definition, weight_pct: Math.round(W.style * 100) },
   practicality: { label: LABELS.practicality, definition: DIMS.practicality.definition, weight_pct: Math.round(W.practicality * 100) },
+  // The resume-comparison block is described here but deliberately kept OUT of `order`:
+  // `order` drives the weighted-score math and the XLSX sub-score color ramp, and these are
+  // neither ranking dimensions nor weighted. They carry no weight_pct for the same reason.
+  resume_comparison: {
+    columns: {
+      base: 'Base Resume Score',
+      improved: 'Improved Resume Score',
+      delta: 'Resume Improvement Delta',
+      why: 'Why It Improves',
+    },
+    scale: '0-100, in increments of 5 only',
+    step: 5,
+    definition: 'How strongly a specific resume DOCUMENT would position the candidate for this '
+      + 'job in the employer\'s eyes: the actual selected base resume vs. the best version that '
+      + 'would exist if every tailoring recommendation were implemented. Both are scored in one '
+      + 'comparison pass against the same hiring thesis. The delta is improved minus base and is '
+      + 'never negative, because the improved version may always retain the base unchanged. '
+      + 'These do not feed the FINAL Weighted Score, and "How They May See Your Profile" '
+      + '(scored from the canonical profile, not from any resume) is not a ceiling on them.',
+    written_by: 'the tailor step\'s comparison pass, via 03-VETTING/update_rankings_row.py',
+  },
 }, null, 2) + '\n'
 
 // ---- Phase 3: write the three files ----

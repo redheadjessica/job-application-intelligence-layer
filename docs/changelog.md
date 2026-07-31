@@ -11,6 +11,76 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-31 — "Would tailoring this actually help?": the resume-comparison block (32-column contract)
+
+The tracker could say how good a *job* was and, via `How They May See Your Profile`, how the employer
+might read the *candidate* — but nothing said anything about the **document being sent**. That score is
+computed from the canonical profile plus the posting and never opens a resume at all. So the system
+produced pages of tailoring recommendations without ever answering the question that decides whether to
+act on them: *would implementing these materially change what this employer sees, or is the base already
+doing the work?* For lower-priority jobs the rational move is often to rename the base, export, and
+apply — and there was no information to support that call.
+
+**Four new columns**, appended as a unit after `Cover Letter Drafted?` (contract 28 → **32**):
+`Base Resume Score` · `Improved Resume Score` · `Resume Improvement Delta` · `Why It Improves`.
+Scores are 0–100 **in increments of five only** — two model-produced scores each drift a few points
+between sessions, so 82-vs-84 is false precision inviting a decision the numbers can't support. The
+delta is derived (`improved − base`), never supplied, because a stored delta disagreeing with its
+operands is the one defect a reader can't catch by eye.
+
+Design decisions worth recording, because several were argued down from the obvious version:
+
+- **`How They May See Your Profile` is NOT a ceiling.** The tempting design clamps the improved score
+  to it. Rejected: the profile score is a *summary-level estimate*, so a resume pass can legitimately
+  surface job-specific evidence it understated. Clamping would hide exactly that signal. It also stays
+  independent — not duplicated, moved, or re-weighted, and the new columns never feed `FINAL`.
+- **Improved ≥ Base is a hard invariant**, enforced in code. Not a scoring preference: "improved" means
+  the *best available* version, and retaining the base unchanged is always available. **A delta of 0 is
+  a real, useful answer** ("send the base as-is"), not a failure — hence the delta's own color ramp,
+  neutral grey at zero, rather than the 0–100 sub-score ramp that would paint every honest result in
+  failure-red.
+- **The base score must come from the actual resume, never the index.** The engine's normal reading rule
+  works from `02-resume-index.md`'s bullet previews — right for drafting, wrong for scoring, because the
+  index is prose a human wrote *about* the resume (one anchor admits its contents aren't fully indexed).
+  Every base here is `.pages`, which can't be read directly, so new `04-TAILOR/resume_artifacts.py`
+  resolves the authoritative **PDF sibling** and classifies the outcome: `ok` · `stale` (the `.pages`
+  was edited after the PDF was exported — still scored, but flagged as a lower bound) ·
+  `no-readable-pdf` / `not-found` (**scores left blank, never estimated**). Two candidate PDFs in one
+  folder is refused rather than guessed. A blank cell and a guessed number look identical in a
+  spreadsheet; only one of them is honest.
+- **No simplistic anti-repetition rule.** Distinct evidence for one capability legitimately reinforces —
+  building with AI, partnering with a data team, writing publicly, tool fluency and correct terminology
+  are different dimensions of credibility. The distinction that matters is *distinct evidence vs.
+  repeated assertion*. Scoring also weighs what proposed changes **displace**: adding a keyword by
+  cutting a stronger bullet can lower the improved score.
+- **A proposed new writing piece may count toward the improved score**, as an upper bound on full
+  implementation — but `Why It Improves` must disclose it, since that part of the delta evaporates if
+  the piece never gets written. Deliberately not a second conditional score: one number, disclosed.
+- **Self-grading bias** is mitigated by scoring the *concrete assembled artifacts* (the paste-ready
+  summary, final bullet lists, skills block, writing picks) rather than the recommender's claim that its
+  recommendations are valuable, and by scoring both versions in **one pass against one hiring-thesis
+  ledger** — absolute calibration may drift run to run, but the delta stays internally consistent.
+
+Plumbing: `norm_contracts` owns the columns and `validate_resume_comparison()` (all-or-nothing, range,
+step-of-five, improved ≥ base, delta arithmetic, reason-required); `update_rankings_row.py` gained the
+block and **validates before touching any file**, so an invalid block aborts rather than half-writing.
+Two real bugs fixed on the way: its XLSX glob was `*-rankings.xlsx`, which silently skipped hand-renamed
+workbooks (`UNIFIED-55-JOB-TRACKER-FINAL.xlsx`) — updating the CSV while leaving the spreadsheet the user
+actually reads untouched; and the rankings **Markdown**, which has no normalization pass and was the one
+artifact free to drift, is now updated in place too. Columns added to an already hand-finished workbook
+inherit its header style, width, ramp and auto-filter rather than landing as bare white cells. Blank
+cells get an explicit conditional-format guard because Excel compares an empty cell as zero, which would
+have painted all 53 untailored rows.
+
+Engine spec: new **Step 9.8** in `00-job_application_agent.md` (+ rule 11e in `job-applier.md`) with the
+band table, the read-the-real-file rule, the evidence rules and the ledger requirement; the full audit
+trail goes in a new **Resume Comparison Ledger** output section, and only the one-or-two-sentence reason
+reaches the spreadsheet. Reconcile is untouched — it never reads the rankings.
+
+**Known limitation, unchanged by this work:** a full re-vet still overwrites the rankings CSV wholesale,
+destroying user-entered columns and the pipeline-filled cells. The new columns inherit that weakness.
+Fixing it needs a merge-on-rerun keyed by canonical URL; deliberately out of scope here.
+
 ## 2026-07-31 — Comp rounding: standard half-up, superseding floor-low/ceil-high
 
 Revised convention, superseding the floor-low/ceil-high rule pinned earlier today: **both** envelope

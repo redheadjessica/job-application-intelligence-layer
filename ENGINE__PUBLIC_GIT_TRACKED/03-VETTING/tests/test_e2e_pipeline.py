@@ -3,7 +3,7 @@
 Drives the REAL wiring, not reimplementations: stubbed fetch (network fully stubbed)
 → real extraction (the actual ATS fixture parsers) → canonical identity → registry →
 `prep_common.process_urls` (capture writer + QA gate) → question filtering →
-scoring-row synthesis through the SAME 28-column contract → the real
+scoring-row synthesis through the SAME 32-column contract → the real
 `norm_contracts.py --normalize-rankings-csv` CLI (subprocess) → the real
 `make_rankings_xlsx.build`. Assertions land on the FINAL artifacts.
 
@@ -207,9 +207,9 @@ def test_the_whole_pipeline_end_to_end(tmp_path, monkeypatch):
     registry = pc.load_capture_registry(reg_path)
     assert len(registry["postings"]["greenhouse:bloomerang:4705550005"]["history"]) == 2
 
-    # ---- Scorer boundary: synthesize rows through the SAME 28-column contract. ----
+    # ---- Scorer boundary: synthesize rows through the SAME 32-column contract. ----
     headers = norm_contracts.resolve_contract_headers()
-    assert len(headers) == 28                       # mirror-pin of the JS writer's HEADERS
+    assert len(headers) == 32                       # mirror-pin of the JS writer's HEADERS
     rankings = batch / "1 - Rankings"
     rankings.mkdir()
     csv_path = rankings / "e2e-rankings.csv"
