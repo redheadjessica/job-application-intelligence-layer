@@ -11,6 +11,43 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-31 — The tracker distinguishes ATS first-posted from ATS last-updated
+
+A tracker-surface change only: the extraction layer already retrieved both timestamps (`posted_date`
+/ `updated_date` in the fetcher contract and the manifest), captures already rendered
+`Job Updated At:`, and `updated_date_from_capture()` already read it back — the value was simply
+unconsumed. Now:
+
+- **`Job Posted Date` → `ATS First Posted Date`** — a LABEL change only. Existing values are
+  preserved verbatim, never recomputed or reinterpreted.
+- **New adjacent column `ATS Last Updated Date`**, immediately after it. The contract goes 27 → 28
+  columns (an approved contract change; the frozen-contract docs move with it).
+- **Populated ONLY from the ATS metadata already stored in the capture.** No research, no company
+  sites, no third-party boards, no LLM inference about refreshes or reopens. Never substituted with
+  JAIL's fetch/process date, a file mtime, an application deadline, a syndicated-listing date, or
+  anything read out of the posting's wording — pinned, including an explicit assertion that today's
+  date never appears.
+- **Deliberate asymmetry, pinned so nobody "harmonizes" it:** first-posted keeps its `Unknown`
+  literal (every posting HAS a first-posted date, so `Unknown` means we could not read it);
+  last-updated stays **BLANK** when the ATS exposes none (many postings are never updated, and
+  Workable / Workday / LinkedIn never publish the field — blank is a real answer, not a missing one).
+- **No mass back-fill:** an existing row gains the value only from its own capture's stored ATS
+  metadata; otherwise blank, populated prospectively. A value already in the sheet is never
+  overwritten. Format matches the posted column exactly (plain ISO).
+- **Backward compatibility in ONE hop:** `LEGACY_RENAMES` now maps both `Posted` and
+  `Job Posted Date` onto the new label, so a two-generation-old CSV migrates with values intact and
+  gains the new column blank-or-back-filled (both generations pinned).
+- Every dependent surface moved together: `CONTRACT_TEMPLATE` + `H_` constants, the back-fill path,
+  row-integrity validation (the new column is explicitly NOT required-non-blank), `vet-jobs.js`
+  HEADERS/dataCells, `make_rankings_xlsx` widths + left-alignment + the Instructions-tab explainer,
+  the E2E pipeline test, the parity tests, `03-VETTING/CLAUDE.md`, and the v2 workflow doc.
+- **Neither date feeds scoring, ranking, or prioritization** — pinned by a test asserting the
+  scoring prompt and score schema reference no date field.
+
+Sources populating the update column: Ashby `updatedAt`, Greenhouse `updated_at`, Lever `updatedAt`,
+Rippling `updatedOn`, JSON-LD `dateModified`. Blank by source: Workable, Workday, LinkedIn.
+Suite: 683 → 692 green.
+
 ## 2026-07-31 — Release-validation fix: substantive questions no longer mislabeled logistical
 
 The final question-workflow validation caught two clearly-substantive live questions classified

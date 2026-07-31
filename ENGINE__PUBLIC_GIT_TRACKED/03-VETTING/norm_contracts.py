@@ -690,13 +690,22 @@ H_LANE = "Lane"
 H_COMPRANGE = "Comp Range"
 H_COMPFIT = "Comp Fit"
 H_COMPANY = "Company"
-H_POSTED = "Job Posted Date"
+H_POSTED = "ATS First Posted Date"    # the ATS's own first-published date
+H_UPDATED = "ATS Last Updated Date"   # the ATS's own last-updated timestamp
 H_JOBFILE = "Job File"
 H_DATACOMPLETE = "Data Completeness"
 H_TITLE = "Job Post Title + Link"
 H_LANEFIT = "Lane Fit"
 H_LOCFIT_LEGACY = "Location Fit"   # removed from the contract; dropped on migration
 UNKNOWN_POSTED_DATE = "Unknown"    # never blank, never the capture date, never inferred
+# DELIBERATE ASYMMETRY (approved 2026-07-31 — do NOT "harmonize" these):
+#   ATS First Posted Date  -> the literal `Unknown` when the ATS published no date.
+#     Every posting HAS a first-posted date; `Unknown` says we could not read it.
+#   ATS Last Updated Date  -> BLANK when the ATS exposes no update timestamp.
+#     Many postings have simply never been updated, and several ATSes never expose
+#     the field at all (Workable, Workday, LinkedIn), so `Unknown` would imply a
+#     failed lookup where there is nothing to look up. Blank means "the ATS gave us
+#     nothing here" — never a guess, never JAIL's own fetch date.
 # The practicality dimension's prose companion column. Static name (like "Mission Fit Notes") even
 # though the score label itself is candidate-relabelable, so both Python passes can find it.
 H_PRACTNOTES = "Comp + Lifestyle Fit Notes"
@@ -737,7 +746,7 @@ CONTRACT_TEMPLATE = [
     "Have Intro? [You Add]", "Your Notes? [You Add]", "Decline/Down Date? [You Add]",
     f"{_SCORE_SLOT}final", f"{_SCORE_SLOT}market", f"{_SCORE_SLOT}desire",
     f"{_SCORE_SLOT}style", f"{_SCORE_SLOT}practicality",
-    H_POSTED,
+    H_POSTED, H_UPDATED,
     "Top Reasons Notes", "Top Concerns Notes", "Profile Score Notes", H_MISSIONNOTES,
     H_PRACTNOTES,
     H_LANEFIT, H_COMPFIT, H_DATACOMPLETE, H_JOBFILE,
@@ -752,7 +761,10 @@ LEGACY_RENAMES = {
     "Mission Fit Notes": "Your Desire Score Notes",
     "Base Resume Used": "Tailored? (Base Resume)",
     "Cover Letter?": "Cover Letter Drafted?",
-    "Posted": "Job Posted Date",
+    # Two generations in one hop: the oldest CSVs say `Posted`, the previous
+    # generation `Job Posted Date`; both land on the current label with values intact.
+    "Posted": H_POSTED,
+    "Job Posted Date": H_POSTED,
     "Top Concerns": "Top Concerns Notes",
     # An even older draft used a hyphen here; the SLASH form is correct.
     "Decline-Down Date? [You Add]": "Decline/Down Date? [You Add]",
@@ -761,7 +773,7 @@ DROPPED_COLUMNS = (H_LOCFIT_LEGACY,)
 
 
 def resolve_contract_headers(existing_headers=None, score_labels=None):
-    """The exact 27 final headers for a given file: literals from the template, with each score
+    """The exact 28 final headers for a given file: literals from the template, with each score
     slot resolved to the label that file already uses (default or legacy spelling), else the
     engine default. `score_labels` (from score-dimensions.json) overrides the defaults."""
     existing = list(existing_headers or [])
@@ -1184,7 +1196,8 @@ def migrate_rankings_headers(rows, score_labels=None, out=None):
     reorder to the contract. Every step joins by header NAME (never index), so no column's data
     can shift onto a neighbour. Values are carried with their header; inserted columns start
     blank and are back-filled by the caller (`Data Completeness` from `fallback_completeness`,
-    `Job Posted Date` from the capture). Returns True when anything changed.
+    `ATS First Posted Date` / `ATS Last Updated Date` from the capture). Returns True
+    when anything changed.
     """
     if not rows:
         return False
@@ -1226,7 +1239,7 @@ def migrate_rankings_headers(rows, score_labels=None, out=None):
 
 
 def normalize_rankings_csv(csv_path, cfg, out=print, score_labels=None):
-    """Migrate a rankings CSV to the 27-column contract and rewrite its contract-governed
+    """Migrate a rankings CSV to the 28-column contract and rewrite its contract-governed
     columns in place, printing every repair. Returns the number of cells changed."""
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
@@ -1306,17 +1319,26 @@ def normalize_rankings_csv(csv_path, cfg, out=print, score_labels=None):
             comp = row[idx[H_COMPRANGE]] if H_COMPRANGE in idx and idx[H_COMPRANGE] < len(row) else ""
             loc = row[idx[H_WORKLOC]] if H_WORKLOC in idx and idx[H_WORKLOC] < len(row) else ""
             fix(row, H_DATACOMPLETE, fallback_completeness(comp, loc), H_DATACOMPLETE, n)
-        # Job Posted Date is not model output — it is read back out of the capture. Only ever
-        # FILLED IN over a blank or the `Unknown` placeholder (a real date already in the sheet
-        # stays put), and it NEVER ends up blank: with no verified employer date it reads
-        # `Unknown` rather than implying nobody looked.
+        # Neither date is model output — both are read back out of the capture (the ATS's
+        # own metadata), and a real date already in the sheet always stays put.
+        job_file = row[idx[H_JOBFILE]] if H_JOBFILE in idx and idx[H_JOBFILE] < len(row) else ""
+        # First-posted: NEVER blank — with no verified ATS date it reads `Unknown`
+        # rather than implying nobody looked.
         if H_POSTED in idx and idx[H_POSTED] < len(row) \
                 and row[idx[H_POSTED]].strip() in ("", UNKNOWN_POSTED_DATE):
-            job_file = row[idx[H_JOBFILE]] if H_JOBFILE in idx and idx[H_JOBFILE] < len(row) else ""
             posted = (posted_date_from_capture(job_file, base_dir=Path(csv_path).parent)
                       or UNKNOWN_POSTED_DATE)
             if posted:
                 fix(row, H_POSTED, posted, H_POSTED, n)
+        # Last-updated: ONLY from the ATS metadata already stored in the capture
+        # (`Job Updated At:`). No ATS update timestamp -> stays BLANK. Never JAIL's
+        # fetch date, never a file mtime, never inferred from posting language, and
+        # no mass back-fill beyond what the capture itself already carries.
+        if H_UPDATED in idx and idx[H_UPDATED] < len(row) \
+                and not row[idx[H_UPDATED]].strip():
+            updated = updated_date_from_capture(job_file, base_dir=Path(csv_path).parent)
+            if updated:
+                fix(row, H_UPDATED, updated, H_UPDATED, n)
     # Row-integrity validation (B2), after every repair above: trustworthy repairs
     # are applied through the same `fix` (so they count + print), anything
     # unrepairable is reported loudly and surfaces in the CLI exit code.

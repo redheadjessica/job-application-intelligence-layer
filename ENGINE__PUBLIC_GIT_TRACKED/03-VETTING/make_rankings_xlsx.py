@@ -61,8 +61,8 @@ H_COMPANY = "Company"
 H_TITLE = "Job Post Title + Link"
 H_WORKLOC = "Working Location"
 H_COMPRANGE = "Comp Range"
-H_POSTED = norm_contracts.H_POSTED   # "Job Posted Date" — the EMPLOYER's publication date
-                                     # (static date or the literal `Unknown`; never age math)
+H_POSTED = norm_contracts.H_POSTED    # "ATS First Posted Date" (static date or `Unknown`)
+H_UPDATED = norm_contracts.H_UPDATED  # "ATS Last Updated Date" (static date or BLANK)
 H_JOBFILE = "Job File"
 H_LANEFIT = "Lane Fit"
 H_COMPFIT = "Comp Fit"
@@ -166,7 +166,7 @@ COMP_LABEL_COLORS = {
 # Structural (non-score) column widths — these header strings don't change with score relabeling.
 WIDTHS = {
     "Applied Date? [You Fill In]": 16, H_STATUS: 30, H_LANE: 22, H_COMPANY: 18, H_TITLE: 46,
-    H_WORKLOC: 22, H_COMPRANGE: 12, H_POSTED: 12, "Have Intro? [You Add]": 14, "Your Notes? [You Add]": 26,
+    H_WORKLOC: 22, H_COMPRANGE: 12, H_POSTED: 14, H_UPDATED: 14, "Have Intro? [You Add]": 14, "Your Notes? [You Add]": 26,
     "Decline/Down Date? [You Add]": 16, H_PRACTNOTES: 46, "Your Desire Score Notes": 40,
     "Profile Score Notes": 40,
     "Top Reasons Notes": 46, "Top Concerns Notes": 46, "Job File": 28,
@@ -435,8 +435,10 @@ INSTRUCTIONS = [
     ("Below the jobs is a legend of section colors. If you like visual breaks between groups, copy a bar in above a group after sorting — optional.", False),
     ("Pasting jobs into your own tracker? Copy only the job rows, NOT the legend bars, so you don't end up with duplicate dividers.", False),
     ("", False),
-    ("Job Posted Date", True),
-    ("\"Job Posted Date\" is the EMPLOYER's publication date from the job posting itself — not the date this batch was fetched. When no verified employer date exists it reads \"Unknown\" rather than sitting blank, and it is never guessed from a URL, job id, or search-result age. It is a fixed date on purpose: an age or \"days open\" number baked into a saved sheet goes stale and starts misleading you.", False),
+    ("ATS dates", True),
+    ("\"ATS First Posted Date\" is the date the EMPLOYER's job board first published the posting — not the date this batch was fetched. When no verified ATS date exists it reads \"Unknown\" rather than sitting blank, and it is never guessed from a URL, job id, or search-result age.", False),
+    ("\"ATS Last Updated Date\" is the job board's own last-updated timestamp, when it publishes one. It is BLANK when the ATS exposes no update date — many postings are simply never updated, and some boards never expose the field at all — so blank is a real answer, not a missing one. Neither date is ever substituted with JAIL's fetch date, a file date, a deadline, or anything inferred from the posting's wording.", False),
+    ("Both are fixed dates on purpose: an age or \"days open\" number baked into a saved sheet goes stale and starts misleading you. Neither date feeds scoring, ranking, or prioritization.", False),
     ("", False),
     ("Colors & the dropdown", True),
     ("Status, Lane, Lane Fit, Comp Fit, Comp Range and Data Completeness cells are color-coded. Working Location uses one fixed 4-color palette: green = remote genuinely available; yellow = acceptable home-metro office at exactly 1-3 days; orange = unknown location/cadence, >3 days, or open-ended minimums (\"3+ days\"); red = required in-person outside your home geography. In Google Sheets you can layer the native rounded \"chip\" dropdown on top if you prefer that look (that is a Sheets feature, not part of the file).", False),
@@ -553,7 +555,7 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         # is left alone by normalize_status (it warns, never rewrites, an unrecognized value).
         if H_STATUS in rec and (rec.get(H_STATUS) or "").strip() != NEEDS_REFETCH_STATUS:
             rec[H_STATUS] = norm_contracts.normalize_status(rec.get(H_STATUS))
-    # ---- Migrate to the 27-column contract, then back-fill the derived columns ----
+    # ---- Migrate to the 28-column contract, then back-fill the derived columns ----
     # The CSV migration pass (norm_contracts.normalize_rankings_csv, which vet-jobs.js runs right
     # after scoring) normally leaves nothing to do here — for a migrated CSV this is a no-op. It
     # stays for a HAND-MADE or never-normalized CSV, which must still regenerate a correct
@@ -593,7 +595,7 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
     # Free-text columns read left-to-right like prose — left-align them (Jessica, 7/16/26). Everything
     # else (dates, scores, short fit labels) stays centered.
     LEFT_ALIGN_HEADERS = {
-        H_LANE, H_COMPANY, H_TITLE, H_WORKLOC, H_POSTED,
+        H_LANE, H_COMPANY, H_TITLE, H_WORKLOC, H_POSTED, H_UPDATED,
         "Have Intro? [You Add]", "Your Notes? [You Add]", "Decline/Down Date? [You Add]",
         H_PRACTNOTES, "Your Desire Score Notes", "Profile Score Notes", "Top Reasons Notes",
         "Top Concerns Notes",

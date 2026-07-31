@@ -486,7 +486,7 @@ const laneFitStr = (lf) => lf ? `${lf.primary_lane} (${lf.confidence})${lf.secon
 // too, and the Python side (norm_contracts.py / make_rankings_xlsx.py) has to locate this column
 // by an exact name that can't shift when a candidate's scoring card relabels the dimension.
 const PRACTICALITY_NOTES_HEADER = 'Comp + Lifestyle Fit Notes'
-// THE 27-COLUMN CONTRACT (order authoritative, approved 2026-07-30). CSV and XLSX share this exact
+// CSV and XLSX share this exact
 // header set + order, and norm_contracts.normalize_rankings_csv MIGRATES any older CSV to it (rename
 // -> drop -> insert -> reorder, joined by header NAME so no column's data ever shifts).
 // `Location Fit` was REMOVED as redundant with `Working Location`: the canonical location grammar
@@ -494,15 +494,18 @@ const PRACTICALITY_NOTES_HEADER = 'Comp + Lifestyle Fit Notes'
 // derived label was one more thing to keep in sync for no added signal.
 // The 5 score-column labels are DYNAMIC (resolved above from score-dimensions.json), so a candidate
 // who relabels a dimension relabels those headers with it; the defaults spell the contract exactly.
+// THE 28-COLUMN CONTRACT (order authoritative; `ATS Last Updated Date` added 2026-07-31).
 const HEADERS = [
   'Applied Date? [You Fill In]', 'Status? [You Change]', 'Lane', 'Company', 'Job Post Title + Link',
   'Working Location', 'Comp Range',
   'Have Intro? [You Add]', 'Your Notes? [You Add]', 'Decline/Down Date? [You Add]',
   LABELS.final, LABELS.market, LABELS.desire, LABELS.style, LABELS.practicality,
-  // The employer's own publication date, immediately after the score block (her spec). Written as
-  // `Unknown` here — never blank, never the JAIL capture date, never inferred — and the
-  // norm_contracts pass replaces that placeholder with a verified date when the capture carries one.
-  'Job Posted Date',
+  // The ATS's own dates, immediately after the score block. Both are read back out of the
+  // capture by the norm_contracts pass — never the JAIL capture date, never inferred.
+  // First-posted is written as the `Unknown` placeholder (never blank); last-updated is
+  // written BLANK and stays blank unless the ATS actually exposed an update timestamp
+  // (deliberate asymmetry — see norm_contracts).
+  'ATS First Posted Date', 'ATS Last Updated Date',
   'Top Reasons Notes', 'Top Concerns Notes', 'Profile Score Notes', 'Your Desire Score Notes',
   // The practicality dimension's prose companion. It exists because that rationale used to be
   // written into `Comp Fit` — a contract-owned, machine-derived column — where the norm_contracts
@@ -526,8 +529,11 @@ function dataCells(r) {
     '', '', '',
     r.final_score, r.market_perception_score, r.desire_score, r.company_style_score, r.practicality_score,
     // Never blank, never the capture date, never inferred: the placeholder the
-    // norm_contracts pass overwrites only with a VERIFIED employer date.
+    // norm_contracts pass overwrites only with a VERIFIED ATS date.
     UNKNOWN_POSTED_DATE,
+    // ATS Last Updated Date: blank here; filled only when the capture carries an
+    // ATS update timestamp. Blank is a real answer, not a missing one.
+    '',
     r.top_reasons, r.top_concerns, r.scope_fit_notes, r.mission_fit_notes,
     r.comp_lifestyle_fit_notes,
     laneFitStr(r.lane_fit), r._comp_fit, r._completeness, r.job_file, '', '',

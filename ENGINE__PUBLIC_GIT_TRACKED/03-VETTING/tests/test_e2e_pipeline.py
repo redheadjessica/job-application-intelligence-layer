@@ -3,7 +3,7 @@
 Drives the REAL wiring, not reimplementations: stubbed fetch (network fully stubbed)
 → real extraction (the actual ATS fixture parsers) → canonical identity → registry →
 `prep_common.process_urls` (capture writer + QA gate) → question filtering →
-scoring-row synthesis through the SAME 27-column contract → the real
+scoring-row synthesis through the SAME 28-column contract → the real
 `norm_contracts.py --normalize-rankings-csv` CLI (subprocess) → the real
 `make_rankings_xlsx.build`. Assertions land on the FINAL artifacts.
 
@@ -207,9 +207,9 @@ def test_the_whole_pipeline_end_to_end(tmp_path, monkeypatch):
     registry = pc.load_capture_registry(reg_path)
     assert len(registry["postings"]["greenhouse:bloomerang:4705550005"]["history"]) == 2
 
-    # ---- Scorer boundary: synthesize rows through the SAME 27-column contract. ----
+    # ---- Scorer boundary: synthesize rows through the SAME 28-column contract. ----
     headers = norm_contracts.resolve_contract_headers()
-    assert len(headers) == 27                       # mirror-pin of the JS writer's HEADERS
+    assert len(headers) == 28                       # mirror-pin of the JS writer's HEADERS
     rankings = batch / "1 - Rankings"
     rankings.mkdir()
     csv_path = rankings / "e2e-rankings.csv"
@@ -221,7 +221,8 @@ def test_the_whole_pipeline_end_to_end(tmp_path, monkeypatch):
                 "Working Location": wl, "Comp Range": comp,
                 "FINAL Weighted Score": "82", "How They May See Your Profile": "80",
                 "Your Desire Score": "84", "Culture Fit Score": "78",
-                "Comp + Lifestyle Fit Score": "76", "Job Posted Date": "Unknown",
+                "Comp + Lifestyle Fit Score": "76", "ATS First Posted Date": "Unknown",
+                "ATS Last Updated Date": "",
                 "Top Reasons Notes": "r", "Top Concerns Notes": "c",
                 "Profile Score Notes": "s", "Your Desire Score Notes": "m",
                 "Comp + Lifestyle Fit Notes": "Cash 30/40 | Location 30/30 | Equity 16/20",
@@ -260,9 +261,14 @@ def test_the_whole_pipeline_end_to_end(tmp_path, monkeypatch):
     # 236-296 is overridden by the mechanical envelope of both.
     assert got_b["Comp Range"] == "213-296"
     assert got_b["Comp Fit"] == norm_contracts.comp_fit_label("213-296", CFG)
-    # Job Posted Date back-filled from the captures (never blank).
-    assert got_b["Job Posted Date"] == "2026-03-25"
-    assert got_a["Job Posted Date"] == "2026-07-01"
+    # ATS First Posted Date back-filled from the captures (never blank).
+    assert got_b["ATS First Posted Date"] == "2026-03-25"
+    assert got_a["ATS First Posted Date"] == "2026-07-01"
+    # ATS Last Updated: populated only where the ATS exposed one. The Ashby fixture
+    # publishes no updatedAt and the rendered page no dateModified -> both BLANK,
+    # never JAIL's fetch date.
+    assert got_b["ATS Last Updated Date"] == ""
+    assert got_a["ATS Last Updated Date"] == ""
     # Data Completeness back-filled; Job File links to a real capture.
     assert norm_contracts.is_valid_completeness(got_b["Data Completeness"])
     assert (src / got_b["Job File"]).is_file()

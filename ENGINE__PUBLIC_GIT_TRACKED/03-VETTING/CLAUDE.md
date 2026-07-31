@@ -27,16 +27,22 @@ Everything candidate-specific — lanes, comp floor, location, dealbreakers, str
 
 Structured numeric preferences (comp target/floor, home metro + aliases, lanes) live in `jail.config.json` (also from `/intake`). The scorer inlines it as `<preferences>` to sharpen `practicality_score`.
 
-**The rankings output is a fixed 27-column contract (2026-07-30).** The order is authoritative and
+**The rankings output is a fixed 28-column contract (2026-07-30; `ATS Last Updated Date` added 2026-07-31).** The order is authoritative and
 defined ONCE, in `norm_contracts.CONTRACT_TEMPLATE` + `resolve_contract_headers()`; `vet-jobs.js`
 writes it, `normalize_rankings_csv` MIGRATES any older CSV to it in place (rename → drop → insert →
 reorder, joined by header NAME so no column's data can shift), and `make_rankings_xlsx.py` shares the
 same helper so a migrated CSV needs no further repair and a hand-made one still regenerates correctly.
 `Location Fit` was **removed** as redundant with `Working Location`: the canonical grammar already
 encodes remote/metro/cadence, both cells carried the same four hexes, and a second derived label was
-one more thing to keep in sync. Two rules worth stating plainly: `Job Posted Date` is **never blank**
-(the literal `Unknown` when there is no verified employer date — never the JAIL capture date, never
-inferred from a URL, job id, or search-result age), and **only** columns marked `[You Fill In]` /
+one more thing to keep in sync. Three rules worth stating plainly. **`ATS First Posted Date`** is **never blank** (the literal
+`Unknown` when there is no verified ATS date — never the JAIL capture date, never inferred from a
+URL, job id, or search-result age). **`ATS Last Updated Date`** is the ATS's own last-updated
+timestamp and is **BLANK** when the board exposes none — a deliberate asymmetry with the column
+beside it: every posting has a first-posted date (so `Unknown` means we could not read it), while
+many postings genuinely have no update and several ATSes never publish the field at all (so blank
+is a real answer). Do not "harmonize" the two. Neither date is ever substituted with JAIL's fetch
+date, a file date, a deadline, or anything inferred from the posting's wording, and **neither feeds
+scoring, ranking, or prioritization**, and **only** columns marked `[You Fill In]` /
 `[You Change]` / `[You Add]` are human-managed — a bare `?` in a header does not imply it
 (`Tailored? (Base Resume)` and `Cover Letter Drafted?` are written by the pipeline via
 `update_rankings_row.py`, which accepts both header generations on read). A column a user added
