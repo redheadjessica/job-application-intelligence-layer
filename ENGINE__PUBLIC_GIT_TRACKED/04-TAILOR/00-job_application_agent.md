@@ -1273,9 +1273,16 @@ Never reward keyword stuffing or awkward repetition — an ATS-legible resume a 
 
 ### Proposed new content
 
-When Step 9.5 recommends a piece **and** you judge that writing it and including it would materially strengthen the resume, the improved score **may** assume it is written and included — an upper bound on what full implementation achieves. It is still bound by the rules above: a new writing piece is supporting evidence, so it moves placement within the band and cannot lift a band that an absent central has set.
+When Step 9.5 recommends a piece **and** you judge that writing it and including it would materially strengthen the resume, the improved score **may** assume it is written and included — an upper bound on what full implementation achieves.
 
-When the improved score makes that assumption, **`Why It Improves` must say so explicitly**, in plain language ("…assumes the proposed [topic] piece is written and linked"). The candidate needs to know that part of the delta is contingent on work they have not done yet. Do not create a second conditional score; one number, disclosed.
+**Grade a completed piece by what it genuinely proves**, using the same evidence test as everything else. It is not automatically supporting evidence, and it is not automatically band-lifting:
+
+- **It cannot manufacture professional experience the candidate does not have.** Writing an essay about enterprise launches is not launching at enterprise scale; writing about management is not having managed. Against centrals like enterprise/at-scale launch experience, people management, or direct ownership of a product or P&L, a written piece is **supporting evidence only** — it moves placement within the band the weakest central already set, and cannot lift that band.
+- **But where the hiring thesis genuinely treats published thinking, communication, writing, public expertise, or demonstrated domain judgment as thesis-defining, a completed and linked piece is direct evidence of that central** — and may change its grade, and therefore the band. A developer-advocacy, content, research, or thought-leadership role that explicitly wants public writing is the clear case: for that central, the piece *is* the proof, not a proxy for it.
+
+So the question is never "is this a writing sample?" but "what does this specific central require, and does a published piece actually satisfy it?" Decide it explicitly in the ledger, naming which central the piece bears on and whether it changed that central's grade.
+
+Whenever the improved score assumes the piece is written and included, **`Why It Improves` must say so explicitly**, in plain language ("…assumes the proposed [topic] piece is written and linked"). That holds however the piece was graded: the candidate needs to know that part of the delta is contingent on work they have not done yet, and will not materialize if they skip it. Do not create a second conditional score; one number, disclosed.
 
 Cover letters are irrelevant here — this compares resumes only.
 

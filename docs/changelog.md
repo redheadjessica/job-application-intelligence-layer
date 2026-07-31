@@ -11,6 +11,38 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-31 — Proposed writing is graded by what it proves, not by a blanket rule
+
+Third correction to the resume-comparison scoring, same day. The weakest-central aggregation rule
+introduced earlier today carried a rider that a proposed new writing piece is *always* supporting
+evidence and can therefore never change a score band. That was too categorical, and it quietly
+contradicted the design intent that the Improved score represent the full upper bound of actually
+implementing the recommendations.
+
+The blanket rule was right about the case that motivated it and wrong as a general law. Now the piece
+is graded like any other evidence — by what it genuinely proves against the specific central:
+
+- **It cannot manufacture professional experience the candidate does not have.** Writing an essay
+  about enterprise launches is not launching at enterprise scale; writing about management is not
+  having managed. Against centrals like at-scale launch experience, people management, or direct
+  product/P&L ownership, a written piece is **supporting evidence only** — it moves placement inside
+  the band the weakest central already set, and cannot lift it.
+- **But where the hiring thesis genuinely treats published thinking, communication, writing, public
+  expertise, or demonstrated domain judgment as thesis-defining, a completed and linked piece is
+  direct evidence of that central** and may change its grade, and so the band. For a
+  content/advocacy/research/thought-leadership role that explicitly asks for public writing, the
+  piece *is* the proof rather than a proxy for it.
+
+The operative question is therefore never "is this a writing sample?" but "what does this central
+require, and does a published piece actually satisfy it?" — decided explicitly in the ledger, naming
+which central the piece bears on and whether it changed that central's grade. Disclosure in
+`Why It Improves` is unchanged and now explicitly required **however the piece was graded**, not only
+when it lifted a band: the candidate needs to know which part of the delta is contingent on work not
+yet done.
+
+No pilot rescoring needed — all four pilot jobs returned a new-content assumption of `None`, so none
+of their scores depended on the old rule.
+
 ## 2026-07-31 — Resume comparison, corrected: weakest-central aggregation, and resume-only artifacts
 
 Two defects surfaced by the first four-job pilot. Both were found by reading the ledgers against the

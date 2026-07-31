@@ -41,12 +41,16 @@ H_WHY = norm_contracts.H_WHY_IMPROVES
 # --------------------------------------------------------------------------- #
 def test_the_four_columns_are_appended_immediately_after_cover_letter_drafted():
     """Appended as a unit at the END, so no existing column's position moves and a user's
-    left-to-right reading of the tracker is untouched."""
+    left-to-right reading of the tracker is untouched.
+
+    Deliberately asserts the RELATIVE position rather than a total column count: the contract
+    grows and shrinks elsewhere as other columns come and go, and pinning a total here would make
+    this test fail for reasons that have nothing to do with the block it guards."""
     headers = norm_contracts.resolve_contract_headers()
     assert headers[-5:] == [
         "Cover Letter Drafted?", H_BASE, H_IMPROVED, H_DELTA, H_WHY,
     ]
-    assert len(headers) == 32
+    assert len(headers) == len(set(headers)), "a duplicated header would silently shadow a column"
 
 
 def test_the_numeric_members_exclude_the_prose_column():
@@ -155,8 +159,12 @@ def test_row_validation_surfaces_a_bad_block_in_a_real_table():
     row[idx["Company"]] = "Acme"
     row[idx["Job Post Title + Link"]] = "Senior PM | https://x.test/j"
     row[idx["Job File"]] = "acme.txt"
-    row[idx[norm_contracts.H_POSTED]] = "Unknown"
-    row[idx[norm_contracts.H_UPDATED]] = "Unknown"
+    # Satisfy whatever never-blank date columns the contract currently carries, without naming
+    # them: which date columns exist is a separate, moving concern, and this test is about the
+    # comparison block. Anything else blank is fine — the assertion below is specific.
+    for h in headers:
+        if "date" in h.lower() and "[you" not in h.lower():
+            row[idx[h]] = "Unknown"
     row[idx[H_BASE]], row[idx[H_IMPROVED]], row[idx[H_DELTA]] = "70", "60", "-10"
     row[idx[H_WHY]] = "worse somehow"
     errors = norm_contracts.validate_rankings_rows([headers, row], out=lambda *_: None)
@@ -556,6 +564,30 @@ def test_the_spec_requires_distinct_evidence_to_reinforce_and_repetition_not_to(
 def test_the_spec_requires_disclosure_when_new_content_is_assumed():
     assert "assumes the proposed" in SPEC
     assert "contingent on work they have not done yet" in SPEC
+    # Disclosure is required no matter how the piece was graded — not only when it lifted a band.
+    assert "That holds however the piece was graded" in SPEC
+
+
+def test_the_spec_grades_new_content_by_what_it_proves_not_by_a_blanket_rule():
+    """Revised 2026-07-31. The first version made every proposed piece supporting evidence that
+    could never change a band — too categorical, and it contradicted the instruction that the
+    improved score represent the full upper bound of implementing the recommendations."""
+    assert "Grade a completed piece by what it genuinely proves" in SPEC
+    assert "It is not automatically supporting evidence, and it is not automatically band-lifting" in SPEC
+
+
+def test_the_spec_forbids_writing_from_manufacturing_missing_experience():
+    assert "cannot manufacture professional experience the candidate does not have" in SPEC
+    assert "not launching at enterprise scale" in SPEC
+    assert "supporting evidence only" in SPEC
+
+
+def test_the_spec_lets_a_written_piece_evidence_a_writing_thesis_central():
+    """The case the blanket rule got wrong: for a role whose thesis genuinely turns on published
+    thinking, a completed piece IS the proof rather than a proxy for it."""
+    assert "published thinking, communication, writing, public expertise, or demonstrated domain judgment as thesis-defining" in SPEC
+    assert "may change its grade, and therefore the band" in SPEC
+    assert "the piece *is* the proof, not a proxy for it" in SPEC
 
 
 def test_the_spec_pins_the_five_point_scale_and_the_never_below_base_invariant():
