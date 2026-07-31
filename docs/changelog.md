@@ -11,6 +11,42 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-31 — One `Posting Last Update` column, with live-aging recency colors
+
+The two visible ATS date columns are merged into a single **`Posting Last Update`** in the same
+position. Derivation: the ATS's last-updated date when it publishes one → else its first-posted date
+→ else the literal `Unknown` (never blank). All four source combinations are pinned.
+
+- **DISPLAY merge only.** `posted_date` / `updated_date` remain separate in the fetcher contract and
+  the manifest, the capture format still records `Job Posted At:` / `Job Updated At:` (frozen and
+  untouched), and both `posted_date_from_capture()` and `updated_date_from_capture()` remain — the
+  two dates stay independently available for future use, pinned by a test.
+- **Real dates, not text.** Populated cells are written as `datetime.date` with a `yyyy-mm-dd`
+  number format, so they sort chronologically and can drive date-relative rules; `Unknown` stays a
+  string in the same column (mixed types by design, and the CF guards skip non-numerics).
+- **Live-aging conditional formatting**, evaluated by Excel rather than baked in at build time:
+  each band is a `FormulaRule` of the form
+  `AND(AND(ISNUMBER($P2),$P2<=TODAY()),TODAY()-$P2<=7)` (then `<=30`, `<=60`, `>60`), ordered
+  fresh→stale with `stopIfTrue` so the first match wins, over the whole data range. A row therefore
+  ages from bright green `70D66B` → green `C6EFCE` → yellow `FFEB9C` → red `FFC7CE` on its own as
+  the workbook sits in the tracker. The `ISNUMBER` guard keeps `Unknown`/blank/text unpainted and
+  the `<=TODAY()` guard keeps FUTURE-dated postings unpainted. Rules and fills are asserted on a
+  real generated workbook, not just helper returns.
+- **Backward compatibility in one hop from every generation:** `Posted`, `Job Posted Date`, and
+  `ATS First Posted Date` rename; the two-column generation needs real MERGE logic (two columns → one,
+  last-updated winning) which runs positionally before the rename map. All four merge combinations
+  are pinned.
+- Posting recency still does **not** feed scoring, ranking, or prioritization, and ATS extraction
+  logic is unchanged.
+
+**Latent bug found and fixed in passing:** `migrate_rankings_headers` compared the ALREADY-RENAMED
+headers against the target to decide whether anything changed, so a PURE rename (no insert, drop, or
+reorder) reported "nothing to do" and left the old label in the file. Every previous rename had
+happened alongside an insert or drop, which masked it; this change is the first pure rename. It now
+compares the original headers.
+
+Suite: 802 → 818 green.
+
 ## 2026-07-31 — Proposed writing is graded by what it proves, not by a blanket rule
 
 Third correction to the resume-comparison scoring, same day. The weakest-central aggregation rule

@@ -35,6 +35,7 @@ import csv
 import json
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -61,8 +62,16 @@ H_COMPANY = "Company"
 H_TITLE = "Job Post Title + Link"
 H_WORKLOC = "Working Location"
 H_COMPRANGE = "Comp Range"
-H_POSTED = norm_contracts.H_POSTED    # "ATS First Posted Date" (static date or `Unknown`)
-H_UPDATED = norm_contracts.H_UPDATED  # "ATS Last Updated Date" (static date or `Unknown`)
+H_POSTING_UPDATE = norm_contracts.H_POSTING_UPDATE   # "Posting Last Update"
+# Posting-recency palette (age relative to TODAY, evaluated live by Excel — see
+# apply_posting_recency_formatting). New to this file on purpose: the Working Location
+# 4-hex contract and the score ramps are semantically different scales.
+RECENCY_FRESH = "70D66B"      # 0-7 days
+RECENCY_RECENT = "C6EFCE"     # 8-30 days
+RECENCY_AGING = "FFEB9C"      # 31-60 days
+RECENCY_STALE = "FFC7CE"      # >60 days
+RECENCY_TEXT = "000000"       # dark, readable on every band
+ISO_DATE_FORMAT = "yyyy-mm-dd"
 # The resume-comparison block — written by the tailor step, blank until then.
 H_BASE_SCORE = norm_contracts.H_BASE_SCORE
 H_IMPROVED_SCORE = norm_contracts.H_IMPROVED_SCORE
@@ -172,7 +181,7 @@ COMP_LABEL_COLORS = {
 # Structural (non-score) column widths — these header strings don't change with score relabeling.
 WIDTHS = {
     "Applied Date? [You Fill In]": 16, H_STATUS: 30, H_LANE: 22, H_COMPANY: 18, H_TITLE: 46,
-    H_WORKLOC: 22, H_COMPRANGE: 12, H_POSTED: 14, H_UPDATED: 14, "Have Intro? [You Add]": 14, "Your Notes? [You Add]": 26,
+    H_WORKLOC: 22, H_COMPRANGE: 12, H_POSTING_UPDATE: 18, "Have Intro? [You Add]": 14, "Your Notes? [You Add]": 26,
     "Decline/Down Date? [You Add]": 16, H_PRACTNOTES: 46, "Your Desire Score Notes": 40,
     "Profile Score Notes": 40,
     "Top Reasons Notes": 46, "Top Concerns Notes": 46, "Job File": 28,
@@ -434,6 +443,43 @@ def apply_resume_comparison_formatting(ws, col_letter, header, last_data_row):
             rng, CellIsRule(operator=op, formula=formula, fill=solid(hexc), stopIfTrue=True))
 
 
+def _iso_to_date(value):
+    """`YYYY-MM-DD` -> a real `datetime.date`, or None for `Unknown` / blank / any
+    other text. Never parses anything looser — a half-recognized date would be worse
+    than leaving the cell as the text it already is."""
+    s = str(value or "").strip()
+    if not s or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        return None
+    try:
+        return datetime.strptime(s, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def apply_posting_recency_formatting(ws, col_letter, last_data_row):
+    """Date-relative conditional formatting on `Posting Last Update`, evaluated by
+    EXCEL against TODAY() — not a static fill computed at build time. Rows therefore
+    age into later bands on their own as the workbook sits in the tracker; a sheet
+    opened next month shows next month's truth without regeneration.
+
+    Every rule is guarded by `ISNUMBER(...)` AND `<=TODAY()`, so the `Unknown` string,
+    a blank, any non-date text, and any FUTURE date all fall through unpainted. The
+    bands are ordered fresh -> stale with stopIfTrue, so the first match wins and the
+    upper bounds do not need restating."""
+    rng = f"{col_letter}2:{col_letter}{last_data_row}"
+    ref = f"${col_letter}2"
+    guard = f"AND(ISNUMBER({ref}),{ref}<=TODAY())"
+    bands = [(f"TODAY()-{ref}<=7", RECENCY_FRESH),
+             (f"TODAY()-{ref}<=30", RECENCY_RECENT),
+             (f"TODAY()-{ref}<=60", RECENCY_AGING),
+             (f"TODAY()-{ref}>60", RECENCY_STALE)]
+    for condition, hexc in bands:
+        ws.conditional_formatting.add(rng, FormulaRule(
+            formula=[f"AND({guard},{condition})"],
+            fill=solid(hexc), font=Font(name=FONT, size=10, color=RECENCY_TEXT),
+            stopIfTrue=True))
+
+
 # The human-managed columns. THE RULE (2026-07-30): a column is yours to fill in ONLY when its
 # header carries an explicit marker — `[You Fill In]`, `[You Change]`, or `[You Add]`. A bare `?`
 # in a header does NOT mean human-managed: `Tailored? (Base Resume)` and `Cover Letter Drafted?`
@@ -505,10 +551,10 @@ INSTRUCTIONS = [
     ("Below the jobs is a legend of section colors. If you like visual breaks between groups, copy a bar in above a group after sorting — optional.", False),
     ("Pasting jobs into your own tracker? Copy only the job rows, NOT the legend bars, so you don't end up with duplicate dividers.", False),
     ("", False),
-    ("ATS dates", True),
-    ("\"ATS First Posted Date\" is the date the EMPLOYER's job board first published the posting — not the date this batch was fetched. When no verified ATS date exists it reads \"Unknown\" rather than sitting blank, and it is never guessed from a URL, job id, or search-result age.", False),
-    ("\"ATS Last Updated Date\" is the job board's own last-updated timestamp, when it publishes one. It follows the SAME rule as the column beside it: when the ATS provides no update date it reads \"Unknown\", never blank — some boards never expose the field at all, and some postings have simply never been updated. Neither date is ever substituted with JAIL's fetch date, a file date, a deadline, or anything inferred from the posting's wording.", False),
-    ("Both are fixed dates on purpose: an age or \"days open\" number baked into a saved sheet goes stale and starts misleading you. Neither column is ever left blank, and neither date feeds scoring, ranking, or prioritization.", False),
+    ("Posting Last Update", True),
+    ("This is how recently the EMPLOYER's job board touched the posting — the ATS's own last-updated date when it publishes one, otherwise its first-posted date, otherwise \"Unknown\". It is never JAIL's fetch date, a file date, an application deadline, or anything inferred from the posting's wording, and it is never left blank.", False),
+    ("The colors are LIVE, not a snapshot: Excel re-evaluates them against today's date every time you open the file, so a row ages from green into yellow and red on its own without regenerating anything. 0-7 days bright green · 8-30 days green · 31-60 days yellow · over 60 days red. \"Unknown\", blank, and any future-dated cell stay unpainted.", False),
+    ("Posting recency is informational only — it does not feed scoring, ranking, or prioritization.", False),
     ("", False),
     ("Colors & the dropdown", True),
     ("Status, Lane, Lane Fit, Comp Fit, Comp Range and Data Completeness cells are color-coded. Working Location uses one fixed 4-color palette: green = remote genuinely available; yellow = acceptable home-metro office at exactly 1-3 days; orange = unknown location/cadence, >3 days, or open-ended minimums (\"3+ days\"); red = required in-person outside your home geography. In Google Sheets you can layer the native rounded \"chip\" dropdown on top if you prefer that look (that is a Sheets feature, not part of the file).", False),
@@ -639,10 +685,13 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
         records = [dict(zip(headers, row)) for row in table[1:]]
     base_dir = Path(input_csv).resolve().parent
     for rec in records:
-        # Never blank: a verified employer date from the capture, else the `Unknown` placeholder.
-        if (rec.get(H_POSTED) or "").strip() in ("", norm_contracts.UNKNOWN_POSTED_DATE):
-            rec[H_POSTED] = (norm_contracts.posted_date_from_capture(
-                rec.get(H_JOBFILE), base_dir=base_dir) or norm_contracts.UNKNOWN_POSTED_DATE)
+        # Never blank: last-updated wins, else first-posted, else the `Unknown` literal.
+        # Both source dates remain separately readable from the capture; this merges
+        # them for DISPLAY only.
+        if (rec.get(H_POSTING_UPDATE) or "").strip() in ("", norm_contracts.UNKNOWN_POSTED_DATE):
+            rec[H_POSTING_UPDATE] = norm_contracts.posting_last_update(
+                norm_contracts.posted_date_from_capture(rec.get(H_JOBFILE), base_dir=base_dir),
+                norm_contracts.updated_date_from_capture(rec.get(H_JOBFILE), base_dir=base_dir))
         # Every row colored: back-fill a blank completeness cell with the shared helper.
         if not (rec.get(H_DATACOMPLETE) or "").strip():
             rec[H_DATACOMPLETE] = fallback_completeness(rec.get(H_COMPRANGE), rec.get(H_WORKLOC))
@@ -667,7 +716,7 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
     # Free-text columns read left-to-right like prose — left-align them (Jessica, 7/16/26). Everything
     # else (dates, scores, short fit labels) stays centered.
     LEFT_ALIGN_HEADERS = {
-        H_LANE, H_COMPANY, H_TITLE, H_WORKLOC, H_POSTED, H_UPDATED,
+        H_LANE, H_COMPANY, H_TITLE, H_WORKLOC, H_POSTING_UPDATE,
         "Have Intro? [You Add]", "Your Notes? [You Add]", "Decline/Down Date? [You Add]",
         H_PRACTNOTES, "Your Desire Score Notes", "Profile Score Notes", "Top Reasons Notes",
         "Top Concerns Notes",
@@ -716,6 +765,18 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
                     cell.font = link_font
                 else:
                     cell.font = base_font
+            elif h == H_POSTING_UPDATE:
+                # REAL date cells, not text: a string never matches a date-relative
+                # FormulaRule and never sorts chronologically. The `Unknown` literal
+                # stays a string in the same column — mixed types are expected here,
+                # and the CF guards skip anything non-numeric.
+                as_date = _iso_to_date(val)
+                if as_date is not None:
+                    cell.value = as_date
+                    cell.number_format = ISO_DATE_FORMAT
+                else:
+                    cell.value = val
+                cell.font = base_font
             else:
                 cell.value = val
                 cell.font = base_font
@@ -782,6 +843,8 @@ def build(input_csv, output_xlsx, config_path=None, quarantined=0):
             if s not in letter:
                 continue
             apply_resume_comparison_formatting(ws, letter[s], s, last_data_row)
+        if H_POSTING_UPDATE in letter:
+            apply_posting_recency_formatting(ws, letter[H_POSTING_UPDATE], last_data_row)
         fcol = letter[H_FINAL]
         frng = f"{fcol}2:{fcol}{last_data_row}"
         for rule in [

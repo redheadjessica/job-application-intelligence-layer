@@ -312,7 +312,7 @@ function compFitLabel(text, cfg) {
 // `Working Location` grammar already encodes, shared its exact 4-hex fill, and was one more derived
 // label to keep in sync. Its labeler is gone with it — do not reintroduce one.
 
-// The literal placeholder for an unverified ATS date, used by BOTH ATS date columns. Never blank
+// The literal placeholder for an unverified ATS date. Never blank
 // (a blank cell reads as "nobody looked"), never the JAIL capture date, never inferred from a URL,
 // job id, or search-result age. norm_contracts replaces it only with a date the capture carries.
 const UNKNOWN_POSTED_DATE = 'Unknown'
@@ -494,17 +494,19 @@ const PRACTICALITY_NOTES_HEADER = 'Comp + Lifestyle Fit Notes'
 // derived label was one more thing to keep in sync for no added signal.
 // The 5 score-column labels are DYNAMIC (resolved above from score-dimensions.json), so a candidate
 // who relabels a dimension relabels those headers with it; the defaults spell the contract exactly.
-// THE 28-COLUMN CONTRACT (order authoritative; `ATS Last Updated Date` added 2026-07-31).
+// THE COLUMN CONTRACT (order authoritative; the two ATS date columns merged into
+// `Posting Last Update` on 2026-07-31).
 const HEADERS = [
   'Applied Date? [You Fill In]', 'Status? [You Change]', 'Lane', 'Company', 'Job Post Title + Link',
   'Working Location', 'Comp Range',
   'Have Intro? [You Add]', 'Your Notes? [You Add]', 'Decline/Down Date? [You Add]',
   LABELS.final, LABELS.market, LABELS.desire, LABELS.style, LABELS.practicality,
-  // The ATS's own dates, immediately after the score block. Both are read back out of the
-  // capture by the norm_contracts pass — never the JAIL capture date, never inferred.
-  // BOTH are written as the `Unknown` placeholder here and stay `Unknown` unless the
-  // capture carries a real ATS date: one shared never-blank convention (see norm_contracts).
-  'ATS First Posted Date', 'ATS Last Updated Date',
+  // How recently the ATS touched the posting: its last-updated date when published,
+  // else its first-posted date, else `Unknown`. Read back out of the capture by the
+  // norm_contracts pass — never the JAIL capture date, never inferred. Written as the
+  // `Unknown` placeholder here (never blank). The two source dates remain separate in
+  // the capture and the manifest; this column is a DISPLAY merge.
+  'Posting Last Update',
   'Top Reasons Notes', 'Top Concerns Notes', 'Profile Score Notes', 'Your Desire Score Notes',
   // The practicality dimension's prose companion. It exists because that rationale used to be
   // written into `Comp Fit` — a contract-owned, machine-derived column — where the norm_contracts
@@ -539,9 +541,8 @@ function dataCells(r) {
     '', '', '',
     r.final_score, r.market_perception_score, r.desire_score, r.company_style_score, r.practicality_score,
     // Never blank, never the capture date, never inferred: the placeholder the
-    // norm_contracts pass overwrites only with a VERIFIED ATS date. Both ATS date
-    // columns share this convention.
-    UNKNOWN_POSTED_DATE, UNKNOWN_POSTED_DATE,
+    // norm_contracts pass overwrites only with a VERIFIED ATS date.
+    UNKNOWN_POSTED_DATE,
     r.top_reasons, r.top_concerns, r.scope_fit_notes, r.mission_fit_notes,
     r.comp_lifestyle_fit_notes,
     laneFitStr(r.lane_fit), r._comp_fit, r._completeness, r.job_file, '', '',

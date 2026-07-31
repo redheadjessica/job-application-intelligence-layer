@@ -691,23 +691,37 @@ H_LANE = "Lane"
 H_COMPRANGE = "Comp Range"
 H_COMPFIT = "Comp Fit"
 H_COMPANY = "Company"
-H_POSTED = "ATS First Posted Date"    # the ATS's own first-published date
-H_UPDATED = "ATS Last Updated Date"   # the ATS's own last-updated timestamp
+# ONE VISIBLE tracker column for posting recency (2026-07-31, superseding the
+# ATS First Posted Date / ATS Last Updated Date pair). This is a DISPLAY merge only:
+# `posted_date` and `updated_date` remain separate in the fetcher contract and the
+# manifest, the capture format still records `Job Posted At:` / `Job Updated At:`
+# (FROZEN), and both `posted_date_from_capture()` and `updated_date_from_capture()`
+# stay — the two dates remain independently available for future use.
+H_POSTING_UPDATE = "Posting Last Update"
+# The superseded column labels, kept ONLY so migration can recognize and merge them.
+H_POSTED_LEGACY = "ATS First Posted Date"
+H_UPDATED_LEGACY = "ATS Last Updated Date"
 H_JOBFILE = "Job File"
 H_DATACOMPLETE = "Data Completeness"
 H_TITLE = "Job Post Title + Link"
 H_LANEFIT = "Lane Fit"
 H_LOCFIT_LEGACY = "Location Fit"   # removed from the contract; dropped on migration
 UNKNOWN_POSTED_DATE = "Unknown"    # never blank, never the capture date, never inferred
-# ONE SHARED CONVENTION for BOTH ATS date columns (revised 2026-07-31, superseding the
-# earlier blank-vs-Unknown split): each reads the literal `Unknown` when the ATS provides
-# no date. Two adjacent date columns with two different empty-conventions is a trap — a
-# reader cannot tell "nothing to look up" from "we failed to look", and a blank cell in a
-# tracker always reads as unfinished work. `Unknown` states plainly that the ATS gave us
-# no date, which is true whether the board never publishes the field (Workable, Workday,
-# LinkedIn) or simply had nothing to report. Neither column is ever blank, and neither is
-# ever filled with JAIL's fetch date, a file date, a deadline, or an inference.
 UNKNOWN_UPDATED_DATE = UNKNOWN_POSTED_DATE
+
+
+def posting_last_update(posted, updated):
+    """The single `Posting Last Update` value from the two ATS dates.
+
+    PRECEDENCE: the ATS's last-updated date when it published one, else its
+    first-posted date, else the literal `Unknown` (never blank). Both inputs come
+    exclusively from ATS metadata already stored in the capture — nothing here
+    researches, infers, or manufactures a date."""
+    for value in (updated, posted):
+        v = str(value or "").strip()
+        if v and v != UNKNOWN_POSTED_DATE:
+            return v
+    return UNKNOWN_POSTED_DATE
 # The practicality dimension's prose companion column. Static name (like "Mission Fit Notes") even
 # though the score label itself is candidate-relabelable, so both Python passes can find it.
 H_PRACTNOTES = "Comp + Lifestyle Fit Notes"
@@ -818,7 +832,7 @@ def validate_resume_comparison(base, improved, delta, why=""):
 
 
 # --------------------------------------------------------------------------- #
-# THE 32-COLUMN CONTRACT (order authoritative; 27 approved 2026-07-30, +ATS Last Updated
+# THE COLUMN CONTRACT (order authoritative; 27 approved 2026-07-30, +ATS Last Updated
 # Date 2026-07-31, +the four-column resume-comparison block 2026-07-31)
 #
 # One definition, shared by the CSV migration pass and the XLSX build. `vet-jobs.js` writes this
@@ -851,7 +865,7 @@ CONTRACT_TEMPLATE = [
     "Have Intro? [You Add]", "Your Notes? [You Add]", "Decline/Down Date? [You Add]",
     f"{_SCORE_SLOT}final", f"{_SCORE_SLOT}market", f"{_SCORE_SLOT}desire",
     f"{_SCORE_SLOT}style", f"{_SCORE_SLOT}practicality",
-    H_POSTED, H_UPDATED,
+    H_POSTING_UPDATE,
     "Top Reasons Notes", "Top Concerns Notes", "Profile Score Notes", H_MISSIONNOTES,
     H_PRACTNOTES,
     H_LANEFIT, H_COMPFIT, H_DATACOMPLETE, H_JOBFILE,
@@ -870,10 +884,14 @@ LEGACY_RENAMES = {
     "Mission Fit Notes": "Your Desire Score Notes",
     "Base Resume Used": "Tailored? (Base Resume)",
     "Cover Letter?": "Cover Letter Drafted?",
-    # Two generations in one hop: the oldest CSVs say `Posted`, the previous
-    # generation `Job Posted Date`; both land on the current label with values intact.
-    "Posted": H_POSTED,
-    "Job Posted Date": H_POSTED,
+    # Every prior generation lands on the single current column in one hop. The oldest
+    # CSVs say `Posted`, then `Job Posted Date`, then `ATS First Posted Date`. The
+    # two-column generation (`ATS First Posted Date` + `ATS Last Updated Date`) needs a
+    # MERGE rather than a rename and is handled in `_merge_legacy_date_columns` before
+    # these renames run.
+    "Posted": H_POSTING_UPDATE,
+    "Job Posted Date": H_POSTING_UPDATE,
+    H_POSTED_LEGACY: H_POSTING_UPDATE,
     "Top Concerns": "Top Concerns Notes",
     # An even older draft used a hyphen here; the SLASH form is correct.
     "Decline-Down Date? [You Add]": "Decline/Down Date? [You Add]",
@@ -1303,13 +1321,11 @@ def validate_rankings_rows(rows, csv_path=None, fix=None, out=print):
             cf = cell(row, H_COMPFIT)
             if cf and cf not in COMP_FIT_VALUES:
                 err(f"Comp Fit {cf!r} is outside its label domain")
-            # Both ATS date columns share the never-blank `Unknown` convention; the
-            # back-fill above guarantees it, so a blank here is a real defect.
-            for date_col in (H_POSTED, H_UPDATED):
-                if not cell(row, date_col):
-                    err(f"required cell blank: {date_col} (both ATS date columns are "
-                        f"never blank — they read {UNKNOWN_POSTED_DATE!r} when the ATS "
-                        f"provides no date)")
+            # The posting-recency column is never blank; the back-fill above guarantees
+            # it, so a blank here is a real defect.
+            if not cell(row, H_POSTING_UPDATE):
+                err(f"required cell blank: {H_POSTING_UPDATE} (never blank — it reads "
+                    f"{UNKNOWN_POSTED_DATE!r} when the ATS provides no date)")
             dc = cell(row, H_DATACOMPLETE)
             if dc and not is_valid_completeness(dc):
                 # The exact live shape: a Comp-Fit-shaped value duplicated into
@@ -1351,6 +1367,40 @@ def load_config(path):
         return {}
 
 
+def _merge_legacy_date_columns(rows, out=None):
+    """Collapse the two-column ATS date generation into the single `Posting Last
+    Update`, per row, BEFORE the rename map runs. A plain rename cannot express this:
+    two source columns become one, with last-updated taking precedence over
+    first-posted. Returns True when the table changed."""
+    headers = [str(h).strip() for h in rows[0]]
+    if H_UPDATED_LEGACY not in headers:
+        return False
+    ui = headers.index(H_UPDATED_LEGACY)
+    pi = headers.index(H_POSTED_LEGACY) if H_POSTED_LEGACY in headers else None
+    if out:
+        out(f"[norm_contracts] migrate: merged {H_POSTED_LEGACY!r} + "
+            f"{H_UPDATED_LEGACY!r} -> {H_POSTING_UPDATE!r} (last-updated wins, "
+            f"else first-posted, else Unknown)")
+    target = pi if pi is not None else ui
+    headers[target] = H_POSTING_UPDATE
+    for row in rows[1:]:
+        updated = row[ui] if ui < len(row) else ""
+        posted = row[pi] if (pi is not None and pi < len(row)) else ""
+        merged = posting_last_update(posted, updated)
+        while len(row) <= target:
+            row.append("")
+        row[target] = merged
+    # Drop the now-redundant second column (whichever slot was not the target).
+    drop = ui if target != ui else None
+    if drop is not None:
+        headers.pop(drop)
+        for row in rows[1:]:
+            if drop < len(row):
+                row.pop(drop)
+    rows[0] = headers
+    return True
+
+
 def migrate_rankings_headers(rows, score_labels=None, out=None):
     """Migrate a rankings table (list of rows, row 0 = headers) to the exact 27-column contract
     IN PLACE, at the WRITER level so every downstream reader finds it already correct.
@@ -1359,11 +1409,13 @@ def migrate_rankings_headers(rows, score_labels=None, out=None):
     reorder to the contract. Every step joins by header NAME (never index), so no column's data
     can shift onto a neighbour. Values are carried with their header; inserted columns start
     blank and are back-filled by the caller (`Data Completeness` from `fallback_completeness`,
-    `ATS First Posted Date` / `ATS Last Updated Date` from the capture). Returns True
-    when anything changed.
+    `Posting Last Update` from the capture). Returns True when anything changed.
     """
     if not rows:
         return False
+    # The two-column ATS date generation merges FIRST (positionally, by index): a
+    # rename map cannot turn two columns into one.
+    merged_dates = _merge_legacy_date_columns(rows, out=out)
     headers = [str(h).strip() for h in rows[0]]
     # Row dicts keyed by (renamed) header — index-free from here on.
     renamed = [LEGACY_RENAMES.get(h, h) for h in headers]
@@ -1381,8 +1433,12 @@ def migrate_rankings_headers(rows, score_labels=None, out=None):
     extras = [h for h in renamed
               if h not in target and h not in DROPPED_COLUMNS and h.strip()]
     target = target + list(dict.fromkeys(extras))
-    if renamed == target and all(len(r) == len(target) for r in rows[1:]):
-        return False
+    # Compare the ORIGINAL headers, not the renamed ones: `renamed` already carries the
+    # new labels, so comparing it to the target reports "nothing to do" for a PURE
+    # rename and leaves the old header in the file. (Latent until now — every previous
+    # rename happened alongside an insert or drop, which made the lengths differ.)
+    if headers == target and all(len(r) == len(target) for r in rows[1:]):
+        return merged_dates
     if out:
         for legacy, final in LEGACY_RENAMES.items():
             if legacy in headers:
@@ -1482,28 +1538,19 @@ def normalize_rankings_csv(csv_path, cfg, out=print, score_labels=None):
             comp = row[idx[H_COMPRANGE]] if H_COMPRANGE in idx and idx[H_COMPRANGE] < len(row) else ""
             loc = row[idx[H_WORKLOC]] if H_WORKLOC in idx and idx[H_WORKLOC] < len(row) else ""
             fix(row, H_DATACOMPLETE, fallback_completeness(comp, loc), H_DATACOMPLETE, n)
-        # Neither date is model output — both are read back out of the capture (the ATS's
-        # own metadata), and a real date already in the sheet always stays put.
+        # Not model output: read back out of the capture's own ATS metadata (both
+        # `Job Posted At:` and `Job Updated At:` are still recorded there and both
+        # readers still exist), then merged by precedence for DISPLAY. A real date
+        # already in the sheet always stays put. Never JAIL's fetch date, never a file
+        # mtime, never a deadline, never inferred from posting language.
         job_file = row[idx[H_JOBFILE]] if H_JOBFILE in idx and idx[H_JOBFILE] < len(row) else ""
-        # First-posted: NEVER blank — with no verified ATS date it reads `Unknown`
-        # rather than implying nobody looked.
-        if H_POSTED in idx and idx[H_POSTED] < len(row) \
-                and row[idx[H_POSTED]].strip() in ("", UNKNOWN_POSTED_DATE):
-            posted = (posted_date_from_capture(job_file, base_dir=Path(csv_path).parent)
-                      or UNKNOWN_POSTED_DATE)
-            if posted:
-                fix(row, H_POSTED, posted, H_POSTED, n)
-        # Last-updated: ONLY from the ATS metadata already stored in the capture
-        # (`Job Updated At:`). No ATS update timestamp -> the same `Unknown` literal the
-        # posted column uses (never blank). Never JAIL's fetch date, never a file mtime,
-        # never inferred from posting language, and no mass back-fill beyond what the
-        # capture itself already carries.
-        if H_UPDATED in idx and idx[H_UPDATED] < len(row) \
-                and row[idx[H_UPDATED]].strip() in ("", UNKNOWN_UPDATED_DATE):
-            updated = (updated_date_from_capture(job_file, base_dir=Path(csv_path).parent)
-                       or UNKNOWN_UPDATED_DATE)
-            if updated:
-                fix(row, H_UPDATED, updated, H_UPDATED, n)
+        if H_POSTING_UPDATE in idx and idx[H_POSTING_UPDATE] < len(row) \
+                and row[idx[H_POSTING_UPDATE]].strip() in ("", UNKNOWN_POSTED_DATE):
+            base_dir = Path(csv_path).parent
+            merged = posting_last_update(
+                posted_date_from_capture(job_file, base_dir=base_dir),
+                updated_date_from_capture(job_file, base_dir=base_dir))
+            fix(row, H_POSTING_UPDATE, merged, H_POSTING_UPDATE, n)
     # Row-integrity validation (B2), after every repair above: trustworthy repairs
     # are applied through the same `fix` (so they count + print), anything
     # unrepairable is reported loudly and surfaces in the CLI exit code.

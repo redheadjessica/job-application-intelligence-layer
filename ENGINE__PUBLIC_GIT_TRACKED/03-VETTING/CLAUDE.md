@@ -27,22 +27,24 @@ Everything candidate-specific — lanes, comp floor, location, dealbreakers, str
 
 Structured numeric preferences (comp target/floor, home metro + aliases, lanes) live in `jail.config.json` (also from `/intake`). The scorer inlines it as `<preferences>` to sharpen `practicality_score`.
 
-**The rankings output is a fixed 32-column contract (2026-07-30; `ATS Last Updated Date` added 2026-07-31; the four-column resume-comparison block added 2026-07-31).** The order is authoritative and
+**The rankings output is a fixed 31-column contract (2026-07-30; `ATS Last Updated Date` added 2026-07-31; the four-column resume-comparison block added 2026-07-31).** The order is authoritative and
 defined ONCE, in `norm_contracts.CONTRACT_TEMPLATE` + `resolve_contract_headers()`; `vet-jobs.js`
 writes it, `normalize_rankings_csv` MIGRATES any older CSV to it in place (rename → drop → insert →
 reorder, joined by header NAME so no column's data can shift), and `make_rankings_xlsx.py` shares the
 same helper so a migrated CSV needs no further repair and a hand-made one still regenerates correctly.
 `Location Fit` was **removed** as redundant with `Working Location`: the canonical grammar already
 encodes remote/metro/cadence, both cells carried the same four hexes, and a second derived label was
-one more thing to keep in sync. Two rules worth stating plainly. **`ATS First Posted Date`** and **`ATS Last Updated Date`** share
-ONE convention: each holds the ATS's own date when the board publishes it, and otherwise the literal
-`Unknown` — **neither is ever blank**. (An earlier revision had the update column use blank instead;
-that was superseded on 2026-07-31 because two adjacent date columns with two different empty
-conventions is a trap — a reader cannot tell "nothing to look up" from "we failed to look", and a
-blank cell reads as unfinished work.) Neither date is ever substituted with JAIL's fetch date, a
-file date, a deadline, a syndicated-listing date, or anything inferred from the posting's wording;
-the update value comes only from ATS metadata already stored in the capture; and **neither feeds
-scoring, ranking, or prioritization**, and **only** columns marked `[You Fill In]` /
+one more thing to keep in sync. One rule worth stating plainly. **`Posting Last Update`** is how recently the EMPLOYER's board
+touched the posting: the ATS's own last-updated date when it publishes one, else its first-posted
+date, else the literal `Unknown` — **never blank**. (It replaced the `ATS First Posted Date` /
+`ATS Last Updated Date` pair on 2026-07-31; that was a DISPLAY merge only — both dates are still
+recorded in the capture as `Job Posted At:` / `Job Updated At:`, still carried in the manifest, and
+still readable via `posted_date_from_capture()` / `updated_date_from_capture()`.) The value is never
+substituted with JAIL's fetch date, a file date, a deadline, a syndicated-listing date, or anything
+inferred from the posting's wording; it comes only from ATS metadata already stored in the capture;
+its workbook colors are date-relative conditional formatting that Excel re-evaluates against
+`TODAY()` (so rows age on their own, and `Unknown`/future dates stay unpainted); and it **does not
+feed scoring, ranking, or prioritization**, and **only** columns marked `[You Fill In]` /
 `[You Change]` / `[You Add]` are human-managed — a bare `?` in a header does not imply it
 (`Tailored? (Base Resume)` and `Cover Letter Drafted?` are written by the pipeline via
 `update_rankings_row.py`, which accepts both header generations on read). A column a user added

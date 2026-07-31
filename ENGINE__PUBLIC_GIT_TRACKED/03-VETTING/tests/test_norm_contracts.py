@@ -7,6 +7,7 @@ with openpyxl (spec: "test the actual written spreadsheet cell").
 """
 import csv
 import json
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -357,7 +358,8 @@ def test_application_name_survives_the_real_filesystem_layer(tmp_path):
 # --------------------------------------------------------------------------- #
 # CSV CLI pass
 # --------------------------------------------------------------------------- #
-# THE 28-COLUMN CONTRACT (order authoritative; `ATS Last Updated Date` added 2026-07-31).
+# THE 31-COLUMN CONTRACT (order authoritative; the two ATS date columns merged into
+# `Posting Last Update` on 2026-07-31).
 # Sourced from the engine so a contract change can never drift silently past these tests.
 HEADERS = list(norm_contracts.resolve_contract_headers())
 
@@ -367,7 +369,7 @@ EXPECTED_CONTRACT = [
     "Have Intro? [You Add]", "Your Notes? [You Add]", "Decline/Down Date? [You Add]",
     "FINAL Weighted Score", "How They May See Your Profile", "Your Desire Score",
     "Culture Fit Score", "Comp + Lifestyle Fit Score",
-    "ATS First Posted Date", "ATS Last Updated Date",
+    "Posting Last Update",
     "Top Reasons Notes", "Top Concerns Notes", "Profile Score Notes",
     "Your Desire Score Notes", "Comp + Lifestyle Fit Notes",
     "Lane Fit", "Comp Fit", "Data Completeness", "Job File",
@@ -393,16 +395,19 @@ LEGACY_XLSX_HEADERS = (LEGACY_CSV_HEADERS[:-1] + ["Data Completeness"]
                        + LEGACY_CSV_HEADERS[-1:])
 
 
-def test_the_contract_is_exactly_the_approved_32_columns():
+def test_the_contract_is_exactly_the_approved_31_columns():
     """The order is authoritative: this test is the tripwire for an accidental reorder,
     rename, or added column anywhere in the engine."""
     assert HEADERS == EXPECTED_CONTRACT
-    assert len(HEADERS) == 32
+    assert len(HEADERS) == 31
     assert "Location Fit" not in HEADERS      # removed as redundant with Working Location
-    assert norm_contracts.H_POSTED == "ATS First Posted Date"
-    assert norm_contracts.H_UPDATED == "ATS Last Updated Date"
-    # The two ATS dates are adjacent, in that order.
-    assert HEADERS.index(norm_contracts.H_UPDATED) == HEADERS.index(norm_contracts.H_POSTED) + 1
+    assert norm_contracts.H_POSTING_UPDATE == "Posting Last Update"
+    # The superseded pair is gone from the visible contract...
+    for gone in ("ATS First Posted Date", "ATS Last Updated Date",
+                 "Job Posted Date", "Posted"):
+        assert gone not in HEADERS, gone
+    # ...and the single merged column sits where the pair sat (col 16, index 15).
+    assert HEADERS.index(norm_contracts.H_POSTING_UPDATE) == 15
 
 
 def row_values(company="Acme", location="Remote", comp="190-210", lane="Health - Mental Health",
@@ -419,6 +424,7 @@ def row_values(company="Acme", location="Remote", comp="190-210", lane="Health -
         "FINAL Weighted Score": "80", "How They May See Your Profile": "80",
         "Your Desire Score": "80", "Culture Fit Score": "80", "Culture Fit": "80",
         "Comp + Lifestyle Fit Score": "80", "Comp + Lifestyle Fit": "80",
+        "Posting Last Update": norm_contracts.posting_last_update(posted, updated),
         "ATS First Posted Date": posted, "Job Posted Date": posted, "Posted": posted,
         "ATS Last Updated Date": updated,
         "Top Reasons Notes": "r", "Top Concerns Notes": "c", "Top Concerns": "c",
@@ -457,8 +463,9 @@ def test_cli_normalizes_csv_in_place_and_reports_repairs(tmp_path, capsys):
     ])
     changed = norm_contracts.normalize_rankings_csv(str(csv_path), CFG)
     out = capsys.readouterr().out
-    # 1 location repair + the two rows' Job Posted Date placeholders (blank -> `Unknown`).
-    assert changed == 3
+    # Just the one location repair: both rows already carry the `Unknown` placeholder
+    # in Posting Last Update (which is what the writer emits), so nothing to fill.
+    assert changed == 1
     assert "RepairMe" in out and "'NYC/SF - 3 days'" in out and "'IRL NYC/SF - 3 days'" in out
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
@@ -844,7 +851,7 @@ def test_cli_pass_fills_the_posted_column_from_the_captures(tmp_path):
     norm_contracts.normalize_rankings_csv(str(csv_path), CFG)
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
-    pi = HEADERS.index("ATS First Posted Date")
+    pi = HEADERS.index("Posting Last Update")
     assert rows[1][pi] == "2026-06-13"
     # No verified employer date -> the literal `Unknown`, never a blank cell.
     assert rows[2][pi] == "Unknown"
@@ -858,12 +865,12 @@ def test_a_posted_value_already_in_the_sheet_is_never_overwritten(tmp_path):
     rankings.mkdir()
     csv_path = rankings / "b-rankings.csv"
     row = make_row(company="Acme")
-    row[HEADERS.index("ATS First Posted Date")] = "2020-01-01"
+    row[HEADERS.index("Posting Last Update")] = "2020-01-01"
     write_csv(csv_path, [row])
     norm_contracts.normalize_rankings_csv(str(csv_path), CFG)
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
-    assert rows[1][HEADERS.index("ATS First Posted Date")] == "2020-01-01"
+    assert rows[1][HEADERS.index("Posting Last Update")] == "2020-01-01"
 
 
 # The real legacy shape (27 cols, `Location Fit`, no `Data Completeness`, old names).
@@ -895,33 +902,15 @@ def test_an_old_csv_without_the_column_gets_it_inserted_and_filled(tmp_path):
     # Inserted right after Comp Range, ahead of the editable columns; every other column
     # keeps its meaning.
     assert rows[0] == HEADERS
-    assert rows[0].index("ATS First Posted Date") == 15
+    assert rows[0].index("Posting Last Update") == 15
     assert rows[0].index("Comp Range") < rows[0].index("Have Intro? [You Add]")
-    assert rows[1][HEADERS.index("ATS First Posted Date")] == "2026-06-13"
+    assert rows[1][HEADERS.index("Posting Last Update")] == "2026-06-13"
     assert rows[1][HEADERS.index("Comp Range")] == "190-210"
     assert rows[1][HEADERS.index("Job File")] == "acme.txt"
 
 
-def test_posted_column_reaches_the_written_spreadsheet(tmp_path):
-    write_capture(tmp_path, "Acme")
-    cfg_path = tmp_path / "jail.config.json"
-    cfg_path.write_text(json.dumps(CFG), encoding="utf-8")
-    rankings = tmp_path / "1 - Rankings"
-    rankings.mkdir()
-    csv_path = rankings / "batch-rankings.csv"
-    xlsx_path = rankings / "batch-rankings.xlsx"
-    # A LEGACY csv (no Posted column) that never went through the CLI still regenerates
-    # with the column populated — the XLSX build re-runs the same back-fill on read.
-    write_legacy_csv(csv_path, [legacy_row(company="Acme")])
-    make_rankings_xlsx.build(str(csv_path), str(xlsx_path), config_path=str(cfg_path))
-    wb = load_workbook(str(xlsx_path))
-    ws = wb["Job Rankings"]
-    headers = [c.value for c in ws[1]]
-    assert headers[15] == "ATS First Posted Date"
-    col = headers.index("ATS First Posted Date") + 1
-    assert ws.cell(2, col).value == "2026-06-13"
-    assert ws.cell(2, col).alignment.horizontal == "left"
-    assert ws.column_dimensions[ws.cell(1, col).column_letter].width == 14
+
+
 
 
 # --------------------------------------------------------------------------- #
@@ -1002,7 +991,7 @@ def test_a_relabelled_score_column_is_recognized_when_the_writer_declares_it(tmp
     hdr = rows[0]
     # The relabelled score sits in slot 15 (where Comp + Lifestyle Fit Score belongs).
     assert hdr[14] == "Pay + Life"
-    assert hdr.index(H_PN) == 21
+    assert hdr.index(H_PN) == 20
     assert by_name(hdr, rows[1])["Your Desire Score Notes"] == "m"
 
 
@@ -1137,7 +1126,7 @@ def test_csv_and_xlsx_schemas_are_identical_for_every_input_shape(tmp_path, shap
     assert got["Comp Range"] == "190-210"
     assert got["Job File"] == "acme.txt"
     assert got["Data Completeness"]            # back-filled for every shape
-    assert got["ATS First Posted Date"]              # never blank
+    assert got["Posting Last Update"]              # never blank
 
 
 def test_a_migrated_csv_makes_the_xlsx_insert_paths_no_ops(tmp_path):
@@ -1157,25 +1146,6 @@ def test_a_migrated_csv_makes_the_xlsx_insert_paths_no_ops(tmp_path):
         _csv_headers(csv_path), list(csv.reader(csv_path.open(encoding="utf-8")))[1]).values())[:0] or True
 
 
-def test_legacy_backfill_writes_unknown_when_no_capture_date_exists(tmp_path):
-    """A3 at the back-fill path: a legacy CSV whose capture carries no employer date gets the
-    literal `Unknown`, never a blank cell and never the capture date."""
-    write_capture(tmp_path, "NoDate", posted="Job Posted At: Unknown")
-    rankings = tmp_path / "1 - Rankings"
-    rankings.mkdir()
-    csv_path = rankings / "old-rankings.csv"
-    write_legacy_csv(csv_path, [legacy_row(company="NoDate")])
-    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
-    with open(csv_path, newline="", encoding="utf-8") as f:
-        got = by_name(*list(csv.reader(f))[:2])
-    assert got["ATS First Posted Date"] == "Unknown"
-    # And a capture WITH a date still wins over the placeholder.
-    write_capture(tmp_path, "Acme")
-    csv2 = rankings / "old2-rankings.csv"
-    write_legacy_csv(csv2, [legacy_row(company="Acme")])
-    norm_contracts.normalize_rankings_csv(str(csv2), CFG, out=lambda _m: None)
-    with open(csv2, newline="", encoding="utf-8") as f:
-        assert by_name(*list(csv.reader(f))[:2])["ATS First Posted Date"] == "2026-06-13"
 
 
 def test_instructions_tab_column_list_matches_the_real_headers():
@@ -1212,8 +1182,7 @@ def test_instructions_tab_reaches_the_workbook(tmp_path):
     assert "Only columns whose header carries an explicit marker are yours" in text
     assert "Tailored? (Base Resume)" in text and "Cover Letter Drafted?" in text
     assert "Location Fit" not in text
-    assert "ATS First Posted Date" in text
-    assert "ATS Last Updated Date" in text
+    assert "Posting Last Update" in text
 
 
 # ---- A5: update_rankings_row writes the renamed columns, reads both generations ----
@@ -1532,14 +1501,25 @@ def test_completeness_vocabulary_recognizer():
 # from ONE canonical row collection: build() runs the shared normalize pass on
 # the CSV itself first.
 # ===========================================================================
+def _cell_text(cell):
+    """A cell's value as the CSV would carry it — real date cells (Posting Last Update
+    is written as a `datetime.date` so sorting and date-relative CF work) render back
+    to their ISO string."""
+    v = cell.value
+    if v is None:
+        return ""
+    if isinstance(v, (datetime, date)):
+        return v.strftime("%Y-%m-%d")
+    return str(v)
+
+
 def _xlsx_cells(xlsx_path):
     ws = load_workbook(str(xlsx_path))["Job Rankings"]
     headers = [c.value for c in ws[1]]
     rows = []
     r = 2
     while ws.cell(r, 1).value is not None or ws.cell(r, 4).value is not None:
-        row = ["" if ws.cell(r, i + 1).value is None else str(ws.cell(r, i + 1).value)
-               for i in range(len(headers))]
+        row = [_cell_text(ws.cell(r, i + 1)) for i in range(len(headers))]
         if not any(c.strip() for c in row):
             break
         rows.append(row)
@@ -1593,9 +1573,9 @@ def test_csv_and_xlsx_agree_cell_by_cell(tmp_path, shape):
     # The repaired values are IN THE CSV, not just the workbook.
     headers, rows = _csv_cells(csv_path)
     got = dict(zip(headers, rows[0]))
-    assert got["ATS First Posted Date"] == "2026-06-13"
+    assert got["Posting Last Update"] == "2026-06-13"
     got2 = dict(zip(headers, rows[1]))
-    assert got2["ATS First Posted Date"] == "Unknown"
+    assert got2["Posting Last Update"] == "Unknown"
     assert got["Data Completeness"]            # back-filled into the CSV too
 
 
@@ -1616,7 +1596,7 @@ def test_regenerating_the_xlsx_writes_repairs_back_to_a_legacy_csv(tmp_path):
     assert headers == HEADERS                   # migrated to the 27-column contract
     got = dict(zip(headers, rows[0]))
     assert got["Working Location"] == "IRL NYC/SF - 3 days"   # normalized in the CSV
-    assert got["ATS First Posted Date"] == "2026-06-13"
+    assert got["Posting Last Update"] == "2026-06-13"
     # And a second build is a no-op on the CSV (single canonical collection, stable).
     stable = csv_path.read_text(encoding="utf-8")
     make_rankings_xlsx.build(str(csv_path), str(rankings / "old-rankings.xlsx"),
@@ -1752,12 +1732,11 @@ def test_a_comp_conflict_is_attention_worthy_in_the_workbook():
     assert make_rankings_xlsx.completeness_category("✓ complete") == "complete"
     assert make_rankings_xlsx.completeness_category("⚠ comp not verified") == "attention"
 
-
 # ===========================================================================
-# ATS first-posted vs last-updated (2026-07-31). The tracker now distinguishes
-# the two ATS timestamps. Population comes ONLY from the ATS metadata already
-# stored in the capture — never JAIL's fetch date, a file date, a deadline, a
-# syndicated-listing date, or anything inferred from posting language.
+# `Posting Last Update` (2026-07-31) — ONE visible column replacing the
+# ATS First Posted Date / ATS Last Updated Date pair. DISPLAY merge only: both
+# source dates remain in the capture, the manifest, and their own readers.
+# Precedence: last-updated -> first-posted -> `Unknown` (never blank).
 # ===========================================================================
 def _capture_with_dates(batch_root, company, posted_line, updated_line):
     src = batch_root / "3 - Source Material" / "All Job Posts (full text)"
@@ -1769,48 +1748,54 @@ def _capture_with_dates(batch_root, company, posted_line, updated_line):
     return path
 
 
-def test_the_update_column_is_filled_only_from_the_ats_update_timestamp(tmp_path):
-    _capture_with_dates(tmp_path, "Withupdate", "Job Posted At: June 13, 2026",
-                        "Job Updated At: July 20, 2026")
-    _capture_with_dates(tmp_path, "Noupdate", "Job Posted At: June 13, 2026",
-                        "Job Updated At: Unknown")
+@pytest.mark.parametrize("posted,updated,expected", [
+    ("2026-06-13", "2026-07-20", "2026-07-20"),   # both -> last-updated wins
+    ("2026-06-13", "", "2026-06-13"),             # posted only -> falls back
+    ("", "2026-07-20", "2026-07-20"),             # updated only
+    ("", "", "Unknown"),                          # neither -> never blank
+    ("Unknown", "Unknown", "Unknown"),            # the literal is not a date
+    ("2026-06-13", "Unknown", "2026-06-13"),
+])
+def test_the_four_source_combinations(posted, updated, expected):
+    assert norm_contracts.posting_last_update(posted, updated) == expected
+
+
+@pytest.mark.parametrize("posted_line,updated_line,expected", [
+    ("Job Posted At: June 13, 2026", "Job Updated At: July 20, 2026", "2026-07-20"),
+    ("Job Posted At: June 13, 2026", "Job Updated At: Unknown", "2026-06-13"),
+    ("Job Posted At: Unknown", "Job Updated At: July 20, 2026", "2026-07-20"),
+    ("Job Posted At: Unknown", "Job Updated At: Unknown", "Unknown"),
+])
+def test_the_column_is_derived_from_the_captures_own_ats_metadata(
+        tmp_path, posted_line, updated_line, expected):
+    _capture_with_dates(tmp_path, "Acme", posted_line, updated_line)
     rankings = tmp_path / "1 - Rankings"
     rankings.mkdir()
     csv_path = rankings / "b-rankings.csv"
-    write_csv(csv_path, [make_row(company="Withupdate"), make_row(company="Noupdate")])
-    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
-    with open(csv_path, newline="", encoding="utf-8") as f:
-        rows = list(csv.reader(f))
-    with_update = by_name(rows[0], rows[1])
-    no_update = by_name(rows[0], rows[2])
-    assert with_update["ATS First Posted Date"] == "2026-06-13"
-    assert with_update["ATS Last Updated Date"] == "2026-07-20"   # plain ISO, like posted
-    # ONE SHARED CONVENTION (revised 2026-07-31): no ATS update timestamp reads the same
-    # `Unknown` literal the posted column uses. Never blank — a blank cell in a tracker
-    # reads as unfinished work, and two adjacent date columns with different empty
-    # conventions is a trap.
-    assert no_update["ATS First Posted Date"] == "2026-06-13"
-    assert no_update["ATS Last Updated Date"] == "Unknown"
-
-
-def test_both_columns_read_unknown_when_neither_date_exists(tmp_path):
-    _capture_with_dates(tmp_path, "Nodates", "Job Posted At: Unknown",
-                        "Job Updated At: Unknown")
-    rankings = tmp_path / "1 - Rankings"
-    rankings.mkdir()
-    csv_path = rankings / "b-rankings.csv"
-    write_csv(csv_path, [make_row(company="Nodates")])
+    write_csv(csv_path, [make_row(company="Acme")])
     norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
     with open(csv_path, newline="", encoding="utf-8") as f:
         got = by_name(*list(csv.reader(f))[:2])
-    # SYMMETRY: both columns read `Unknown` in the same row — neither is ever blank.
-    assert got["ATS First Posted Date"] == "Unknown"
-    assert got["ATS Last Updated Date"] == "Unknown"
+    assert got["Posting Last Update"] == expected
+
+
+def test_both_source_dates_remain_independently_available(tmp_path):
+    """The merge is DISPLAY only — the capture still records both dates and both
+    readers still work, so the fields stay available for future use."""
+    path = _capture_with_dates(tmp_path, "Acme", "Job Posted At: June 13, 2026",
+                               "Job Updated At: July 20, 2026")
+    text = path.read_text(encoding="utf-8")
+    assert "Job Posted At: June 13, 2026" in text     # capture format untouched
+    assert "Job Updated At: July 20, 2026" in text
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    assert norm_contracts.posted_date_from_capture("acme.txt", base_dir=rankings) == "2026-06-13"
+    assert norm_contracts.updated_date_from_capture("acme.txt", base_dir=rankings) == "2026-07-20"
 
 
 def test_no_capture_means_unknown_and_no_substitution(tmp_path):
-    """No capture to read -> both columns read `Unknown`. Nothing is substituted:
-    not the fetch date, not a file mtime, not a deadline."""
+    """No capture to read -> `Unknown`. Nothing is substituted: not the fetch date,
+    not a file mtime, not a deadline."""
     rankings = tmp_path / "1 - Rankings"
     rankings.mkdir(parents=True)
     csv_path = rankings / "b-rankings.csv"
@@ -1818,38 +1803,34 @@ def test_no_capture_means_unknown_and_no_substitution(tmp_path):
     norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
     with open(csv_path, newline="", encoding="utf-8") as f:
         got = by_name(*list(csv.reader(f))[:2])
-    assert got["ATS Last Updated Date"] == "Unknown"
-    assert got["ATS First Posted Date"] == "Unknown"
-    from datetime import date
-    assert date.today().isoformat() not in got["ATS Last Updated Date"]
-    assert date.today().isoformat() not in got["ATS First Posted Date"]
+    assert got["Posting Last Update"] == "Unknown"
+    from datetime import date as _d
+    assert _d.today().isoformat() not in got["Posting Last Update"]
 
 
-def test_an_update_value_already_in_the_sheet_is_never_overwritten(tmp_path):
+def test_a_value_already_in_the_sheet_is_never_overwritten(tmp_path):
     _capture_with_dates(tmp_path, "Acme", "Job Posted At: June 13, 2026",
                         "Job Updated At: July 20, 2026")
     rankings = tmp_path / "1 - Rankings"
     rankings.mkdir()
     csv_path = rankings / "b-rankings.csv"
     row = make_row(company="Acme")
-    row[HEADERS.index("ATS Last Updated Date")] = "2020-01-01"
+    row[HEADERS.index("Posting Last Update")] = "2020-01-01"
     write_csv(csv_path, [row])
     norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
     with open(csv_path, newline="", encoding="utf-8") as f:
-        assert by_name(*list(csv.reader(f))[:2])["ATS Last Updated Date"] == "2020-01-01"
+        assert by_name(*list(csv.reader(f))[:2])["Posting Last Update"] == "2020-01-01"
 
 
-@pytest.mark.parametrize("legacy_label", ["Posted", "Job Posted Date"])
-def test_both_legacy_generations_migrate_in_one_hop(tmp_path, legacy_label):
-    """A CSV from EITHER earlier generation gains the new label with values intact,
-    plus the new column (blank or back-filled)."""
+@pytest.mark.parametrize("legacy_label", ["Posted", "Job Posted Date",
+                                          "ATS First Posted Date"])
+def test_every_single_column_legacy_generation_migrates_in_one_hop(tmp_path, legacy_label):
     _capture_with_dates(tmp_path, "Acme", "Job Posted At: June 13, 2026",
                         "Job Updated At: July 20, 2026")
     rankings = tmp_path / "1 - Rankings"
     rankings.mkdir()
     csv_path = rankings / f"legacy-{legacy_label.replace(' ', '-')}.csv"
-    headers = [legacy_label if h == "ATS First Posted Date" else h
-               for h in HEADERS if h != "ATS Last Updated Date"]
+    headers = [legacy_label if h == "Posting Last Update" else h for h in HEADERS]
     row = row_for(headers, company="Acme", posted="2026-05-01")
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -1860,36 +1841,60 @@ def test_both_legacy_generations_migrate_in_one_hop(tmp_path, legacy_label):
         rows = list(csv.reader(f))
     assert rows[0] == HEADERS
     got = by_name(rows[0], rows[1])
-    # RENAME ONLY: the existing value is preserved, never recomputed.
-    assert got["ATS First Posted Date"] == "2026-05-01"
-    # The new column arrives back-filled from the capture's own ATS metadata —
-    # and would read `Unknown` (never empty) had the capture carried no update date.
-    assert got["ATS Last Updated Date"] == "2026-07-20"
+    assert got["Posting Last Update"] == "2026-05-01"    # value intact, not recomputed
     assert got["Company"] == "Acme" and got["Comp Range"] == "190-210"
 
 
-def test_both_date_columns_are_validated_the_same_way(tmp_path):
-    """Unified: a blank cell in EITHER ATS date column is a defect — but the back-fill
-    guarantees the `Unknown` literal first, so a normalized CSV never trips it."""
+@pytest.mark.parametrize("posted,updated,expected", [
+    ("2026-05-01", "2026-06-02", "2026-06-02"),   # last-updated wins the merge
+    ("2026-05-01", "Unknown", "2026-05-01"),      # falls back to first-posted
+    ("Unknown", "2026-06-02", "2026-06-02"),
+    ("Unknown", "Unknown", "Unknown"),
+])
+def test_the_two_column_generation_merges_not_renames(tmp_path, posted, updated, expected):
+    """The two-source generation needs MERGE logic: both columns collapse into one,
+    values intact, with last-updated taking precedence."""
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir(parents=True)
+    csv_path = rankings / "two-col.csv"
+    headers = []
+    for h in HEADERS:
+        if h == "Posting Last Update":
+            headers.extend(["ATS First Posted Date", "ATS Last Updated Date"])
+        else:
+            headers.append(h)
+    row = row_for(headers, company="Acme", posted=posted, updated=updated)
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(headers)
+        w.writerow(row)
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    assert rows[0] == HEADERS                    # one column, at the pair's position
+    assert "ATS First Posted Date" not in rows[0]
+    assert "ATS Last Updated Date" not in rows[0]
+    got = by_name(rows[0], rows[1])
+    assert got["Posting Last Update"] == expected
+    assert got["Company"] == "Acme" and got["Comp Range"] == "190-210"
+
+
+def test_the_column_is_never_blank_and_row_integrity_says_so(tmp_path):
     rankings = tmp_path / "1 - Rankings"
     rankings.mkdir(parents=True)
     csv_path = rankings / "b-rankings.csv"
     write_csv(csv_path, [make_row(company="Acme", posted="", updated="")])
     norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
-    errors = norm_contracts.normalize_rankings_csv.last_integrity_errors
-    assert errors == [], errors
+    assert norm_contracts.normalize_rankings_csv.last_integrity_errors == []
     with open(csv_path, newline="", encoding="utf-8") as f:
-        got = by_name(*list(csv.reader(f))[:2])
-    assert got["ATS First Posted Date"] == "Unknown"
-    assert got["ATS Last Updated Date"] == "Unknown"
-    # The validator itself treats them identically when a blank does survive.
-    rows = [list(HEADERS), row_for(HEADERS, company="Blankco", posted="", updated="")]
+        assert by_name(*list(csv.reader(f))[:2])["Posting Last Update"] == "Unknown"
+    rows = [list(HEADERS), row_for(HEADERS, company="Blankco")]
+    rows[1][HEADERS.index("Posting Last Update")] = ""
     reported = norm_contracts.validate_rankings_rows(rows, out=lambda _m: None)
-    assert any("ATS First Posted Date" in e for e in reported)
-    assert any("ATS Last Updated Date" in e for e in reported)
+    assert any("Posting Last Update" in e for e in reported)
 
 
-def test_both_ats_dates_reach_the_workbook_identically(tmp_path):
+def test_the_merged_date_reaches_the_workbook_identically(tmp_path):
     _capture_with_dates(tmp_path, "Acme", "Job Posted At: June 13, 2026",
                         "Job Updated At: July 20, 2026")
     rankings = tmp_path / "1 - Rankings"
@@ -1900,11 +1905,10 @@ def test_both_ats_dates_reach_the_workbook_identically(tmp_path):
     xlsx_path = rankings / "b-rankings.xlsx"
     write_csv(csv_path, [make_row(company="Acme")])
     make_rankings_xlsx.build(str(csv_path), str(xlsx_path), config_path=str(cfg_path))
-    _assert_every_cell_identical(csv_path, xlsx_path, "ats-dates")
+    _assert_every_cell_identical(csv_path, xlsx_path, "posting-update")
     ws = load_workbook(str(xlsx_path))["Job Rankings"]
     headers = [c.value for c in ws[1]]
-    assert ws.cell(2, headers.index("ATS First Posted Date") + 1).value == "2026-06-13"
-    assert ws.cell(2, headers.index("ATS Last Updated Date") + 1).value == "2026-07-20"
+    assert _cell_text(ws.cell(2, headers.index("Posting Last Update") + 1)) == "2026-07-20"
 
 
 def test_neither_ats_date_feeds_scoring_or_ranking():
@@ -2045,3 +2049,127 @@ def test_the_live_shapes_survive_the_whole_normalize_pass(tmp_path):
         rows2 = list(csv.reader(f))
     assert by_name(rows2[0], rows2[1])["Comp Range"] == "182-214"
     assert by_name(rows2[0], rows2[2])["Comp Range"] == "165-205"
+
+
+# ===========================================================================
+# `Posting Last Update` in the workbook: REAL date cells + date-relative
+# conditional formatting that Excel re-evaluates against TODAY() — so rows age
+# into later bands on their own, without regeneration.
+# ===========================================================================
+def _recency_workbook(tmp_path, values):
+    """A built workbook whose Posting Last Update column holds `values` in order."""
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir(parents=True, exist_ok=True)
+    cfg_path = tmp_path / "jail.config.json"
+    cfg_path.write_text(json.dumps(CFG), encoding="utf-8")
+    csv_path = rankings / "recency.csv"
+    rows = []
+    for i, v in enumerate(values):
+        row = make_row(company=f"Co{i}")
+        row[HEADERS.index("Posting Last Update")] = v
+        rows.append(row)
+    write_csv(csv_path, rows)
+    xlsx_path = rankings / "recency.xlsx"
+    make_rankings_xlsx.build(str(csv_path), str(xlsx_path), config_path=str(cfg_path))
+    return load_workbook(str(xlsx_path))["Job Rankings"]
+
+
+def _recency_rules(ws):
+    from openpyxl.utils import get_column_letter
+    col = get_column_letter([c.value for c in ws[1]].index("Posting Last Update") + 1)
+    out = []
+    for rng, rules in ws.conditional_formatting._cf_rules.items():
+        if f"{col}2" in str(rng.sqref):
+            for r in rules:
+                if r.formula:
+                    fill = r.dxf.fill.bgColor.rgb if (r.dxf and r.dxf.fill) else None
+                    out.append((str(rng.sqref), r.formula[0], str(fill)[-6:], r.stopIfTrue))
+    return col, out
+
+
+def test_populated_cells_are_real_dates_and_sort_chronologically(tmp_path):
+    from datetime import date as _date, datetime as _dt
+    ws = _recency_workbook(tmp_path, ["2026-05-02", "2026-06-16", "2026-07-11", "Unknown"])
+    ci = [c.value for c in ws[1]].index("Posting Last Update") + 1
+    got = [ws.cell(r, ci).value for r in range(2, 6)]
+    assert all(isinstance(v, (_dt, _date)) for v in got[:3]), got
+    assert [v.strftime("%Y-%m-%d") for v in got[:3]] == \
+        ["2026-05-02", "2026-06-16", "2026-07-11"]
+    assert sorted(got[:3]) == got[:3]                  # chronological, not lexical
+    assert ws.cell(2, ci).number_format == "yyyy-mm-dd"
+    # The `Unknown` literal stays a string in the same column — mixed types by design.
+    assert got[3] == "Unknown" and isinstance(got[3], str)
+
+
+def test_the_four_age_bands_are_written_as_date_relative_rules(tmp_path):
+    """Assert the RULES on a real generated workbook — a static fill computed at build
+    time would freeze the colors; these formulas re-evaluate every time Excel opens."""
+    ws = _recency_workbook(tmp_path, ["2026-07-28", "Unknown"])
+    col, rules = _recency_rules(ws)
+    assert len(rules) == 4, rules
+    expected = [
+        (f"TODAY()-${col}2<=7", make_rankings_xlsx.RECENCY_FRESH),
+        (f"TODAY()-${col}2<=30", make_rankings_xlsx.RECENCY_RECENT),
+        (f"TODAY()-${col}2<=60", make_rankings_xlsx.RECENCY_AGING),
+        (f"TODAY()-${col}2>60", make_rankings_xlsx.RECENCY_STALE),
+    ]
+    for (sqref, formula, fill, stop), (condition, hexc) in zip(rules, expected):
+        assert condition in formula, formula
+        # Guarded so text/blank/future can never match.
+        assert f"ISNUMBER(${col}2)" in formula
+        assert f"${col}2<=TODAY()" in formula
+        assert fill.upper() == hexc
+        assert stop is True                      # first match wins, fresh -> stale
+        assert sqref == f"{col}2:{col}3"         # the whole data range, row 2..last
+
+
+def test_her_four_hexes_are_the_recency_palette():
+    assert make_rankings_xlsx.RECENCY_FRESH == "70D66B"
+    assert make_rankings_xlsx.RECENCY_RECENT == "C6EFCE"
+    assert make_rankings_xlsx.RECENCY_AGING == "FFEB9C"
+    assert make_rankings_xlsx.RECENCY_STALE == "FFC7CE"
+    # Distinct from the Working Location contract and the score ramp (different scales).
+    assert make_rankings_xlsx.RECENCY_FRESH not in (norm_contracts.WL_GREEN,
+                                                    norm_contracts.WL_YELLOW)
+
+
+@pytest.mark.parametrize("age_days,expected_band", [
+    (0, "RECENCY_FRESH"), (3, "RECENCY_FRESH"), (7, "RECENCY_FRESH"),
+    (8, "RECENCY_RECENT"), (30, "RECENCY_RECENT"),
+    (31, "RECENCY_AGING"), (60, "RECENCY_AGING"),
+    (61, "RECENCY_STALE"), (400, "RECENCY_STALE"),
+])
+def test_each_age_lands_in_the_right_band_by_the_written_formulas(tmp_path, age_days,
+                                                                  expected_band):
+    """Evaluate the written formulas the way Excel would: first rule whose condition
+    holds wins (stopIfTrue), so an age maps to exactly one band."""
+    from datetime import date as _date, timedelta
+    ws = _recency_workbook(tmp_path, [(_date.today() - timedelta(days=age_days)).isoformat()])
+    _col, rules = _recency_rules(ws)
+    bounds = [7, 30, 60, None]
+    winner = next(i for i, b in enumerate(bounds) if b is None or age_days <= b)
+    assert rules[winner][2].upper() == getattr(make_rankings_xlsx, expected_band)
+
+
+@pytest.mark.parametrize("value", ["Unknown", "", "not a date"])
+def test_unknown_blank_and_text_stay_unpainted(tmp_path, value):
+    """The ISNUMBER guard means no rule can match a non-date — the cell keeps the
+    sheet's default (white) fill."""
+    ws = _recency_workbook(tmp_path, [value])
+    _col, rules = _recency_rules(ws)
+    assert all("ISNUMBER" in f for _s, f, _h, _st in rules)
+    ci = [c.value for c in ws[1]].index("Posting Last Update") + 1
+    assert not isinstance(ws.cell(2, ci).value, (int, float))
+
+
+def test_a_future_date_stays_unpainted(tmp_path):
+    """A future-dated posting is real but cannot be 'aged' — the `<=TODAY()` guard
+    keeps every band from matching it."""
+    from datetime import date as _date, timedelta
+    future = (_date.today() + timedelta(days=10)).isoformat()
+    ws = _recency_workbook(tmp_path, [future])
+    col, rules = _recency_rules(ws)
+    assert all(f"${col}2<=TODAY()" in f for _s, f, _h, _st in rules)
+    ci = [c.value for c in ws[1]].index("Posting Last Update") + 1
+    from datetime import datetime as _dt
+    assert isinstance(ws.cell(2, ci).value, (_dt, _date))     # a real date, just unpainted

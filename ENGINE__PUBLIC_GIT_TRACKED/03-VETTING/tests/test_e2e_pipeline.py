@@ -19,6 +19,7 @@ enrichment), and a rendered generic page (JSON-LD JobPosting).
 """
 import csv
 import json
+from datetime import date as dt_date, datetime
 import subprocess
 import sys
 from pathlib import Path
@@ -209,7 +210,7 @@ def test_the_whole_pipeline_end_to_end(tmp_path, monkeypatch):
 
     # ---- Scorer boundary: synthesize rows through the SAME 32-column contract. ----
     headers = norm_contracts.resolve_contract_headers()
-    assert len(headers) == 32                       # mirror-pin of the JS writer's HEADERS
+    assert len(headers) == 31                       # mirror-pin of the JS writer's HEADERS
     rankings = batch / "1 - Rankings"
     rankings.mkdir()
     csv_path = rankings / "e2e-rankings.csv"
@@ -221,8 +222,7 @@ def test_the_whole_pipeline_end_to_end(tmp_path, monkeypatch):
                 "Working Location": wl, "Comp Range": comp,
                 "FINAL Weighted Score": "82", "How They May See Your Profile": "80",
                 "Your Desire Score": "84", "Culture Fit Score": "78",
-                "Comp + Lifestyle Fit Score": "76", "ATS First Posted Date": "Unknown",
-                "ATS Last Updated Date": "Unknown",
+                "Comp + Lifestyle Fit Score": "76", "Posting Last Update": "Unknown",
                 "Top Reasons Notes": "r", "Top Concerns Notes": "c",
                 "Profile Score Notes": "s", "Your Desire Score Notes": "m",
                 "Comp + Lifestyle Fit Notes": "Cash 30/40 | Location 30/30 | Equity 16/20",
@@ -261,14 +261,12 @@ def test_the_whole_pipeline_end_to_end(tmp_path, monkeypatch):
     # 236-296 is overridden by the mechanical envelope of both.
     assert got_b["Comp Range"] == "213-296"
     assert got_b["Comp Fit"] == norm_contracts.comp_fit_label("213-296", CFG)
-    # ATS First Posted Date back-filled from the captures (never blank).
-    assert got_b["ATS First Posted Date"] == "2026-03-25"
-    assert got_a["ATS First Posted Date"] == "2026-07-01"
-    # ATS Last Updated: populated only where the ATS exposed one. The Ashby fixture
-    # publishes no updatedAt and the rendered page no dateModified -> both read the
-    # shared `Unknown` literal (never blank, never JAIL's fetch date).
-    assert got_b["ATS Last Updated Date"] == "Unknown"
-    assert got_a["ATS Last Updated Date"] == "Unknown"
+    # Posting Last Update back-filled from the captures (never blank).
+    # Posting Last Update: neither fixture publishes an update timestamp (the Ashby
+    # payload has no updatedAt, the rendered page no dateModified), so the merged
+    # column falls back to the first-posted date — never JAIL's fetch date.
+    assert got_b["Posting Last Update"] == "2026-03-25"
+    assert got_a["Posting Last Update"] == "2026-07-01"
     # Data Completeness back-filled; Job File links to a real capture.
     assert norm_contracts.is_valid_completeness(got_b["Data Completeness"])
     assert (src / got_b["Job File"]).is_file()
@@ -285,6 +283,8 @@ def test_the_whole_pipeline_end_to_end(tmp_path, monkeypatch):
     for rn, crow in enumerate(final_rows, start=2):
         for i, h in enumerate(headers):
             xv = ws.cell(rn, i + 1).value
+            if isinstance(xv, (datetime, dt_date)):
+                xv = xv.strftime("%Y-%m-%d")      # real date cells render back to ISO
             xv = "" if xv is None else str(xv)
             cv = str(crow[i])
             if h == "Job Post Title + Link" and xv and xv in cv:
