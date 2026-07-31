@@ -406,7 +406,7 @@ def test_the_contract_is_exactly_the_approved_28_columns():
 def row_values(company="Acme", location="Remote", comp="190-210", lane="Health - Mental Health",
                lane_fit="Mental Health (high)", loc_fit="Remote", comp_fit="Meets/above target",
                status="Apply ASAP: High Prio", completeness="✓ complete", posted="",
-               updated=""):
+               updated="Unknown"):
     """One job row as a header->value MAPPING, so both the current and the legacy row builders
     below place every value by NAME. No test hardcodes a column index."""
     notes = "Cash 26/40 (midpoint ~$188K) | Location 30/30 (fully remote) | Equity 19/20"
@@ -1783,14 +1783,15 @@ def test_the_update_column_is_filled_only_from_the_ats_update_timestamp(tmp_path
     no_update = by_name(rows[0], rows[2])
     assert with_update["ATS First Posted Date"] == "2026-06-13"
     assert with_update["ATS Last Updated Date"] == "2026-07-20"   # plain ISO, like posted
-    # THE ASYMMETRY (deliberate — do not "harmonize"): no ATS update timestamp leaves
-    # the cell BLANK, while the first-posted column keeps its `Unknown` literal.
+    # ONE SHARED CONVENTION (revised 2026-07-31): no ATS update timestamp reads the same
+    # `Unknown` literal the posted column uses. Never blank — a blank cell in a tracker
+    # reads as unfinished work, and two adjacent date columns with different empty
+    # conventions is a trap.
     assert no_update["ATS First Posted Date"] == "2026-06-13"
-    assert no_update["ATS Last Updated Date"] == ""
-    assert "Unknown" not in no_update["ATS Last Updated Date"]
+    assert no_update["ATS Last Updated Date"] == "Unknown"
 
 
-def test_the_asymmetry_holds_when_neither_date_exists(tmp_path):
+def test_both_columns_read_unknown_when_neither_date_exists(tmp_path):
     _capture_with_dates(tmp_path, "Nodates", "Job Posted At: Unknown",
                         "Job Updated At: Unknown")
     rankings = tmp_path / "1 - Rankings"
@@ -1800,12 +1801,13 @@ def test_the_asymmetry_holds_when_neither_date_exists(tmp_path):
     norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
     with open(csv_path, newline="", encoding="utf-8") as f:
         got = by_name(*list(csv.reader(f))[:2])
-    assert got["ATS First Posted Date"] == "Unknown"   # never blank
-    assert got["ATS Last Updated Date"] == ""          # never "Unknown"
+    # SYMMETRY: both columns read `Unknown` in the same row — neither is ever blank.
+    assert got["ATS First Posted Date"] == "Unknown"
+    assert got["ATS Last Updated Date"] == "Unknown"
 
 
-def test_no_capture_means_no_update_value_and_no_substitution(tmp_path):
-    """No capture to read -> the update column stays blank. Nothing is substituted:
+def test_no_capture_means_unknown_and_no_substitution(tmp_path):
+    """No capture to read -> both columns read `Unknown`. Nothing is substituted:
     not the fetch date, not a file mtime, not a deadline."""
     rankings = tmp_path / "1 - Rankings"
     rankings.mkdir(parents=True)
@@ -1814,9 +1816,11 @@ def test_no_capture_means_no_update_value_and_no_substitution(tmp_path):
     norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
     with open(csv_path, newline="", encoding="utf-8") as f:
         got = by_name(*list(csv.reader(f))[:2])
-    assert got["ATS Last Updated Date"] == ""
+    assert got["ATS Last Updated Date"] == "Unknown"
+    assert got["ATS First Posted Date"] == "Unknown"
     from datetime import date
     assert date.today().isoformat() not in got["ATS Last Updated Date"]
+    assert date.today().isoformat() not in got["ATS First Posted Date"]
 
 
 def test_an_update_value_already_in_the_sheet_is_never_overwritten(tmp_path):
@@ -1856,19 +1860,31 @@ def test_both_legacy_generations_migrate_in_one_hop(tmp_path, legacy_label):
     got = by_name(rows[0], rows[1])
     # RENAME ONLY: the existing value is preserved, never recomputed.
     assert got["ATS First Posted Date"] == "2026-05-01"
-    # The new column arrives back-filled from the capture's own ATS metadata.
+    # The new column arrives back-filled from the capture's own ATS metadata —
+    # and would read `Unknown` (never empty) had the capture carried no update date.
     assert got["ATS Last Updated Date"] == "2026-07-20"
     assert got["Company"] == "Acme" and got["Comp Range"] == "190-210"
 
 
-def test_the_new_column_is_not_required_by_row_integrity(tmp_path):
+def test_both_date_columns_are_validated_the_same_way(tmp_path):
+    """Unified: a blank cell in EITHER ATS date column is a defect — but the back-fill
+    guarantees the `Unknown` literal first, so a normalized CSV never trips it."""
     rankings = tmp_path / "1 - Rankings"
     rankings.mkdir(parents=True)
     csv_path = rankings / "b-rankings.csv"
-    write_csv(csv_path, [make_row(company="Acme", posted="2026-06-13", updated="")])
+    write_csv(csv_path, [make_row(company="Acme", posted="", updated="")])
     norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
     errors = norm_contracts.normalize_rankings_csv.last_integrity_errors
-    assert not any("Last Updated" in e for e in errors), errors
+    assert errors == [], errors
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        got = by_name(*list(csv.reader(f))[:2])
+    assert got["ATS First Posted Date"] == "Unknown"
+    assert got["ATS Last Updated Date"] == "Unknown"
+    # The validator itself treats them identically when a blank does survive.
+    rows = [list(HEADERS), row_for(HEADERS, company="Blankco", posted="", updated="")]
+    reported = norm_contracts.validate_rankings_rows(rows, out=lambda _m: None)
+    assert any("ATS First Posted Date" in e for e in reported)
+    assert any("ATS Last Updated Date" in e for e in reported)
 
 
 def test_both_ats_dates_reach_the_workbook_identically(tmp_path):

@@ -312,9 +312,9 @@ function compFitLabel(text, cfg) {
 // `Working Location` grammar already encodes, shared its exact 4-hex fill, and was one more derived
 // label to keep in sync. Its labeler is gone with it — do not reintroduce one.
 
-// The literal placeholder for an unverified employer publication date. Never blank (a blank cell
-// reads as "nobody looked"), never the JAIL capture date, never inferred from a URL, job id, or
-// search-result age. norm_contracts replaces it only with a date the capture actually carries.
+// The literal placeholder for an unverified ATS date, used by BOTH ATS date columns. Never blank
+// (a blank cell reads as "nobody looked"), never the JAIL capture date, never inferred from a URL,
+// job id, or search-result age. norm_contracts replaces it only with a date the capture carries.
 const UNKNOWN_POSTED_DATE = 'Unknown'
 
 // ---- Per-job DATA COMPLETENESS (comp + working-location capture quality) ----
@@ -502,9 +502,8 @@ const HEADERS = [
   LABELS.final, LABELS.market, LABELS.desire, LABELS.style, LABELS.practicality,
   // The ATS's own dates, immediately after the score block. Both are read back out of the
   // capture by the norm_contracts pass — never the JAIL capture date, never inferred.
-  // First-posted is written as the `Unknown` placeholder (never blank); last-updated is
-  // written BLANK and stays blank unless the ATS actually exposed an update timestamp
-  // (deliberate asymmetry — see norm_contracts).
+  // BOTH are written as the `Unknown` placeholder here and stay `Unknown` unless the
+  // capture carries a real ATS date: one shared never-blank convention (see norm_contracts).
   'ATS First Posted Date', 'ATS Last Updated Date',
   'Top Reasons Notes', 'Top Concerns Notes', 'Profile Score Notes', 'Your Desire Score Notes',
   // The practicality dimension's prose companion. It exists because that rationale used to be
@@ -529,11 +528,9 @@ function dataCells(r) {
     '', '', '',
     r.final_score, r.market_perception_score, r.desire_score, r.company_style_score, r.practicality_score,
     // Never blank, never the capture date, never inferred: the placeholder the
-    // norm_contracts pass overwrites only with a VERIFIED ATS date.
-    UNKNOWN_POSTED_DATE,
-    // ATS Last Updated Date: blank here; filled only when the capture carries an
-    // ATS update timestamp. Blank is a real answer, not a missing one.
-    '',
+    // norm_contracts pass overwrites only with a VERIFIED ATS date. Both ATS date
+    // columns share this convention.
+    UNKNOWN_POSTED_DATE, UNKNOWN_POSTED_DATE,
     r.top_reasons, r.top_concerns, r.scope_fit_notes, r.mission_fit_notes,
     r.comp_lifestyle_fit_notes,
     laneFitStr(r.lane_fit), r._comp_fit, r._completeness, r.job_file, '', '',

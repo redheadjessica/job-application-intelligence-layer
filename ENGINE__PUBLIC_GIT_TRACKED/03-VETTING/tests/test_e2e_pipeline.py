@@ -222,7 +222,7 @@ def test_the_whole_pipeline_end_to_end(tmp_path, monkeypatch):
                 "FINAL Weighted Score": "82", "How They May See Your Profile": "80",
                 "Your Desire Score": "84", "Culture Fit Score": "78",
                 "Comp + Lifestyle Fit Score": "76", "ATS First Posted Date": "Unknown",
-                "ATS Last Updated Date": "",
+                "ATS Last Updated Date": "Unknown",
                 "Top Reasons Notes": "r", "Top Concerns Notes": "c",
                 "Profile Score Notes": "s", "Your Desire Score Notes": "m",
                 "Comp + Lifestyle Fit Notes": "Cash 30/40 | Location 30/30 | Equity 16/20",
@@ -265,10 +265,10 @@ def test_the_whole_pipeline_end_to_end(tmp_path, monkeypatch):
     assert got_b["ATS First Posted Date"] == "2026-03-25"
     assert got_a["ATS First Posted Date"] == "2026-07-01"
     # ATS Last Updated: populated only where the ATS exposed one. The Ashby fixture
-    # publishes no updatedAt and the rendered page no dateModified -> both BLANK,
-    # never JAIL's fetch date.
-    assert got_b["ATS Last Updated Date"] == ""
-    assert got_a["ATS Last Updated Date"] == ""
+    # publishes no updatedAt and the rendered page no dateModified -> both read the
+    # shared `Unknown` literal (never blank, never JAIL's fetch date).
+    assert got_b["ATS Last Updated Date"] == "Unknown"
+    assert got_a["ATS Last Updated Date"] == "Unknown"
     # Data Completeness back-filled; Job File links to a real capture.
     assert norm_contracts.is_valid_completeness(got_b["Data Completeness"])
     assert (src / got_b["Job File"]).is_file()

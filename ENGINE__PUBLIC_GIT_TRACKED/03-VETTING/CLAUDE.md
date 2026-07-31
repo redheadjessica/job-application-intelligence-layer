@@ -34,14 +34,14 @@ reorder, joined by header NAME so no column's data can shift), and `make_ranking
 same helper so a migrated CSV needs no further repair and a hand-made one still regenerates correctly.
 `Location Fit` was **removed** as redundant with `Working Location`: the canonical grammar already
 encodes remote/metro/cadence, both cells carried the same four hexes, and a second derived label was
-one more thing to keep in sync. Three rules worth stating plainly. **`ATS First Posted Date`** is **never blank** (the literal
-`Unknown` when there is no verified ATS date — never the JAIL capture date, never inferred from a
-URL, job id, or search-result age). **`ATS Last Updated Date`** is the ATS's own last-updated
-timestamp and is **BLANK** when the board exposes none — a deliberate asymmetry with the column
-beside it: every posting has a first-posted date (so `Unknown` means we could not read it), while
-many postings genuinely have no update and several ATSes never publish the field at all (so blank
-is a real answer). Do not "harmonize" the two. Neither date is ever substituted with JAIL's fetch
-date, a file date, a deadline, or anything inferred from the posting's wording, and **neither feeds
+one more thing to keep in sync. Two rules worth stating plainly. **`ATS First Posted Date`** and **`ATS Last Updated Date`** share
+ONE convention: each holds the ATS's own date when the board publishes it, and otherwise the literal
+`Unknown` — **neither is ever blank**. (An earlier revision had the update column use blank instead;
+that was superseded on 2026-07-31 because two adjacent date columns with two different empty
+conventions is a trap — a reader cannot tell "nothing to look up" from "we failed to look", and a
+blank cell reads as unfinished work.) Neither date is ever substituted with JAIL's fetch date, a
+file date, a deadline, a syndicated-listing date, or anything inferred from the posting's wording;
+the update value comes only from ATS metadata already stored in the capture; and **neither feeds
 scoring, ranking, or prioritization**, and **only** columns marked `[You Fill In]` /
 `[You Change]` / `[You Add]` are human-managed — a bare `?` in a header does not imply it
 (`Tailored? (Base Resume)` and `Cover Letter Drafted?` are written by the pipeline via

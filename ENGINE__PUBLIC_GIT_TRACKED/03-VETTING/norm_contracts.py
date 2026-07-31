@@ -698,14 +698,15 @@ H_TITLE = "Job Post Title + Link"
 H_LANEFIT = "Lane Fit"
 H_LOCFIT_LEGACY = "Location Fit"   # removed from the contract; dropped on migration
 UNKNOWN_POSTED_DATE = "Unknown"    # never blank, never the capture date, never inferred
-# DELIBERATE ASYMMETRY (approved 2026-07-31 — do NOT "harmonize" these):
-#   ATS First Posted Date  -> the literal `Unknown` when the ATS published no date.
-#     Every posting HAS a first-posted date; `Unknown` says we could not read it.
-#   ATS Last Updated Date  -> BLANK when the ATS exposes no update timestamp.
-#     Many postings have simply never been updated, and several ATSes never expose
-#     the field at all (Workable, Workday, LinkedIn), so `Unknown` would imply a
-#     failed lookup where there is nothing to look up. Blank means "the ATS gave us
-#     nothing here" — never a guess, never JAIL's own fetch date.
+# ONE SHARED CONVENTION for BOTH ATS date columns (revised 2026-07-31, superseding the
+# earlier blank-vs-Unknown split): each reads the literal `Unknown` when the ATS provides
+# no date. Two adjacent date columns with two different empty-conventions is a trap — a
+# reader cannot tell "nothing to look up" from "we failed to look", and a blank cell in a
+# tracker always reads as unfinished work. `Unknown` states plainly that the ATS gave us
+# no date, which is true whether the board never publishes the field (Workable, Workday,
+# LinkedIn) or simply had nothing to report. Neither column is ever blank, and neither is
+# ever filled with JAIL's fetch date, a file date, a deadline, or an inference.
+UNKNOWN_UPDATED_DATE = UNKNOWN_POSTED_DATE
 # The practicality dimension's prose companion column. Static name (like "Mission Fit Notes") even
 # though the score label itself is candidate-relabelable, so both Python passes can find it.
 H_PRACTNOTES = "Comp + Lifestyle Fit Notes"
@@ -1178,6 +1179,13 @@ def validate_rankings_rows(rows, csv_path=None, fix=None, out=print):
             cf = cell(row, H_COMPFIT)
             if cf and cf not in COMP_FIT_VALUES:
                 err(f"Comp Fit {cf!r} is outside its label domain")
+            # Both ATS date columns share the never-blank `Unknown` convention; the
+            # back-fill above guarantees it, so a blank here is a real defect.
+            for date_col in (H_POSTED, H_UPDATED):
+                if not cell(row, date_col):
+                    err(f"required cell blank: {date_col} (both ATS date columns are "
+                        f"never blank — they read {UNKNOWN_POSTED_DATE!r} when the ATS "
+                        f"provides no date)")
             dc = cell(row, H_DATACOMPLETE)
             if dc and not is_valid_completeness(dc):
                 # The exact live shape: a Comp-Fit-shaped value duplicated into
@@ -1355,12 +1363,14 @@ def normalize_rankings_csv(csv_path, cfg, out=print, score_labels=None):
             if posted:
                 fix(row, H_POSTED, posted, H_POSTED, n)
         # Last-updated: ONLY from the ATS metadata already stored in the capture
-        # (`Job Updated At:`). No ATS update timestamp -> stays BLANK. Never JAIL's
-        # fetch date, never a file mtime, never inferred from posting language, and
-        # no mass back-fill beyond what the capture itself already carries.
+        # (`Job Updated At:`). No ATS update timestamp -> the same `Unknown` literal the
+        # posted column uses (never blank). Never JAIL's fetch date, never a file mtime,
+        # never inferred from posting language, and no mass back-fill beyond what the
+        # capture itself already carries.
         if H_UPDATED in idx and idx[H_UPDATED] < len(row) \
-                and not row[idx[H_UPDATED]].strip():
-            updated = updated_date_from_capture(job_file, base_dir=Path(csv_path).parent)
+                and row[idx[H_UPDATED]].strip() in ("", UNKNOWN_UPDATED_DATE):
+            updated = (updated_date_from_capture(job_file, base_dir=Path(csv_path).parent)
+                       or UNKNOWN_UPDATED_DATE)
             if updated:
                 fix(row, H_UPDATED, updated, H_UPDATED, n)
     # Row-integrity validation (B2), after every repair above: trustworthy repairs

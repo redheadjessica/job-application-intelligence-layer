@@ -11,6 +11,33 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-31 — Both ATS date columns now share one `Unknown` convention (supersedes the asymmetry)
+
+Revised spec, superseding the blank-vs-`Unknown` split shipped earlier today: **both** ATS date
+columns write the literal `Unknown` when the ATS provides no date, and **neither is ever blank**.
+Two adjacent date columns with two different empty conventions is a trap — a reader cannot tell
+"nothing to look up" from "we failed to look", and a blank cell in a tracker always reads as
+unfinished work. `Unknown` states the same true thing in both cases: the ATS gave us no date.
+
+- `ATS Last Updated Date` now emits `Unknown` at the vet-jobs row write, in the norm_contracts
+  back-fill, and for legacy-CSV migration (a newly inserted column back-fills to a real date where
+  the capture has one, else `Unknown` — never empty).
+- **Row-integrity unified:** a blank cell in EITHER ATS date column is now a reported defect. The
+  back-fill guarantees the placeholder first, so a normalized CSV never trips it — pinned both ways
+  (a normalized CSV validates clean; a hand-blanked row is reported for both columns).
+- The three asymmetry tests are inverted into symmetry tests: update-absent → `Unknown`;
+  neither-date-present → BOTH read `Unknown` in the same row; no-capture-at-all → `Unknown` for
+  both, with the assertion that today's date never appears retained for each.
+- Everything else is unchanged: the update value still comes ONLY from ATS-provided fields already
+  stored in the capture (Ashby `updatedAt`, Greenhouse `updated_at`, Lever `updatedAt`, Rippling
+  `updatedOn`, JSON-LD `dateModified`; Workable / Workday / LinkedIn now read `Unknown` rather than
+  blank), no inference, no fetch-date / mtime / deadline substitution, plain ISO format, adjacency
+  at columns 16-17, and neither date feeds scoring or ranking.
+- Instructions tab, `03-VETTING/CLAUDE.md` and the v2 workflow doc now describe the single shared
+  convention and note the supersession.
+
+Suite: 713 green (unchanged count — three tests inverted rather than added).
+
 ## 2026-07-31 — Comp-envelope parser fix: per-endpoint scale and per-period suffixes
 
 A dry-run of the normalize pass against a copy of a real tracker caught a silent-corruption-on-
