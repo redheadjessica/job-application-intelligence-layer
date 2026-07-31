@@ -67,6 +67,14 @@ This pipeline prepares drafts and organizes folders. It must **never submit appl
 
 ---
 
+## ⭐ NO HARD LINE-WRAPPING — repo-wide, every file, every agent (required)
+
+**Never insert manual mid-sentence line breaks in any `.md`, `.txt`, or other prose file. Write each sentence, paragraph, list item, and bullet as ONE continuous line and let the editor soft-wrap.** This applies to everything — canonical reference files, changelog entries, docs, review outputs, commit-adjacent notes, generated deliverables, files you write for yourself. Not just the tailoring step's `application_resume_output.md`, which is where this rule was previously (and too narrowly) scoped.
+
+Why: hard-wrapped prose is unreadable in the user's viewer, breaks copy-paste, produces noisy line-level diffs on trivial edits, and wastes vertical space. There is no upside — soft wrap is a viewer setting, not a file property.
+
+Preserve real structure: fenced code blocks, tables, headings, and list markers all stay as they are. The rule is about *joining wrapped continuations of the same sentence or paragraph*, never about flattening structure.
+
 ## Working style for this repo
 
 A local, git-tracked workspace — routine file changes are reversible, so optimize for momentum: read, search, and edit freely; don't pause to ask "should I continue?" after routine steps. Stop and ask first only when an action reaches outside the repo, needs secrets/credentials/payment, is truly destructive and hard to undo (`rm -rf`, force-push over shared history), or changes dependencies/CI.
