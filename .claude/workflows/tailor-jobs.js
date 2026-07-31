@@ -100,7 +100,7 @@ const CONFIRM_SCHEMA = {
     base_resume_score: { type: 'integer', description: '0-100, multiple of 5, from the ACTUAL base file' },
     improved_resume_score: { type: 'integer', description: '0-100, multiple of 5, never below base' },
     why_it_improves: { type: 'string', description: 'one or two sentences naming the changes behind the delta' },
-    base_artifact_status: { type: 'string', description: 'ok | stale | no-readable-pdf | not-found' },
+    base_artifact_status: { type: 'string', description: 'ok | no-readable-pdf | not-found' },
   },
 }
 

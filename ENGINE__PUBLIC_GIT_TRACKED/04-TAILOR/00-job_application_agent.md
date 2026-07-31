@@ -1184,7 +1184,7 @@ When you do recommend one, give exactly: **proposed title**, **why it helps for 
 Produce two scores and one sentence:
 
 - **Base Resume Score** — how strongly the **actual selected base resume** would position the candidate for **this specific job**, exactly as that file stands today.
-- **Improved Resume Score** — how strongly the resume would position them if **every recommendation in this output were implemented**.
+- **Improved Resume Score** — how strongly the resume would position them after implementing every recommendation in this output **that is actually worth implementing**.
 - **Why It Improves** — one or two sentences naming the changes responsible for the gap. This is the only part that reaches the spreadsheet.
 
 ### Read the actual resume, never the index
@@ -1197,13 +1197,15 @@ So: resolve the readable artifact first.
 .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/resume_artifacts.py "<base path from 02-resume-index.md>"
 ```
 
-It returns the authoritative file to read (a `.pages` base is scored from its **PDF sibling**, since Pages cannot be read directly), plus a status:
+The finalized-application folders follow one convention: `<name>.pages` is the editable source, `<name>.pdf` is **the resume as submitted**, and `<name> FULL.pdf` is that same resume bundled with the cover letter for convenience.
 
-- `ok` — read it and score normally.
-- `stale` — the `.pages` was edited after the PDF was exported, so the PDF may be missing recent manual edits. Score it anyway, and **say so in Final Risks / Notes**: the base score is a lower bound.
-- `no-readable-pdf` / `not-found` — **do not score, and do not estimate.** Omit `base_resume_score`, `improved_resume_score` and `why_it_improves` from your return entirely, leaving the tracker cells blank, and state plainly in **Final Risks / Notes** which file was missing and that exporting a PDF beside the `.pages` will fix it. A number guessed from the index is indistinguishable in the spreadsheet from one measured off the document — that is precisely the confusion this rule prevents.
+- **Score the exact-name resume-only PDF, and nothing else.** It is the artifact the employer receives as the resume.
+- **Never fall back to `FULL.pdf`.** These columns answer a deliberately narrow question — what changing the *resume* is worth — so cover-letter prose must not influence the number.
+- **If the resolved resume-only PDF nonetheless ends with a cover-letter page, score only the resume pages and say so in the ledger.** The resolver matches on NAME and cannot see inside the file, and some older exports bundle the letter into the resume-named PDF (the same letter-as-a-trailing-page pattern reconcile already handles). Scoring that page would let cover-letter prose inflate a resume score — the exact thing the `FULL.pdf` exclusion exists to prevent. Note the file under **Suggested System Updates** so the export can be cleaned up.
+- **Never open or diff the `.pages` file**, and never compare versions against each other. The `.pages` is the source, not the artifact, and its modification time means nothing here: a Pages package updates for metadata, styling and view state without a word of the resume changing. There is no staleness check in this path, by design.
+- **`no-readable-pdf` / `not-found` → do not score, and do not estimate.** Omit `base_resume_score`, `improved_resume_score` and `why_it_improves` from your return entirely, leaving all four tracker cells blank, and state plainly in **Final Risks / Notes** which file was missing and what to export. A number guessed from the index is indistinguishable in the spreadsheet from one measured off the document.
 
-If the index's path is wrong (usually punctuation drift in a folder name — a missing comma), resolve the real path, use it, and note the correction under **Suggested System Updates** so the index gets fixed. Do not silently work around it.
+If the index's path is wrong (usually punctuation drift in a folder name — a missing comma), resolve the real path, use it, and note the correction under **Suggested System Updates**. Do not silently work around it.
 
 ### Scale — 0–100, in steps of five only
 
@@ -1220,41 +1222,81 @@ Never emit 82 or 84; emit 80 or 85. Two model-produced scores each carry a few p
 
 These score **employer perception of the document**, not writing polish.
 
-### Score both in ONE pass, against the same ledger
+### How to reach a number: centrals first, then placement
 
-Derive the job's hiring thesis and its thesis-defining central requirements **once**, then grade each central twice — once against the base, once against the improved version. Scoring them separately, or scoring the improved version by itself, produces two numbers that are not comparable and a delta that means nothing.
+Scoring is an aggregation with a specific shape. Do not average impressions across requirements — averaging is how a genuine, acknowledged gap gets diluted by unrelated strengths and a resume with a disqualifying hole lands in the "strong and competitive" band.
 
-Score the **concrete artifacts**, not your own enthusiasm for your recommendations: the improved version is the paste-ready summary you chose, the actual final bullet lists, the skills block, the writing selections and the structural changes — assembled and read as a document. "These recommendations are valuable" is not evidence; the assembled page is.
+**1. Derive the hiring thesis once.** One or two sentences: what this employer is actually hiring someone to do.
 
-**Relationship to `How They May See Your Profile`:** none, mechanically. That score is judged from the candidate's canonical profile and the posting and reads no resume at all. It is **not a ceiling** — a resume pass may surface job-specific evidence the profile pass understated, and the improved score may legitimately exceed it. No special explanation is owed when it does.
+**2. Split the posting's requirements into two classes.**
 
-**Hard invariant: improved is never below base.** The improved version is the *best available* option, and retaining the base unchanged is always available. If the recommendations would not help, the improved score **equals** the base score and the delta is 0 — a legitimate, useful result that tells the candidate to send the base as-is. Tailoring also cannot manufacture qualifications or close a genuine experience gap; a weak candidacy stays weak.
+- **Thesis-defining centrals** — the requirements an employer must believe are met to believe the candidate fits the role at all.
+- **Supporting / preferred requirements** — real evidence that strengthens the presentation but cannot substitute for a missing central.
+
+**3. Keep the centrals few and evidence-based.** A requirement earns central status because it is **explicitly required**, **repeatedly emphasized**, or **fundamental to the role's core ownership** — not because it appears somewhere in the posting. Most postings have two to four. A long central list is a sign you are pattern-matching the JD's wording rather than reading its thesis.
+
+**4. Grade each central against the document**, using the same evidence vocabulary as the scoring card: `direct` (the resume shows the candidate has done this thing) · `transferable` (adjacent, credible, requires a small inferential step) · `light` (a mention, a keyword, or an inference the reader must work for) · `absent` (nothing in the document supports it).
+
+**5. The WEAKEST thesis-defining central sets the band.** Not the average, not the strongest:
+
+| Weakest central | Band |
+|---|---|
+| `direct` | 85–95 |
+| `transferable` | 65–80 |
+| `light` | 45–60 |
+| `absent` | 25–40 |
+| `absent`, and the role is implausible without it | 0–20 |
+
+**6. Everything else determines placement WITHIN that band** — supporting and preferred evidence, evidence-source diversity, where the proof sits on the page and whether a skimmer sees it, ATS terminology, narrative coherence. Strong supporting evidence moves a score to the top of its band. It never moves it into the next one.
+
+**7. A truly absent central cannot be repaired by presentation.** Keywords, summary language, skills-line additions and adjacent evidence change *placement within the band*, never the band itself. If tailoring appears to close a genuine experience gap, the analysis is wrong — say so in the ledger and keep the band.
+
+**8. Apply the identical thesis, the identical central list and this identical rule to BOTH scores, in one pass.** Deriving centrals twice, or scoring the improved version on its own, produces two numbers that are not comparable and a delta that means nothing.
+
+**Relationship to `How They May See Your Profile`:** mechanically independent. That score is judged from the candidate's canonical profile and the posting and reads no resume at all. Do **not** impose a ceiling from it: if the resume genuinely makes truthful evidence more visible than the profile pass credited, it may legitimately score higher, and no special explanation is owed. Equally, do not anchor to it — score the documents.
+
+### What "improved" means
+
+The improved version is the **best truthful version available**, not "the base with every suggestion applied". Evaluate each recommendation on its merits: if a proposed change would **displace stronger evidence** or is a **net loss** for this specific JD, leave it out of the hypothetical improved resume and say so in the ledger. Retaining the base's content is always an available option, for any individual bullet or for the document as a whole.
+
+**Hard invariant: improved is never below base.** If nothing is worth changing, the improved score **equals** the base score and the delta is 0 — a legitimate, useful result telling the candidate to send the base as-is.
+
+Score the **concrete artifacts**, not your own enthusiasm for your recommendations: the improved version is the paste-ready summary you chose, the actual final bullet lists, the skills block, the writing selections and the structural changes — assembled and read as a document.
 
 ### How evidence accrues
 
-Do **not** apply a flat "one point per capability" rule. Distinct, credible, relevant evidence for the same capability legitimately reinforces — for an AI-builder role, personally building a product with AI, partnering with a data-science team on AI-powered opportunities, writing or speaking publicly about AI, demonstrable hands-on tool fluency, and the right terminology in summary/skills each communicate a *different* dimension of credibility, and a resume showing several is genuinely stronger than one showing one.
+Do **not** apply a flat "one point per capability" rule. Distinct, credible, relevant evidence for the same capability legitimately reinforces — for an AI-builder role, personally building a product with AI, partnering with a data-science team on AI-powered opportunities, writing or speaking publicly about AI, demonstrable hands-on tool fluency, and the right terminology in summary/skills each communicate a *different* dimension of credibility.
 
 The distinction that matters is **distinct evidence vs. repeated assertion**. Restating the same unsupported claim in the summary, the skills block and three bullets adds very little; three different experiences demonstrating the capability add a lot.
-
-Weigh all of: evidence depth · source diversity · what a human actually sees when skimming (top-third placement, bullet order) · ATS legibility and terminology · narrative coherence · **and anything stronger the proposed changes displace**. A change that adds a keyword by cutting a stronger bullet can lower the improved score.
 
 Never reward keyword stuffing or awkward repetition — an ATS-legible resume a human finds grating scores *worse*, not better.
 
 ### Proposed new content
 
-When Step 9.5 recommends a piece **and** you judge that writing it and including it would materially strengthen the resume, the improved score **may** assume it is written and included — the score is an upper bound on what full implementation achieves.
+When Step 9.5 recommends a piece **and** you judge that writing it and including it would materially strengthen the resume, the improved score **may** assume it is written and included — an upper bound on what full implementation achieves. It is still bound by the rules above: a new writing piece is supporting evidence, so it moves placement within the band and cannot lift a band that an absent central has set.
 
-When it does, **`Why It Improves` must say so explicitly**, in plain language ("…assumes the proposed [topic] piece is written and linked"). The candidate needs to know that part of the delta is contingent on work they have not done yet, and will not materialize if they skip it. Do not create a second conditional score; one number, disclosed.
+When the improved score makes that assumption, **`Why It Improves` must say so explicitly**, in plain language ("…assumes the proposed [topic] piece is written and linked"). The candidate needs to know that part of the delta is contingent on work they have not done yet. Do not create a second conditional score; one number, disclosed.
 
 Cover letters are irrelevant here — this compares resumes only.
 
 ### The ledger, and what reaches the spreadsheet
 
-Write the full audit trail into the **Resume Comparison Ledger** section (bottom of the output): the hiring thesis, each thesis-defining central with its base grade and improved grade, what changed between them, any displacement, and one line for the new-content assumption if you made one. This is a **recommendation-time estimate**, not durable learning — the standing prohibition on learning-ledger/source-update sections in this file still applies.
+Write the full audit trail into the **Resume Comparison Ledger** section (bottom of the output). It must contain the hiring thesis; the thesis-defining centrals with their base grade and improved grade; which supporting requirements moved placement; any recommendation you **declined** to include and why; and the band each score landed in, with the central that set it named explicitly. This is a **recommendation-time estimate**, not durable learning — the standing prohibition on learning-ledger/source-update sections in this file still applies.
 
-The spreadsheet gets only the two scores, the derived delta, and the one-or-two-sentence `Why It Improves`. Never paste the ledger into that cell.
+End every ledger with this exact block, so the four numbers can be read the same way in every job folder:
+
+```
+**Base Resume Score:** <n>
+**Improved Resume Score:** <n>
+**Resume Improvement Delta:** +<n>
+**Why It Improves:** <the one-or-two-sentence spreadsheet text, verbatim>
+**New-content assumption:** <what the improved score assumes is written, or "None.">
+```
+
+The spreadsheet gets only the two scores, the derived delta, and `Why It Improves`. Never paste the ledger into that cell.
 
 ---
+
 
 ## Step 10 — Suggest Knowledge-Base Updates When Useful
 

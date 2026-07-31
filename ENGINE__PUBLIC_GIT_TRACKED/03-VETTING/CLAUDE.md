@@ -61,10 +61,16 @@ granularity is drift, not signal); **improved is never below base** (the improve
 retain the base unchanged, so a delta of 0 is a legitimate answer meaning "send it as-is"); and the
 stored delta must equal improved minus base. The block **never feeds `FINAL Weighted Score`**, and
 `How They May See Your Profile` is **not a ceiling** on it — a resume pass can surface job-specific
-evidence the profile pass understated. The base score must come from the ACTUAL resume artifact
-(`04-TAILOR/resume_artifacts.py` resolves a `.pages` base to its authoritative PDF sibling and flags
-stale exports); when no readable artifact exists the cells stay **blank and are never estimated**,
-because a guessed number and a measured one are indistinguishable once they are in the spreadsheet.
+evidence the profile pass understated. Scoring aggregates by the **weakest thesis-defining
+central**, which sets the band; supporting evidence, terminology, placement and coherence only set
+position within it, so a genuinely absent requirement cannot be papered over with keywords. The base
+score must come from the ACTUAL resume artifact: `04-TAILOR/resume_artifacts.py` resolves a `.pages`
+base to its **exact-name resume-only PDF** — never the `<name> FULL.pdf` resume+cover-letter bundle,
+whose letter must not influence a resume score, and never by picking the lone PDF in a folder. There
+is deliberately **no timestamp staleness check** (a Pages package's mtime moves for metadata and
+styling without the resume changing, so the flag was mostly false positives). When no resume-only PDF
+exists the cells stay **blank and are never estimated**, because a guessed number and a measured one
+are indistinguishable once they are in the spreadsheet.
 
 **Captures arrive in the JOB SNAPSHOT format, with ORIGINAL vs LATEST capture details.** Prep writes a
 human-readable preamble — `JOB SNAPSHOT` (incl. `Job Posted At:` / `Job Updated At:`, always present,

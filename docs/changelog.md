@@ -11,6 +11,64 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-31 — Resume comparison, corrected: weakest-central aggregation, and resume-only artifacts
+
+Two defects surfaced by the first four-job pilot. Both were found by reading the ledgers against the
+actual resume files, which is the argument for making the ledger mandatory in the first place.
+
+**1. The aggregation rule was under-specified, so absolute scores drifted upward.** Step 9.8 said to
+derive the thesis-defining centrals and grade each one against both documents, but never said how to
+combine them — so the scorer averaged impressions. The Google Chat pilot showed the cost: its own
+ledger identified the AI/ML product-launch requirement as a genuine gap "tailoring cannot
+manufacture", and the document still landed at 75/80, inside the *strong and competitive* band, because
+strength elsewhere diluted it. Averaging is exactly how a disqualifying hole disappears into a good
+score.
+
+The rule is now explicit and mirrors the scoring card's own logic: derive the thesis once · split
+requirements into **thesis-defining centrals** (necessary to believe the candidate fits at all) versus
+**supporting/preferred** · keep centrals few and evidence-based, qualifying only when a requirement is
+explicitly required, repeatedly emphasized, or fundamental to the role's core ownership · grade each
+central `direct`/`transferable`/`light`/`absent` · **the weakest central sets the band** (85–95 /
+65–80 / 45–60 / 25–40, or 0–20 when the role is implausible without it) · supporting evidence, ATS
+terminology, placement, skimmability, evidence diversity and narrative coherence set position **within**
+that band and never move it to the next one · **a truly absent central cannot be repaired by
+presentation**. Same thesis, same central list, same rule for base and improved, in one pass.
+
+Note what did *not* change: `How They May See Your Profile` is still **not** a ceiling, mechanically or
+otherwise. The complaint was never that a resume score exceeded it — a resume may legitimately make
+truthful evidence more visible than the profile pass credited. The complaint was that an acknowledged
+unfixable gap didn't constrain the band. Those are different problems and only the second one was real.
+
+Also sharpened: **"improved" means the best *truthful* version, not "the base with every suggestion
+applied."** A recommendation that would displace stronger evidence or is a net loss for that JD is left
+out of the hypothetical improved resume and the ledger says so — retaining base content is always
+available, at bullet level or wholesale. And every ledger now ends with one standard five-line summary
+block (base · improved · delta · why · new-content assumption) so the numbers read identically in every
+job folder.
+
+**2. Artifact selection was too clever, and produced a false staleness warning.** The finalized folders
+follow a convention the module didn't know: `<name>.pdf` is the resume as submitted, `<name> FULL.pdf`
+is that resume bundled with the cover letter, `<name>.pages` is the editable source. Now: **only the
+exact-name resume-only PDF is authoritative**; `FULL.pdf` is never a fallback (these columns answer a
+resume-only question, so a cover letter must not be able to move the number, and pointing directly at a
+bundle is refused); the "single PDF in the folder" fallback is **gone**, since these folders routinely
+hold three or four PDFs and choosing by elimination is how the wrong document gets scored; the `.pages`
+is never opened and versions are never diffed. One tolerance remains — stem matching ignores whitespace,
+because a base saved as `"Resume - Acme .pages"` and its `"Resume - Acme.pdf"` are the same name, not an
+ambiguity.
+
+The **timestamp-based staleness check is removed entirely.** It fired on the Pinterest base, whose PDF
+was in fact current: a Pages package's modification time moves for metadata, styling and view-state
+changes that never touch a word of the resume. A false warning attached to a real score is worse than no
+warning, because it teaches the reader to discount numbers that are fine.
+
+Tests updated accordingly (787 total): resume-only PDF wins when both it and `FULL.pdf` exist ·
+`FULL.pdf` is never adopted as a fallback and is refused when pointed at directly · an unrelated lone PDF
+is not adopted · a newer `.pages` timestamp produces no warning and `STATUS_STALE` no longer exists ·
+whitespace drift still matches · an unreadable base leaves all four columns blank. The spec drift-guards
+now also pin the weakest-central rule, the centrals-qualification test, the no-presentation-repair rule,
+the decline-a-net-loss rule, and the standard ledger block.
+
 ## 2026-07-31 — "Would tailoring this actually help?": the resume-comparison block (32-column contract)
 
 The tracker could say how good a *job* was and, via `How They May See Your Profile`, how the employer
@@ -43,11 +101,10 @@ Design decisions worth recording, because several were argued down from the obvi
   works from `02-resume-index.md`'s bullet previews — right for drafting, wrong for scoring, because the
   index is prose a human wrote *about* the resume (one anchor admits its contents aren't fully indexed).
   Every base here is `.pages`, which can't be read directly, so new `04-TAILOR/resume_artifacts.py`
-  resolves the authoritative **PDF sibling** and classifies the outcome: `ok` · `stale` (the `.pages`
-  was edited after the PDF was exported — still scored, but flagged as a lower bound) ·
-  `no-readable-pdf` / `not-found` (**scores left blank, never estimated**). Two candidate PDFs in one
-  folder is refused rather than guessed. A blank cell and a guessed number look identical in a
-  spreadsheet; only one of them is honest.
+  resolves the authoritative PDF and classifies the outcome: `ok` · `no-readable-pdf` / `not-found`
+  (**scores left blank, never estimated**). A blank cell and a guessed number look identical in a
+  spreadsheet; only one of them is honest. (Artifact-selection rules were tightened the same day —
+  see the follow-up entry below.)
 - **No simplistic anti-repetition rule.** Distinct evidence for one capability legitimately reinforces —
   building with AI, partnering with a data team, writing publicly, tool fluency and correct terminology
   are different dimensions of credibility. The distinction that matters is *distinct evidence vs.

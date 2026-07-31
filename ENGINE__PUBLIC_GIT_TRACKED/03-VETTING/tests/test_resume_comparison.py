@@ -166,9 +166,9 @@ def test_row_validation_surfaces_a_bad_block_in_a_real_table():
 # --------------------------------------------------------------------------- #
 # Which file actually gets scored
 # --------------------------------------------------------------------------- #
-def test_a_pages_base_resolves_to_its_pdf_sibling_not_the_index(tmp_path):
+def test_a_pages_base_resolves_to_its_resume_only_pdf_not_the_index(tmp_path):
     """The whole point: a .pages file cannot be read, and the resume index is prose ABOUT the
-    resume. Scoring must land on the document."""
+    resume. Scoring must land on the document the employer actually receives."""
     pages = tmp_path / "Jessica-Barnett-Resume - Acme - Senior PM.pages"
     pages.write_text("pages bundle")
     pdf = tmp_path / "Jessica-Barnett-Resume - Acme - Senior PM.pdf"
@@ -180,49 +180,86 @@ def test_a_pages_base_resolves_to_its_pdf_sibling_not_the_index(tmp_path):
     assert art.reader == "pdf skill"
 
 
-def test_a_missing_pdf_yields_no_readable_artifact_and_a_clear_reason(tmp_path):
+def test_the_resume_only_pdf_wins_over_the_full_bundle(tmp_path):
+    """`<name> FULL.pdf` is the resume PLUS the cover letter. Picking it would let cover-letter
+    prose raise a score that is supposed to measure the resume alone."""
+    pages = tmp_path / "Resume - Acme.pages"
+    pages.write_text("pages")
+    resume_pdf = tmp_path / "Resume - Acme.pdf"
+    resume_pdf.write_text("%PDF resume only")
+    full = tmp_path / "Resume - Acme FULL.pdf"
+    full.write_text("%PDF resume plus cover letter")
+    art = resume_artifacts.resolve_base_artifact(pages)
+    assert art.readable_path == str(resume_pdf)
+    assert "FULL" not in Path(art.readable_path).stem
+
+
+def test_the_full_bundle_is_never_a_fallback(tmp_path):
+    """With the resume-only PDF absent, the answer is 'not scored' — not 'use the bundle'. A
+    cover letter must never be able to influence these columns."""
+    pages = tmp_path / "Resume - Acme.pages"
+    pages.write_text("pages")
+    (tmp_path / "Resume - Acme FULL.pdf").write_text("%PDF resume plus cover letter")
+    art = resume_artifacts.resolve_base_artifact(pages)
+    assert art.status == resume_artifacts.STATUS_NO_PDF
+    assert not art.scoreable
+    assert art.readable_path is None
+    assert "FULL.pdf" in art.note or "cover-letter" in art.note
+
+
+def test_pointing_directly_at_a_full_bundle_is_refused(tmp_path):
+    full = tmp_path / "Resume - Acme FULL.pdf"
+    full.write_text("%PDF")
+    art = resume_artifacts.resolve_base_artifact(full)
+    assert art.status == resume_artifacts.STATUS_NO_PDF
+    assert not art.scoreable
+
+
+def test_an_unrelated_lone_pdf_is_not_adopted(tmp_path):
+    """There is no 'the only PDF in this folder' fallback: these folders hold several PDFs, and
+    choosing one by elimination is how the wrong document gets scored."""
+    pages = tmp_path / "Resume - Acme.pages"
+    pages.write_text("pages")
+    (tmp_path / "Some Other Document.pdf").write_text("%PDF")
+    assert resume_artifacts.resolve_base_artifact(pages).status == resume_artifacts.STATUS_NO_PDF
+
+
+def test_a_missing_pdf_yields_no_readable_artifact_and_an_actionable_reason(tmp_path):
     pages = tmp_path / "Resume - Acme.pages"
     pages.write_text("pages bundle")
     art = resume_artifacts.resolve_base_artifact(pages)
     assert art.status == resume_artifacts.STATUS_NO_PDF
     assert not art.scoreable
     assert art.readable_path is None
-    assert "NOT scored" in art.note and "Export a PDF" in art.note
+    assert "NOT scored" in art.note and "Resume - Acme.pdf" in art.note
 
 
-def test_two_ambiguous_pdfs_are_refused_rather_than_guessed(tmp_path):
-    pages = tmp_path / "Resume - Acme.pages"
-    pages.write_text("pages bundle")
-    (tmp_path / "one.pdf").write_text("%PDF")
-    (tmp_path / "two.pdf").write_text("%PDF")
-    assert resume_artifacts.resolve_base_artifact(pages).status == resume_artifacts.STATUS_NO_PDF
-
-
-def test_a_pdf_older_than_its_pages_is_flagged_stale_but_still_scoreable(tmp_path):
-    """A stale PDF is missing the candidate's most recent manual Pages edits, so the base score
-    it produces is a lower bound — usable, but the caveat has to travel with it."""
-    import os
-    pages = tmp_path / "Resume - Acme.pages"
-    pages.write_text("pages bundle")
-    pdf = tmp_path / "Resume - Acme.pdf"
-    pdf.write_text("%PDF")
-    os.utime(pdf, (1_700_000_000, 1_700_000_000))
-    os.utime(pages, (1_700_600_000, 1_700_600_000))   # ~7 days newer
-    art = resume_artifacts.resolve_base_artifact(pages)
-    assert art.status == resume_artifacts.STATUS_STALE
-    assert art.scoreable, "stale is a warning, not a refusal"
-    assert "STALE" in art.note and "lower bound" in art.note
-
-
-def test_a_fresh_export_is_not_flagged_stale(tmp_path):
+def test_a_newer_pages_timestamp_does_not_produce_a_stale_warning(tmp_path):
+    """A Pages package's mtime moves for metadata, styling and view-state changes that never
+    touch a word of the resume, so a timestamp-derived 'stale' flag was mostly false positives —
+    and a false warning attached to a real score is worse than no warning."""
     import os
     pages = tmp_path / "Resume - Acme.pages"
     pages.write_text("pages")
     pdf = tmp_path / "Resume - Acme.pdf"
     pdf.write_text("%PDF")
     os.utime(pdf, (1_700_000_000, 1_700_000_000))
-    os.utime(pages, (1_700_000_030, 1_700_000_030))   # exported 30s apart
-    assert resume_artifacts.resolve_base_artifact(pages).status == resume_artifacts.STATUS_OK
+    os.utime(pages, (1_700_600_000, 1_700_600_000))   # ~7 days newer
+    art = resume_artifacts.resolve_base_artifact(pages)
+    assert art.status == resume_artifacts.STATUS_OK
+    assert art.scoreable
+    assert "stale" not in art.note.lower()
+    assert not hasattr(resume_artifacts, "STATUS_STALE")
+
+
+def test_whitespace_drift_in_the_filename_still_matches(tmp_path):
+    """Real bases carry a trailing space in the stem. That is the same name, not an ambiguity."""
+    pages = tmp_path / "Resume - Talkspace - Senior PM Growth .pages"
+    pages.write_text("pages")
+    pdf = tmp_path / "Resume - Talkspace - Senior PM Growth.pdf"
+    pdf.write_text("%PDF")
+    art = resume_artifacts.resolve_base_artifact(pages)
+    assert art.status == resume_artifacts.STATUS_OK and art.readable_path == str(pdf)
 
 
 def test_directly_readable_formats_pass_through_with_the_right_reader(tmp_path):
@@ -238,6 +275,25 @@ def test_a_nonexistent_base_is_not_found(tmp_path):
     art = resume_artifacts.resolve_base_artifact(tmp_path / "nope.pages")
     assert art.status == resume_artifacts.STATUS_NOT_FOUND
     assert not art.scoreable
+
+
+def test_an_unscoreable_artifact_leaves_all_four_columns_blank(tmp_path):
+    """End-to-end statement of the rule: no readable resume PDF means the tailor step omits the
+    comparison fields, and the row keeps four blank cells rather than an estimate."""
+    pages = tmp_path / "Resume - Acme.pages"
+    pages.write_text("pages")
+    (tmp_path / "Resume - Acme FULL.pdf").write_text("%PDF bundle")
+    assert not resume_artifacts.resolve_base_artifact(pages).scoreable
+
+    batch, csv_path = _batch(tmp_path)
+    before = csv_path.read_text(encoding="utf-8")
+    # The agent omits the fields entirely; nothing is written, so the block stays blank.
+    r = _run(batch, "--job-file", "acme.txt", "--base", "Some Base (7/1/26)")
+    assert r.returncode == 0, r.stderr
+    _, recs = _read(csv_path)
+    for col in (H_BASE, H_IMPROVED, H_DELTA, H_WHY):
+        assert recs[0][col] == "", f"{col} should stay blank when the base is unreadable"
+    assert before != csv_path.read_text(encoding="utf-8"), "the base name still got written"
 
 
 # --------------------------------------------------------------------------- #
@@ -453,8 +509,43 @@ SPEC = (TAILOR / "00-job_application_agent.md").read_text(encoding="utf-8")
 
 def test_the_spec_forbids_scoring_the_resume_index_instead_of_the_resume():
     assert "resume_artifacts.py" in SPEC
-    assert "never score the resume index" in SPEC.lower() or \
-           "wrong** input for *scoring*" in SPEC or "grades the description" in SPEC
+    assert "grades the description instead of the document" in SPEC
+
+
+def test_the_spec_pins_the_resume_only_pdf_and_bans_the_full_bundle():
+    assert "Never fall back to `FULL.pdf`" in SPEC
+    assert "Score the exact-name resume-only PDF, and nothing else." in SPEC
+
+
+def test_the_spec_has_no_timestamp_staleness_rule_left():
+    """Removed 2026-07-31: a Pages mtime moves for metadata and styling, so the flag was mostly
+    false positives, and a false warning attached to a real score is worse than none."""
+    assert "There is no staleness check in this path, by design." in SPEC
+    assert "STALE" not in SPEC
+    assert "may be missing recent manual edits" not in SPEC
+
+
+def test_the_spec_pins_weakest_central_aggregation_not_averaging():
+    """The Google pilot showed why: an acknowledged, unfixable gap got averaged away and the
+    document still landed in the 'strong and competitive' band."""
+    assert "The WEAKEST thesis-defining central sets the band" in SPEC
+    assert "Do not average impressions across requirements" in SPEC
+    assert "never moves it into the next one" in SPEC
+
+
+def test_the_spec_requires_centrals_to_be_few_and_evidence_based():
+    assert "explicitly required" in SPEC and "repeatedly emphasized" in SPEC
+    assert "fundamental to the role's core ownership" in SPEC
+
+
+def test_the_spec_forbids_repairing_an_absent_central_with_presentation():
+    assert "cannot be repaired by presentation" in SPEC
+    assert "never the band itself" in SPEC
+
+
+def test_the_spec_allows_declining_a_recommendation_that_is_a_net_loss():
+    assert "displace stronger evidence" in SPEC
+    assert "best truthful version available" in SPEC
 
 
 def test_the_spec_requires_distinct_evidence_to_reinforce_and_repetition_not_to():
@@ -472,8 +563,18 @@ def test_the_spec_pins_the_five_point_scale_and_the_never_below_base_invariant()
     assert "improved is never below base" in SPEC.lower()
 
 
-def test_the_spec_states_the_profile_score_is_not_a_ceiling():
-    assert "not a ceiling" in SPEC.lower()
+def test_the_spec_forbids_a_mechanical_ceiling_from_the_profile_score():
+    assert "Do **not** impose a ceiling from it" in SPEC
+    assert "mechanically independent" in SPEC
+
+
+def test_the_spec_pins_the_standard_ledger_summary_block():
+    """Every job folder must end its ledger the same way, so the four numbers read identically
+    wherever they are opened."""
+    for line in ("**Base Resume Score:**", "**Improved Resume Score:**",
+                 "**Resume Improvement Delta:**", "**Why It Improves:**",
+                 "**New-content assumption:**"):
+        assert line in SPEC, f"ledger summary block missing {line}"
 
 
 def test_the_spec_keeps_the_ledger_out_of_the_spreadsheet_cell():

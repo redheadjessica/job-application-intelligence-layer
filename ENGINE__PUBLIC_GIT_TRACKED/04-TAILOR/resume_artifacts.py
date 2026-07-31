@@ -10,18 +10,30 @@ human wrote about the resume, so scoring it would grade the description rather t
 Several anchors in a real index carry only a one-paragraph gist, and at least one says outright that
 its contents are not fully indexed.
 
-The complication is that every base in the current setup is an Apple Pages file, which cannot be
-read directly. Each finalized base does have a `.pdf` sibling in the same folder, and the index
-already names the `.pages`/`.pdf` pair as authoritative — so the PDF is the artifact the comparison
-pass reads.
+Every base in the current setup is an Apple Pages file, which cannot be read directly — so the
+comparison pass reads a PDF. The finalized-application folders follow one convention:
 
-Two failure modes must be visible rather than papered over:
-  * NO readable PDF — the base score is left BLANK. It is never estimated from the index, because a
-    number sourced from a summary is indistinguishable in the spreadsheet from one sourced from the
-    document.
-  * A STALE PDF — the `.pages` was edited after the PDF was exported, so the PDF is missing the
-    candidate's most recent manual edits. The file is still readable and still scored, but the note
-    travels with the score so the number can be discounted.
+    <name>.pages       the editable source
+    <name>.pdf         THE RESUME AS SUBMITTED — the only artifact this module returns
+    <name> FULL.pdf    the same resume PLUS the cover letter, bundled for convenience
+
+Selection is deliberately strict, because each loose rule breaks the score in a different way:
+
+  * ONLY the exact-name resume-only PDF is authoritative. No "the single PDF in this folder"
+    fallback — these folders routinely hold three or four PDFs, and picking one by elimination is
+    how a cover letter ends up inside a resume score.
+  * `FULL.pdf` is NEVER a fallback. These columns answer a deliberately narrow question — how much
+    would changing the RESUME be worth — so cover-letter prose must not touch the number. A missing
+    resume-only PDF is reported, not worked around.
+  * The `.pages` file is never opened or compared. It is the editable source, not the artifact.
+  * NO timestamp-based staleness. A Pages package's modification time moves for metadata, style and
+    view-state changes that never touch a word of the resume, so a "stale" flag derived from it was
+    mostly false positives — and a false warning attached to a real score is worse than no warning.
+    (This module previously carried such a check; it was removed on 2026-07-31 after it fired on a
+    Pinterest base whose PDF was in fact current.)
+
+The one tolerance: stem matching ignores whitespace differences, so a base saved as
+`"Resume - Acme .pages"` still matches `"Resume - Acme.pdf"`. That is the same name, not a guess.
 
     python resume_artifacts.py "/path/to/Resume - Company - Role.pages"
 """
@@ -29,14 +41,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import dataclass, asdict
 from pathlib import Path
-
-# How much newer the .pages may be before its PDF counts as stale. Exporting a PDF from Pages
-# writes the two files seconds apart, so a small window avoids flagging a normal export; anything
-# beyond it means real editing happened after the export.
-STALE_TOLERANCE_SECONDS = 120
 
 # Formats the comparison pass can read directly, and the tool each one needs. `.pages` is
 # deliberately absent — it is the one format with no direct reader, which is the whole reason
@@ -48,12 +56,15 @@ DIRECT_READABLE = {
     ".docx": "docx skill",
 }
 
-# Resolution outcomes. Only `ok` and `stale` carry a readable path; the rest mean BLANK scores.
+# The combined resume+cover-letter bundle. Recognized ONLY so it can be excluded by name and
+# named in the error message; it is never returned.
+FULL_SUFFIX_RE = re.compile(r"\s*full$", re.IGNORECASE)
+
+# Resolution outcomes. Only `ok` carries a readable path; the rest mean BLANK scores.
 STATUS_OK = "ok"
-STATUS_STALE = "stale"
 STATUS_NO_PDF = "no-readable-pdf"
 STATUS_NOT_FOUND = "not-found"
-SCOREABLE = (STATUS_OK, STATUS_STALE)
+SCOREABLE = (STATUS_OK,)
 
 
 @dataclass
@@ -74,27 +85,31 @@ class BaseArtifact:
         return json.dumps(d, indent=2)
 
 
-def _mtime(p: Path):
-    try:
-        return p.stat().st_mtime
-    except OSError:
-        return None
+def _key(stem: str) -> str:
+    """Compare stems ignoring whitespace only — `"Resume - Acme "` and `"Resume - Acme"` name the
+    same document. Nothing else is normalized away."""
+    return re.sub(r"\s+", "", stem).casefold()
 
 
-def find_pdf_sibling(pages_path: Path):
-    """The PDF that corresponds to a `.pages` base. Same stem in the same folder is the only
-    confident match. Falling back to "the one other PDF in this folder" is deliberate but narrow:
-    a finalized application folder holds one resume, so a lone PDF beside it is that resume — but
-    if there are two, guessing which is the resume is exactly the kind of silent wrong answer this
-    module exists to prevent, so it returns nothing and the score goes blank."""
-    exact = pages_path.with_suffix(".pdf")
-    if exact.is_file():
-        return exact
+def is_full_bundle(path) -> bool:
+    """True for the `<name> FULL.pdf` resume+cover-letter bundle."""
+    return bool(FULL_SUFFIX_RE.search(Path(path).stem))
+
+
+def find_resume_pdf(pages_path: Path):
+    """The resume-only PDF for a `.pages` base, or None.
+
+    Exact stem match (whitespace-insensitive) and nothing else. Returning None is a normal,
+    reportable outcome — never a reason to reach for a different file."""
+    want = _key(pages_path.stem)
     try:
-        pdfs = sorted(p for p in pages_path.parent.glob("*.pdf") if p.is_file())
+        candidates = sorted(p for p in pages_path.parent.glob("*.pdf") if p.is_file())
     except OSError:
         return None
-    return pdfs[0] if len(pdfs) == 1 else None
+    for p in candidates:
+        if _key(p.stem) == want and not is_full_bundle(p):
+            return p
+    return None
 
 
 def resolve_base_artifact(source_path) -> BaseArtifact:
@@ -106,6 +121,11 @@ def resolve_base_artifact(source_path) -> BaseArtifact:
         if not src.is_file():
             return BaseArtifact(str(src), None, None, STATUS_NOT_FOUND,
                                 f"Base file does not exist: {src}")
+        if suffix == ".pdf" and is_full_bundle(src):
+            return BaseArtifact(
+                str(src), None, None, STATUS_NO_PDF,
+                f"{src.name} is the combined resume+cover-letter bundle. These columns score the "
+                f"RESUME only, so point at the resume-only PDF instead.")
         return BaseArtifact(str(src), str(src), DIRECT_READABLE[suffix], STATUS_OK,
                             f"Read directly via the {DIRECT_READABLE[suffix]}.")
 
@@ -120,25 +140,22 @@ def resolve_base_artifact(source_path) -> BaseArtifact:
                             f"02-resume-index.md — a wrong path here is usually a punctuation "
                             f"drift in the folder name, not a missing resume.")
 
-    pdf = find_pdf_sibling(src)
+    pdf = find_resume_pdf(src)
     if pdf is None:
+        try:
+            present = sorted(p.name for p in src.parent.glob("*.pdf"))
+        except OSError:
+            present = []
+        seen = f" PDFs present: {', '.join(present)}." if present else " No PDFs in that folder."
         return BaseArtifact(
             str(src), None, None, STATUS_NO_PDF,
-            f"No authoritative PDF beside {src.name}. A .pages file cannot be read directly, and "
-            f"the resume index's prose preview is a summary, not the document — so the base is "
-            f"NOT scored. Export a PDF next to the .pages and re-run.")
-
-    t_pages, t_pdf = _mtime(src), _mtime(pdf)
-    if t_pages is not None and t_pdf is not None and t_pages - t_pdf > STALE_TOLERANCE_SECONDS:
-        drift_days = (t_pages - t_pdf) / 86400.0
-        return BaseArtifact(
-            str(src), str(pdf), DIRECT_READABLE[".pdf"], STATUS_STALE,
-            f"PDF may be STALE: {pdf.name} was exported about {drift_days:.1f} day(s) before the "
-            f".pages was last edited, so it may be missing the most recent manual edits. Scored "
-            f"anyway, but treat the base score as a lower bound.")
+            f"No resume-only PDF named to match {src.name}.{seen} The base is NOT scored: the "
+            f"combined FULL.pdf bundle would let cover-letter text influence a resume score, and "
+            f"the resume index's preview is a summary, not the document. Export "
+            f"'{src.with_suffix('.pdf').name}' beside the .pages and re-run.")
 
     return BaseArtifact(str(src), str(pdf), DIRECT_READABLE[".pdf"], STATUS_OK,
-                        f"Authoritative PDF sibling: {pdf.name}")
+                        f"Resume-only PDF: {pdf.name}")
 
 
 def main(argv):
