@@ -980,10 +980,25 @@ def practicality_notes_insert_at(headers):
 # columns and FINAL/practicality SCORES are scorer-owned and are NOT recomputed
 # here — a rescore is a human-triggered act, not a normalization side effect.
 # --------------------------------------------------------------------------- #
-_BAND_RANGE_RE = re.compile(
-    r"\$?\s?(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*[-–—]\s*\$?\s?(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*([Kk])?")
+# An endpoint: optional $, the amount, an optional K scale, and an optional per-period
+# suffix. BOTH endpoints accept the scale and the suffix — an earlier version allowed `K`
+# only on the SECOND endpoint, so `$181.9K/yr - $214K/yr` and even `$236K – $296K` failed
+# the range match entirely and fell through to the single-amount path, collapsing the
+# envelope to one endpoint (`181-182`, `165-165`). Silent corruption on regeneration,
+# which is exactly what B12 exists to prevent.
+_AMOUNT = r"\$?\s?(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*([KkMm])?"
+_PER_PERIOD = (r"(?:\s*(?:/\s*(?:yr|year|hr|hour|mo|month|wk|week)|"
+               r"per\s+(?:year|hour|month|week)|annually|hourly|monthly|weekly)\b)?")
+_BAND_RANGE_RE = re.compile(_AMOUNT + _PER_PERIOD +
+                            r"\s*(?:-|–|—|to|through)\s*" + _AMOUNT + _PER_PERIOD, re.I)
 _BAND_SINGLE_RE = re.compile(r"\$\s?(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*([Kk])?")
-_NON_ANNUAL_BAND_RE = re.compile(r"(?i)/hour|/hr\b|hourly|/month|monthly|/week|weekly")
+# A band quoted per hour/month/week is NOT an annual figure. It is excluded from the
+# annual envelope rather than converted — an assumed 2,080-hour year would be an
+# invention. A capture with ONLY hourly bands yields no envelope (the model's value
+# stands) rather than a fabricated annual one.
+_NON_ANNUAL_BAND_RE = re.compile(
+    r"(?i)/\s*(?:hour|hr|mo|month|wk|week)\b|per\s+(?:hour|month|week)\b"
+    r"|hourly|monthly|weekly")
 _ABSENCE_PREFIX_RE = re.compile(r"(?i)^(employer did not mention|could not verify|not posted)")
 _CONFLICT_PREFIX_RE = re.compile(r"(?i)^conflicting employer information")
 
@@ -1026,8 +1041,14 @@ def base_salary_text_from_capture(text):
 
 
 def comp_envelope(comp_text):
-    """`lo-hi` in whole thousands across EVERY annual band in the text (floor the
-    min, ceil the max — endpoints may come from different bands), or ""."""
+    """`lo-hi` in whole thousands across EVERY annual band in the text, or "".
+
+    ROUNDING CONVENTION (fixed 2026-07-31): floor the low, ceil the high. It never
+    overstates the floor nor understates the ceiling, so a candidate reading the cell
+    is never told the band is better than it is — the honest direction. `139,764–287,749`
+    is therefore `139-288` (not `140-288`), and `$181.9K` floors to `181` exactly as
+    `$122.4K` floors to `122`. Endpoints may come from DIFFERENT bands.
+    """
     text = str(comp_text or "")
     lows, highs = [], []
     for segment in re.split(r"\s*[·;]\s*|\bvs\b", text):
@@ -1035,8 +1056,11 @@ def comp_envelope(comp_text):
             continue   # an hourly/monthly figure is never part of the annual envelope
         matched = False
         for m in _BAND_RANGE_RE.finditer(segment):
-            lo = _amount_thousands(m.group(1), bool(m.group(3)))
-            hi = _amount_thousands(m.group(2), bool(m.group(3)))
+            # A K/M scale written on EITHER endpoint applies to both ("$236K – $296K",
+            # "$181.9K/yr - $214K/yr", and the shared-scale "$200-250K" alike).
+            scaled = bool(m.group(2) or m.group(4))
+            lo = _amount_thousands(m.group(1), scaled)
+            hi = _amount_thousands(m.group(3), scaled)
             if lo is None or hi is None or lo > hi or not (10 <= lo <= 2000):
                 continue
             lows.append(lo)

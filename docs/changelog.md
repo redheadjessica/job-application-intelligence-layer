@@ -11,6 +11,33 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-31 — Comp-envelope parser fix: per-endpoint scale and per-period suffixes
+
+A dry-run of the normalize pass against a copy of a real tracker caught a silent-corruption-on-
+regeneration bug in the B12 mechanical envelope. The range regex accepted a `K` scale only on the
+SECOND endpoint, so `$181.9K/yr - $214K/yr` and `$165K/yr - $205K/yr` failed the range match
+entirely and fell through to the single-amount path, collapsing the envelope to one endpoint
+(`181-182`, `165-165`). Investigating showed the defect was wider than reported: `$236K – $296K`
+— a scale on BOTH endpoints, with no period suffix at all — collapsed the same way (`236-236`).
+Nothing in the live tracker was wrong yet, because human-verified values were stored; the corruption
+would have landed on the next regeneration.
+
+- Both endpoints now accept a `K`/`M` scale and a per-period suffix (`/yr`, `/year`, `/hr`,
+  `/hour`, `/mo`, `/wk`, `per year|hour|month|week`, `annually|hourly|monthly|weekly`), and a scale
+  written on either endpoint applies to both.
+- **Hourly/monthly/weekly bands remain EXCLUDED from the annual envelope** — widened to catch the
+  new spellings too. They are never converted (an assumed 2,080-hour year would be an invention);
+  a capture with only hourly bands yields no envelope and the model's value stands. Pinned in both
+  directions, including an hourly band sitting beside an annual one.
+- **Rounding convention fixed and documented: floor the low, ceil the high.** It never overstates
+  the floor nor understates the ceiling — the honest direction for a candidate reading the cell.
+  The ±1K drifts noticed on regeneration (e.g. `140-288` → `139-288` for a `139,764–287,749` source)
+  are this convention correcting values that had been produced by rounding; the current code was
+  already consistent, and it is now pinned so it cannot drift again. The frozen `N-N` display format
+  is unchanged.
+
+Suite: 692 → 713 green.
+
 ## 2026-07-31 — The tracker distinguishes ATS first-posted from ATS last-updated
 
 A tracker-surface change only: the extraction layer already retrieved both timestamps (`posted_date`

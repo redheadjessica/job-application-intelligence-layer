@@ -1900,3 +1900,81 @@ def test_neither_ats_date_feeds_scoring_or_ranking():
     # The score schema carries no date field either.
     schema = js.split("const SCORE_SCHEMA")[1].split("// ---- Phase 1")[0]
     assert "date" not in schema.lower()
+
+
+# ===========================================================================
+# Comp-envelope parser: per-endpoint scale + per-period suffixes (2026-07-31).
+# The live bug: `$181.9K/yr - $214K/yr` collapsed to `181-182` and
+# `$165K/yr - $205K/yr` to `165-165`, because the range regex accepted a `K`
+# scale only on the SECOND endpoint — so the whole range failed to match and the
+# single-amount fallback took over. Silent corruption on regeneration.
+# ===========================================================================
+@pytest.mark.parametrize("comp_text,expected", [
+    # The two exact live shapes.
+    ("$181.9K/yr - $214K/yr", "181-214"),
+    ("$165K/yr - $205K/yr", "165-205"),
+    # A K scale on BOTH endpoints (this failed too, unreported).
+    ("$236K – $296K", "236-296"),
+    # Other per-period spellings on both endpoints.
+    ("$150,000 per year - $180,000 per year", "150-180"),
+    ("$150K annually - $180K annually", "150-180"),
+    ("$150K/year - $180K/year", "150-180"),
+    # Shared trailing scale and bare full-dollar shapes keep working.
+    ("Zone A: $200-250K · Zone B: $180-225K", "180-250"),
+    ("USD 182,000-227,000", "182-227"),
+])
+def test_per_endpoint_scale_and_period_suffixes_parse(comp_text, expected):
+    assert norm_contracts.comp_envelope(comp_text) == expected
+
+
+@pytest.mark.parametrize("hourly", [
+    "$27-44/hour", "$27/hr - $44/hr", "$27.50/hour - $44/hour",
+    "$27 - $44 per hour", "$27-44 hourly",
+])
+def test_hourly_only_bands_decline_rather_than_invent_an_annual_envelope(hourly):
+    """An hourly band must never silently become an annual one — no assumed
+    2,080-hour year. With only hourly bands the envelope declines and the model's
+    value stands."""
+    assert norm_contracts.comp_envelope(hourly) == ""
+
+
+def test_an_hourly_band_beside_an_annual_one_is_excluded_not_merged():
+    assert norm_contracts.comp_envelope("$200-250K · $27-44/hour") == "200-250"
+    assert norm_contracts.comp_envelope("$27-44/hour · $200-250K") == "200-250"
+
+
+@pytest.mark.parametrize("comp_text,expected", [
+    # THE CONVENTION: floor the low, ceil the high — never overstates the floor,
+    # never understates the ceiling (the honest direction for a candidate).
+    ("139,764–287,749", "139-288"),      # Pinterest shape: 139.764 floors, 287.749 ceils
+    ("$181.9K - $214K", "181-214"),      # decimal low floors, like 122.4 -> 122
+    ("$122.4-170K", "122-170"),
+    ("$150,200 - $202,400", "150-203"),
+    ("$128,900 - $197,100", "128-198"),
+    ("$215,000 - $264,200", "215-265"),
+])
+def test_the_floor_low_ceil_high_convention_is_consistent(comp_text, expected):
+    assert norm_contracts.comp_envelope(comp_text) == expected
+
+
+def test_the_live_shapes_survive_the_whole_normalize_pass(tmp_path):
+    """End-to-end: a capture carrying the `/yr` shape yields the full envelope in the
+    tracker, not the truncated one."""
+    _write_comp_capture(tmp_path, "Fetchco", "Base Salary: $181.9K/yr - $214K/yr")
+    _write_comp_capture(tmp_path, "Foodsmartco", "Base Salary: $165K/yr - $205K/yr")
+    rankings = tmp_path / "1 - Rankings"
+    rankings.mkdir()
+    csv_path = rankings / "b-rankings.csv"
+    write_csv(csv_path, [make_row(company="Fetchco", comp="182-214", posted="2026-06-13"),
+                         make_row(company="Foodsmartco", comp="165-205", posted="2026-06-13")])
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+    assert by_name(rows[0], rows[1])["Comp Range"] == "181-214"
+    assert by_name(rows[0], rows[2])["Comp Range"] == "165-205"
+    # Idempotent: a second pass does not drift.
+    norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        rows2 = list(csv.reader(f))
+    assert by_name(rows2[0], rows2[1])["Comp Range"] == "181-214"
+    assert by_name(rows2[0], rows2[2])["Comp Range"] == "165-205"
