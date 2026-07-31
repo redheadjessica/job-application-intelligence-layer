@@ -1635,8 +1635,8 @@ def test_regenerating_the_xlsx_writes_repairs_back_to_a_legacy_csv(tmp_path):
     ("Zone A: $200-250K · Zone B: $180-225K", "180-250"),
     # Headspace-shaped two-band with a decimal low.
     ("$122.4-170K · $156.4-190K", "122-190"),
-    # Flex-shaped two-tier.
-    ("Tier 1: $216-270K · Tier 2: $183.6-229.5K", "183-270"),
+    # Flex-shaped two-tier (183.6 rounds UP to 184 under standard rounding).
+    ("Tier 1: $216-270K · Tier 2: $183.6-229.5K", "184-270"),
     # ClassDojo-shaped two-region.
     ("US: $215-250K · Other: $183-212.5K", "183-250"),
     # Full-dollar legacy shapes.
@@ -1674,7 +1674,7 @@ def _write_comp_capture(batch_root, company, base_salary_block):
     # Inline decimal band.
     ("Base Salary: $122.4-170K", "122-170", "122-170"),
     # The scorer excluded a listed band entirely — the standing-rule case.
-    ("Base Salary:\n- NYC: $216-270K\n- Elsewhere: $183.6-229.5K", "216-270", "183-270"),
+    ("Base Salary:\n- NYC: $216-270K\n- Elsewhere: $183.6-229.5K", "216-270", "184-270"),
 ])
 def test_the_envelope_overrides_the_scorers_band_choice(tmp_path, block, scorer_value, expected):
     _write_comp_capture(tmp_path, "Acme", block)
@@ -1927,7 +1927,7 @@ def test_neither_ats_date_feeds_scoring_or_ranking():
 # ===========================================================================
 @pytest.mark.parametrize("comp_text,expected", [
     # The two exact live shapes.
-    ("$181.9K/yr - $214K/yr", "181-214"),
+    ("$181.9K/yr - $214K/yr", "182-214"),
     ("$165K/yr - $205K/yr", "165-205"),
     # A K scale on BOTH endpoints (this failed too, unreported).
     ("$236K – $296K", "236-296"),
@@ -1940,7 +1940,11 @@ def test_neither_ats_date_feeds_scoring_or_ranking():
     ("USD 182,000-227,000", "182-227"),
 ])
 def test_per_endpoint_scale_and_period_suffixes_parse(comp_text, expected):
-    assert norm_contracts.comp_envelope(comp_text) == expected
+    got = norm_contracts.comp_envelope(comp_text)
+    assert got == expected
+    # A genuine range must NEVER collapse into a repeated single value.
+    lo, hi = got.split("-")
+    assert lo != hi, f"{comp_text!r} collapsed to a single endpoint"
 
 
 @pytest.mark.parametrize("hourly", [
@@ -1960,17 +1964,62 @@ def test_an_hourly_band_beside_an_annual_one_is_excluded_not_merged():
 
 
 @pytest.mark.parametrize("comp_text,expected", [
-    # THE CONVENTION: floor the low, ceil the high — never overstates the floor,
-    # never understates the ceiling (the honest direction for a candidate).
-    ("139,764–287,749", "139-288"),      # Pinterest shape: 139.764 floors, 287.749 ceils
-    ("$181.9K - $214K", "181-214"),      # decimal low floors, like 122.4 -> 122
-    ("$122.4-170K", "122-170"),
-    ("$150,200 - $202,400", "150-203"),
-    ("$128,900 - $197,100", "128-198"),
-    ("$215,000 - $264,200", "215-265"),
+    # THE CONVENTION (revised 2026-07-31, superseding floor-low/ceil-high): STANDARD
+    # rounding to the nearest whole thousand on BOTH endpoints, halves UP. Lower
+    # endpoints are not floored; upper endpoints are not ceiled.
+    ("139,764–287,749", "140-288"),      # Pinterest shape: .764 and .749 both round up
+    ("$181.9K - $214K", "182-214"),
+    ("$122.4-170K", "122-170"),          # .4 rounds DOWN — no flooring bias
+    ("$150,200 - $202,400", "150-202"),  # both endpoints round down
+    ("$128,900 - $197,100", "129-197"),
+    ("$215,000 - $264,200", "215-264"),
 ])
-def test_the_floor_low_ceil_high_convention_is_consistent(comp_text, expected):
+def test_the_standard_rounding_convention_is_consistent(comp_text, expected):
     assert norm_contracts.comp_envelope(comp_text) == expected
+
+
+@pytest.mark.parametrize("value,expected", [
+    (181.9, 182), (139.764, 140), (287.749, 288), (122.4, 122),
+    # A half rounds UP, never to-even. Python's built-in round() gives 182 for
+    # 182.5 (banker's), so this pair proves half-even is not in play.
+    (181.5, 182), (182.5, 183), (1.5, 2), (0.5, 1),
+    # Exact whole thousands pass through untouched.
+    (165.0, 165), (214.0, 214), (296.0, 296),
+])
+def test_round_thousands_is_half_up_not_bankers(value, expected):
+    assert norm_contracts.round_thousands(value) == expected
+
+
+def test_the_half_up_rule_differs_from_pythons_builtin_round():
+    """Guard against someone "simplifying" the helper back to round()."""
+    assert norm_contracts.round_thousands(182.5) == 183
+    assert round(182.5) == 182          # the trap this helper exists to avoid
+    assert norm_contracts.round_thousands(181.5) == round(181.5) == 182
+
+
+@pytest.mark.parametrize("comp_text,expected", [
+    # Her acceptance list, end to end through the envelope.
+    ("$181.9K – $214K", "182-214"),
+    ("$165K – $205K", "165-205"),
+    ("$236K – $296K", "236-296"),
+    ("139,764–287,749", "140-288"),
+    # A half-thousand endpoint inside a real band rounds up.
+    ("$182.5K – $296.5K", "183-297"),
+])
+def test_the_revised_convention_acceptance_cases(comp_text, expected):
+    assert norm_contracts.comp_envelope(comp_text) == expected
+
+
+def test_rounding_happens_after_envelope_selection_not_before():
+    """Order matters: the lowest low and highest high are chosen across bands FIRST,
+    then each selected endpoint is rounded — never rounded per-band then compared."""
+    # Lowest low is 183.6 (rounds to 184); highest high is 270. A per-band rounding
+    # that then compared rounded values would give the same here, so use a case where
+    # the winning endpoints come from DIFFERENT bands and carry fractions.
+    assert norm_contracts.comp_envelope(
+        "Zone A: $216-270.4K · Zone B: $183.6-229.5K") == "184-270"
+    assert norm_contracts.comp_envelope(
+        "Zone A: $216-270.6K · Zone B: $183.4-229.5K") == "183-271"
 
 
 def test_the_live_shapes_survive_the_whole_normalize_pass(tmp_path):
@@ -1986,11 +2035,11 @@ def test_the_live_shapes_survive_the_whole_normalize_pass(tmp_path):
     norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
-    assert by_name(rows[0], rows[1])["Comp Range"] == "181-214"
+    assert by_name(rows[0], rows[1])["Comp Range"] == "182-214"
     assert by_name(rows[0], rows[2])["Comp Range"] == "165-205"
     # Idempotent: a second pass does not drift.
     norm_contracts.normalize_rankings_csv(str(csv_path), CFG, out=lambda _m: None)
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows2 = list(csv.reader(f))
-    assert by_name(rows2[0], rows2[1])["Comp Range"] == "181-214"
+    assert by_name(rows2[0], rows2[1])["Comp Range"] == "182-214"
     assert by_name(rows2[0], rows2[2])["Comp Range"] == "165-205"

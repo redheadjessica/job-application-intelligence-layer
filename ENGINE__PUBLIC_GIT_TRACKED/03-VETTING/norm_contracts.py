@@ -71,6 +71,7 @@ import json
 import re
 import sys
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 # ---- Working Location colors — EXACT hexes from the spec (uppercase for openpyxl). ----
@@ -1041,14 +1042,29 @@ def base_salary_text_from_capture(text):
     return "", False
 
 
+def round_thousands(value):
+    """A thousands figure rounded to the nearest whole thousand, HALF UP.
+
+    Deliberately not Python's `round()`, which is banker's (half-to-even) and would
+    render `182.5` as `182`. `Decimal(str(...))` also avoids the binary-float artifacts
+    that make `math.floor(x + 0.5)` unreliable at the boundary.
+    """
+    return int(Decimal(str(value)).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
 def comp_envelope(comp_text):
     """`lo-hi` in whole thousands across EVERY annual band in the text, or "".
 
-    ROUNDING CONVENTION (fixed 2026-07-31): floor the low, ceil the high. It never
-    overstates the floor nor understates the ceiling, so a candidate reading the cell
-    is never told the band is better than it is — the honest direction. `139,764–287,749`
-    is therefore `139-288` (not `140-288`), and `$181.9K` floors to `181` exactly as
-    `$122.4K` floors to `122`. Endpoints may come from DIFFERENT bands.
+    ROUNDING CONVENTION (revised 2026-07-31, superseding floor-low/ceil-high):
+    STANDARD rounding to the nearest whole thousand on BOTH endpoints, with a half
+    rounding UP (`$181.9K` -> 182, `$139,764` -> 140, `$287,749` -> 288, `$182.5K` ->
+    183). Exact whole thousands pass through untouched (`$165K` -> 165). Lower
+    endpoints are NOT floored and upper endpoints are NOT ceiled.
+
+    ORDER OF OPERATIONS (unchanged): the ENVELOPE is selected first — the lowest
+    applicable lower endpoint and the highest applicable upper endpoint across the
+    applicable bands, which may come from DIFFERENT bands — and only the two selected
+    endpoints are then rounded for display.
     """
     text = str(comp_text or "")
     lows, highs = [], []
@@ -1076,8 +1092,9 @@ def comp_envelope(comp_text):
                     highs.append(v)
     if not lows:
         return ""
-    import math
-    return f"{int(math.floor(min(lows)))}-{int(math.ceil(max(highs)))}"
+    # Envelope FIRST (lowest applicable low, highest applicable high — possibly from
+    # different bands), THEN round each selected endpoint for display.
+    return f"{round_thousands(min(lows))}-{round_thousands(max(highs))}"
 
 
 def comp_envelope_from_capture(job_file, base_dir=None):

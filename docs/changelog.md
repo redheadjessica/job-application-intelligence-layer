@@ -11,6 +11,38 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-31 — Comp rounding: standard half-up, superseding floor-low/ceil-high
+
+Revised convention, superseding the floor-low/ceil-high rule pinned earlier today: **both** envelope
+endpoints are now rounded to the nearest whole thousand by STANDARD rounding, with a half rounding
+**up**. `$181.9K` → 182, `$139,764` → 140, `$287,749` → 288, `$182.5K` → 183. Exact whole thousands
+pass through untouched (`$165K` → 165, never 166). Lower endpoints are no longer floored and upper
+endpoints are no longer ceiled.
+
+- **Half-up is implemented explicitly**, via `Decimal` + `ROUND_HALF_UP` in a new
+  `round_thousands()`. Python's built-in `round()` is banker's (half-to-even) and renders `182.5` as
+  `182`; `math.floor(x + 0.5)` is vulnerable to binary-float artifacts at the boundary. A test pins
+  the divergence from `round()` directly, so nobody "simplifies" the helper back.
+- **Order of operations unchanged:** the envelope is selected FIRST — the lowest applicable lower
+  endpoint and the highest applicable upper endpoint, which may come from different bands — and only
+  the two selected endpoints are then rounded for display. Pinned with a case where rounding
+  per-band before comparing would give a different answer.
+- **The parser fix stands**, including its guarantee that a genuine range never collapses into a
+  repeated single value — now asserted on every per-endpoint-scale fixture rather than only the two
+  live shapes.
+- Hourly/monthly/weekly bands remain excluded from the annual envelope, unconverted.
+- The `N-N` display format is unchanged.
+
+Fixture expectations updated by the supersession: `139,764–287,749` 139-288 → **140-288**;
+`$181.9K–$214K` (and the `/yr` live shape, and its end-to-end tracker test) 181-214 → **182-214**;
+`$183.6–229.5K` two-tier envelopes 183-270 → **184-270** (two fixtures); `$150,200–$202,400`
+150-203 → **150-202**; `$128,900–$197,100` 128-198 → **129-197**; `$215,000–$264,200` 215-265 →
+**215-264**. `$122.4-170K` stays 122-170 (a `.4` rounds down — the new rule has no flooring bias).
+Notably the four full-dollar cases now agree with the values already stored in the live tracker,
+which had been produced by standard rounding all along.
+
+Suite: 713 → 731 green.
+
 ## 2026-07-31 — Both ATS date columns now share one `Unknown` convention (supersedes the asymmetry)
 
 Revised spec, superseding the blank-vs-`Unknown` split shipped earlier today: **both** ATS date
