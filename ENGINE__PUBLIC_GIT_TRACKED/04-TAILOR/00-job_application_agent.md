@@ -1486,12 +1486,19 @@ Reading these one at a time is the single largest source of avoidable latency. A
 
 ## Conditional Reads (Only After the Parallel Batch)
 
+- **⭐ Deep canonical reference files — `03*-canonical.md` and their companions (e.g. `03-ascend-canonical.md`, `03b-ascend-north-star.md`, `03c-ridg-canonical.md`).** READ the one(s) covering any experience this resume will feature prominently — i.e. whenever that role, venture, or client engagement is getting more than a passing bullet. Read them in a second batch, right after the core batch and before drafting bullets.
+  - **These are APPROVED EVIDENCE, not maintenance files.** They carry the full, verified detail behind an experience — what actually happened, at what scale, with what outcome, attributed to the candidate versus co-contributors, plus the boundaries on what must not be claimed. `04-experience-bank.md` holds a *curated selection* of pre-written bullets for that experience; the canonical file holds the evidence base those bullets were drawn from, which is always larger.
+  - **This is what makes net-new bullets possible.** When the JD asks for something no pre-written bullet covers, the canonical file is where the material to compose one lives. Without it you are limited to recombining the bullets someone already wrote, and a rich body of evidence stays invisible — the exact failure this rule exists to prevent. Composition still follows the normal rules: recompose approved descriptors, no new factual claims, and any net-new bullet is flagged **Suggested New**.
+  - **Honor their internal evidence tags.** These files mark claims by strength (proven / co-attributed / testimony / not supported) and carry explicit do-not-claim lists and confidentiality rules. Those bind: a "not supported" item never becomes a bullet, however well it fits the JD.
+  - How to know which exist: `03-approved-truths-and-boundary-rules.md` names them inline (e.g. "mandatory reading when X appears"), and `04-experience-bank.md` cross-links them from the relevant role section.
 - prior resume base file — only if needed, and only after the core batch. Read it with the format-appropriate tool (`.docx` via the docx skill, `.pdf` via the pdf skill, `.txt`/`.md` read directly; a `.pages` base can't be read directly — rely on the bullet previews), not a sub-agent. Skip entirely if `02-resume-index.md` has sufficient bullet previews for the selected anchor.
 - `10-bio-library.md` — only when the candidate includes `[USE BIO]` or directly asks for longer-form narrative/bio support. Otherwise do not open it.
 
 **Full reference files — do not read during standard generation runs:**
 - `05a-summary-library.md` (full source history and variant tracking)
 - `06a-skills-library.md` (full calibration notes and assessment log)
+
+⚠️ **The `03*-canonical.md` files are NOT in that maintenance bucket** — they superficially resemble it (long, reference-shaped, one topic) but they are primary approved evidence and are read during normal generation whenever their subject appears. `05a`/`06a` are *history and calibration logs about the system's own past output*; canonical files are *the record of what the candidate actually did*. Never skip a canonical file on the theory that it is a reference file.
 
 Prefer previously generated clean system files over raw extraction or audit files during normal runs. Do not use maintenance files as primary sources unless the candidate explicitly requests maintenance, audit, or reconciliation work.
 
