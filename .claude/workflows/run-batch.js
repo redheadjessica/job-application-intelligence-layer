@@ -38,7 +38,13 @@ const RESUMES_DIR = `${REVIEW_ROOT}/2 - Tailored Resumes`
 
 // ---- Phase 1: vet (always) — rankings land in "1 - Rankings/", named after the batch ----
 phase('Vet')
-const vet = await workflow('vet-jobs', { folder: SOURCE, outDir: RANKINGS_DIR, batchName: BATCH })
+// Delegate to vet-jobs by scriptPath, NOT by name: the workflow-name registry is populated from
+// scripts that PARSE at scan time and is cached per session, so vet-jobs can silently drop out of it
+// (it did, after an earlier parse error) and never re-register mid-session. scriptPath resolves by
+// FILE and does not depend on the registry, so the production path is deterministic across sessions.
+// vet-jobs now scores Profile Fit INLINE (no nested child workflow), so this stays within the
+// one-level nesting limit: run-batch -> vet-jobs, and nothing deeper.
+const vet = await workflow({ scriptPath: '.claude/workflows/vet-jobs.js' }, { folder: SOURCE, outDir: RANKINGS_DIR, batchName: BATCH })
 if (!vet || vet.error || !Array.isArray(vet.ranked) || vet.ranked.length === 0) {
   return { stopped_after: 'vet', vet }
 }

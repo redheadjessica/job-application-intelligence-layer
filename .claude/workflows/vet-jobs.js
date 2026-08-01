@@ -61,10 +61,14 @@ const SCORE_SCHEMA = {
   required: [
     'content_verified', 'content_issue',
     'company', 'title_and_link', 'location', 'comp_range', 'lane', 'lane_fit',
-    'desire_score', 'market_perception_score', 'company_style_score', 'practicality_score',
+    'desire_score', 'company_style_score', 'practicality_score',
     'comp_lifestyle_fit_notes',
-    'mission_fit_notes', 'scope_fit_notes', 'top_reasons', 'top_concerns',
+    'mission_fit_notes', 'top_reasons', 'top_concerns',
   ],
+  // NOTE: market_perception_score (Profile Fit) and its scope_fit_notes are DELIBERATELY
+  // absent — Profile Fit is scored by the isolated, reliability-gated `score-profile-fit`
+  // workflow (delegated below), never in this bundled multi-dimension call. Bundling it here
+  // was the root cause of the 07-30 harsh-outlier failure (see the production failure analysis).
   properties: {
     content_verified: { type: 'boolean' },
     content_issue: { type: ['string', 'null'] },
@@ -84,12 +88,10 @@ const SCORE_SCHEMA = {
       },
     },
     desire_score: { type: 'integer', minimum: 0, maximum: 100 },
-    market_perception_score: { type: 'integer', minimum: 0, maximum: 100 },
     company_style_score: { type: 'integer', minimum: 0, maximum: 100 },
     practicality_score: { type: 'integer', minimum: 0, maximum: 100 },
     comp_lifestyle_fit_notes: { type: 'string' },
     mission_fit_notes: { type: 'string' },
-    scope_fit_notes: { type: 'string' },
     top_reasons: { type: 'string' },
     top_concerns: { type: 'string' },
   },
@@ -245,12 +247,11 @@ content_issue if you cannot find genuine posting content, even if the file is la
 content_verified is true, set content_issue to null and proceed normally.
 
 Scoring rules:
-- Four scores, each an INTEGER 0-100: desire_score, market_perception_score, company_style_score, practicality_score.
-  - desire_score: how much the candidate would want this role — mission fit, role excitement, domain alignment, personal pull. Compute the scoring card's five Desire sub-factors, THEN apply the card's "⭐ Strategic Career Leverage" rule: a bounded uplift (None/Some/Strong/Exceptional) for a role whose actual mandate would build the specific missing evidence named in the candidate profile's "Target Career Direction / Primary Strategic Gaps / High-Leverage Bridge Work" fields — all three of the card's tests (named-gap, ownership, future-legibility) must hold, it's capped at 85, it can't rescue disliked work, and it NEVER touches Profile/Style/Practicality. If the profile has no target-direction/gaps fields, apply no leverage. When it materially moves the score, note it in one clause of mission_fit_notes (the `Your Desire Score Notes` column) — naming the level and the evidence in that same clause.
-  - market_perception_score: how strong a candidate they would appear to this employer — experience match, credibility, likely recruiter reaction.
+- THREE scores, each an INTEGER 0-100: desire_score, company_style_score, practicality_score. Do NOT score Profile Fit / market_perception here — that dimension is scored separately by the isolated Profile-Fit path.
+  - desire_score: how much the candidate would want this role — mission fit, role excitement, domain alignment, personal pull. Compute the scoring card's five Desire sub-factors, THEN apply the card's "⭐ Strategic Career Leverage" rule: a bounded uplift (None/Some/Strong/Exceptional) for a role whose actual mandate would build the specific missing evidence named in the candidate profile's "Target Career Direction / Primary Strategic Gaps / High-Leverage Bridge Work" fields — all three of the card's tests (named-gap, ownership, future-legibility) must hold, it's capped at 85, it can't rescue disliked work, and it NEVER touches Profile/Style/Practicality. If the profile has no target-direction/gaps fields, apply no leverage. When it materially moves the score, note it in one clause of mission_fit_notes (the \`Your Desire Score Notes\` column) — naming the level and the evidence in that same clause.
   - company_style_score: how well the company culture, stage, and working style fit the candidate.
   - practicality_score: how livable/practical the job is — comp relative to the candidate's targets, location/remote fit, logistics, quality of life. Use the <preferences> block (comp target/floor, location arrangement ratings) when present to sharpen this; if preferences are absent, fall back to the profile prose. Preferences inform — they do not override the full rubric/profile.
-- Do NOT compute the final score or status — that is handled downstream. Just return the four sub-scores and the fields below.
+- Do NOT compute the final score or status — that is handled downstream. Just return the three sub-scores and the fields below.
 - Be decisive. Don't over-index on title. Reflect comp/location tradeoffs in practicality_score, not by skipping.
 - comp_range: the OUTER ENVELOPE of the APPLICABLE base-salary bands — min(applicable lows)-max(applicable highs), in whole thousands, no $ or commas (e.g. 190-210, or 125-250 where the endpoints come from DIFFERENT bands); "??" if unknown. A band is APPLICABLE when it covers a way the candidate could genuinely take the job: their remote state, an acceptable home-metro office, or a configured relocation option; when the posting shows multiple geo bands and the applicable one can't be resolved, include them all; when multiple levels are genuinely unresolved (the posting might hire at either), include both. EXCLUDE: the candidate's own expectations (never employer data); bands for locations the candidate can't take; bands for unrelated roles listed on the same page; clearly inapplicable levels; and bonus/commission/equity/OTE figures — base salary only. Never output a midpoint, the first tier shown, the first city's band, or one model-picked band when several apply. **AUTHORITATIVE SOURCE: prep writes a "COMPENSATION" section near the top of the file (before "--- JOB TEXT START ---") with a "Base Salary:" bullet list (one bullet per geo/level band, full dollar amounts), an "Additional Compensation:" line, and a "Benefits:" line. When Base Salary lists real dollar bands, treat those bullets as ground truth — apply the applicability filter above to THOSE bands and take the envelope; do not second-guess them from body prose. When Base Salary reads "Employer Did Not Mention Compensation." the employer genuinely didn't publish comp → "??". When it reads "Could Not Verify." or "Conflicting Employer Information: …", use "??" and note the uncertainty in top_concerns. "Additional Compensation" (bonus/commission/equity) is never part of comp_range.** (norm_contracts.py mechanically enforces the N-N format after scoring; the applicability judgment is yours.)
 - location: output ONLY the canonical Working Location grammar — exactly one of: "Remote" · "Remote (<detail>)" (e.g. "Remote (states: NY, CA)" when remote is restricted to specific US states) · "Remote or IRL <cities> - <cadence>" · "IRL <cities> - <cadence>" · "Unknown". Every known non-remote location MUST carry the literal "IRL " prefix — NEVER bare "Hybrid", "Onsite", "NYC/SF - 3 days", or "New York hybrid". <cadence> is "N days" for an exact required day count; "N+ days" when the posting states an OPEN-ENDED minimum ("3+ days", "at least 3 days", "a minimum of 3 days") — preserve the open-endedness, "3 days" and "3+ days" are DIFFERENT values; or "unknown days" when the city is known but the day count is not. Use the "Remote or IRL <cities> - <cadence>" form ONLY when remote is genuinely available to the applicant AND an office option also exists — never infer remote from "flexible", "distributed", or "remote-friendly". Abbreviate major cities to their common short form (NYC, SF, LA, DC — only when unambiguous). If the posting names MULTIPLE genuinely-available office cities, keep them ALL, joined with "/" in the candidate's city_priority order from <preferences> (priority cities first, in that order; any other named cities after, in the posting's own order) — e.g. "IRL NYC/SF/Austin - 3 days"; never collapse a multi-office list to one city. "Onsite <city>" means "IRL <city> - 5 days" ONLY when full-time attendance is explicitly established; otherwise "IRL <city> - unknown days". If a city/office location is named ANYWHERE in the posting but the arrangement or day count isn't stated, still output "IRL <City> - unknown days" — a named city is real signal; do NOT collapse it to bare "Unknown". "Unknown" ONLY when the posting gives no location signal at all. A location requirement stated in an APPLICATION QUESTION (e.g. "can you attend the office at least 2 days per week?") counts exactly like one stated in the JD and normalizes the same way. **AUTHORITATIVE SOURCE: prep writes a "WORK DETAILS" section near the top of the file (before "--- JOB TEXT START ---") with "Work Arrangement:", "Working Location(s):" and "Office Expectation:" lines — the fetcher's own structured fields. "Working Location(s)" may list MULTIPLE employer office metros (e.g. "Austin, TX; San Francisco Bay Area; New York City; Washington, D.C.") and "Office Expectation" carries the exact cadence (e.g. "At Least 2 Days Per Week" or "3 Days Per Week, Tuesday–Thursday"). Treat those lines as authoritative ground truth for the employer's eligible cities + day-count; don't second-guess them from body text. Their honest-distinction values mean exactly what they say: "Employer Did Not Mention Working Location." → the employer published no location; "Could Not Verify." → the capture failed (read the body prose as fallback and note the uncertainty); "Conflicting Employer Information: …" → two sources disagree (both readings shown — reflect the uncertainty); "Not Specified" (Office Expectation) → no cadence was stated, never invent one. Then express the result in the canonical grammar above (an "At Least 2 Days Per Week" expectation is open-ended → "2+ days").** For a bare "Location: <City>" line found INSIDE the job description body (not the structured WORK DETAILS section), treat it as the company HQ, not a relocation requirement, unless the posting actually requires on-site presence. (A mechanical normalizer, ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py, re-validates this value after scoring — emit exactly the grammar above so nothing needs repair.)
@@ -258,9 +259,9 @@ Scoring rules:
 - lane: the job's category as "<Bucket> - <Descriptor>", in the job's OWN terms — NOT mapped to the candidate's lanes. Bucket = closest fit from Health / Consumer / Work / Other (exactly "Work", NEVER "Work Tools"; add a new bucket only if truly none fit — keep this set small and reusable). Descriptor = a short 1-2 word phrase, e.g. "Health - DTC Supplements", "Health - Provider Tools", "Health - Consumer Wellness", "Consumer - Home Sharing", "Work - Collaboration", "Work - Productivity", "Work - Project Management", "Work - Legal", "Work - Consumer Research", "Other - Fintech". Reuse an existing descriptor for the same kind of job rather than inventing near-duplicate wording — consistency across jobs matters more than precision on any one job. Mental/behavioral health jobs MUST use the exact string "Health - Mental Health" — no extra qualifier words appended.
 - lane_fit: how that job-lane maps to the CANDIDATE's priority lanes — candidate-relative and honest. { primary_lane: EXACTLY one of the candidate's priority-lane names (verbatim from the profile), or "Outside lanes" if it fits none; secondary_lane (or null); confidence ("high"/"medium"/"low"); note (one short phrase) }. If the role is not one of the candidate's lanes, primary_lane = "Outside lanes" (even when the domain sounds related). Do NOT inflate — it is surfaced for the candidate, not added to the score.
 - comp_lifestyle_fit_notes: the RATIONALE BREAKDOWN behind practicality_score — the prose companion to that score, exactly like mission_fit_notes is to the mission judgment. Terse pipe-separated parts in the order cash | location | equity+bonus+benefits, each naming the sub-points it earned and the one-phrase reason, e.g. \`Cash 26/40 (midpoint ~$188K) | Location 30/30 (fully remote) | Equity+bonus+401k 19/20 (equity stated; bonus stated; 401k stated)\`. Use whatever sub-factor names and point totals the candidate's scoring card actually defines for this dimension; if the card defines no sub-factors, write the same three-part breakdown in plain phrases without point math. This is the ONLY field where that breakdown belongs. Two columns it must NEVER be written into: **comp_range** stays the mechanical \`N-N\` (or \`??\`) value described above — never prose, never a note; and the **Comp Fit** column is MACHINE-DERIVED downstream from the normalized comp range by norm_contracts.comp_fit_label() — you do not produce it at all, and anything prose-like aimed at it is destroyed on the next normalization pass.
-- mission_fit_notes / scope_fit_notes: ONE plain-English sentence each, written the way you'd say it out loud — no sub-factor math, no "=", "/", or "+" notation, no "Mission 27/30 + Role 16/30..." breakdowns. They land in the `Your Desire Score Notes` and `Profile Score Notes` columns. Keep the reasoning in that one sentence; there is no separate detail field.
+- mission_fit_notes: ONE plain-English sentence, the way you'd say it out loud — no sub-factor math, no "=", "/", or "+" notation. It lands in the \`Your Desire Score Notes\` column. (The \`Profile Score Notes\` column is written by the isolated Profile-Fit phases, not here.)
 - top_reasons / top_concerns: semicolon-separated phrases, concise and concrete.
-- If PDF extraction is imperfect, make a best effort and note it in scope_fit_notes; do not fail.`,
+- If PDF extraction is imperfect, make a best effort and note it in top_concerns; do not fail.`,
     { phase: 'Score', model: 'sonnet', schema: SCORE_SCHEMA, label: job.file }
   )
   if (!result) return null
@@ -270,6 +271,135 @@ Scoring rules:
 const rows = scored.filter(Boolean)
 if (rows.length === 0) {
   return { error: 'All scoring agents returned empty.', folder: discovery.root }
+}
+
+// ---- Profile Fit: DELEGATED to the isolated, reliability-gated path (never the bundled call) ----
+// Root-cause fix for the 07-30 harsh outliers (PROFILE-FIT-PRODUCTION-FAILURE-ANALYSIS.md): Profile
+// Fit is scored ALONE, walking the full §2 procedure, behind a deterministic risk gate + a bounded
+// second blind pass + adjudication. This is the ONLY production path for the dimension.
+// ---- Profile Fit: INLINE isolated phases (NOT a nested child workflow) ----
+// run-batch -> vet-jobs -> (nested score-profile-fit) is TWO levels of workflow nesting, which the
+// engine forbids (one level max). So the isolated Profile-Fit scoring lives HERE, inline, and stays
+// logically isolated all the same: each pass sees ONE posting + the §2 rubric + the profile, never
+// the other dimensions or any prior score. Keep this in sync with .claude/workflows/score-profile-fit.js
+// (its standalone twin, used for isolated validation). Bundling Profile Fit with the other three
+// dimensions was the root cause of the 07-30 outliers — do not undo this isolation.
+const PF_LEDGER_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['hiring_thesis', 'centrals', 'narrative_coherence', 'misclassification_check',
+    'compounding_applied', 'band_setter', 'band', 'score', 'profile_notes',
+    'hiring_thesis_ambiguous', 'centrality_ambiguous', 'independent_gap_ambiguity', 'posting_requirement_conflict'],
+  properties: {
+    hiring_thesis: { type: 'string' },
+    centrals: { type: 'array', items: { type: 'object', additionalProperties: false,
+      required: ['requirement', 'classification', 'grade', 'evidence'],
+      properties: { requirement: { type: 'string' }, classification: { type: 'string', enum: ['thesis-defining', 'supporting'] },
+        grade: { type: 'string', enum: ['direct', 'transferable', 'light', 'absent'] }, evidence: { type: 'string' } } } },
+    narrative_coherence: { type: 'string' }, misclassification_check: { type: 'string' },
+    compounding_applied: { type: 'boolean' }, band_setter: { type: 'string' }, band: { type: 'string' },
+    score: { type: 'integer', minimum: 0, maximum: 100 }, profile_notes: { type: 'string' },
+    hiring_thesis_ambiguous: { type: 'boolean' }, centrality_ambiguous: { type: 'boolean' },
+    independent_gap_ambiguity: { type: 'boolean' }, posting_requirement_conflict: { type: 'boolean' },
+  },
+}
+const PF_ADJ_SCHEMA = { type: 'object', additionalProperties: false,
+  required: ['hiring_thesis', 'band_setter', 'band', 'score', 'profile_notes', 'rejected_interpretations'],
+  properties: { hiring_thesis: { type: 'string' }, band_setter: { type: 'string' }, band: { type: 'string' },
+    score: { type: 'integer', minimum: 0, maximum: 100 }, profile_notes: { type: 'string' }, rejected_interpretations: { type: 'string' } } }
+const PF_AGREE_SCHEMA = { type: 'object', additionalProperties: false, required: ['substantively_agree', 'reason'],
+  properties: { substantively_agree: { type: 'boolean' }, reason: { type: 'string' } } }
+function pfScorerPrompt(job, passId) {
+  return 'You are an INDEPENDENT, BLIND Profile-Fit scorer. Score exactly ONE dimension — "How They May See Your Profile" (Profile Fit) — for ONE job, applying the documented procedure faithfully. Profile Fit ONLY; no other dimension. Independent pass id: ' + passId + ' (ignore it beyond making this run independent).\n\n'
+    + 'READ ONLY:\n1. The "Profile Fit" / "How They May See Your Profile" section (§2) of "' + RUBRIC + '" — walk Step 0->5: HIRING THESIS quoting the posting; enumerate CENTRAL requirements; Centrality Test; classify THESIS-DEFINING vs SUPPORTING; grade evidence direct/transferable/light/absent with NAMED evidence; mandatory MISCLASSIFICATION check; narrative coherence; compounding clause (count one gap once); Step 3 "the WEAKEST thesis-defining central sets the band"; band table 97-100/82-96/68-81/50-67/30-49/0-29; Rules A/B/C; position within band.\n'
+    + '2. Part 1 of "' + PROFILE + '" — Career Identity, Throughlines, Common Misclassifications. Reason from these, not bullet-to-bullet resemblance.\n'
+    + '3. The job posting — "' + job.abs_path + '".\n\n'
+    + 'CLUSTER & AI-MATURITY RULE (enumeration, NOT grade inflation): When a posting expresses ONE specialization through several related bullets, enumerate it as a single coherent requirement CLUSTER — do not collapse the role into its single hardest sub-clause, do not treat multiple phrasings of the same specialization as independent compounding gaps, and do not erase genuine adjacent evidence by grading it absent. BUT evaluating related requirements as one cluster changes how the requirement is ENUMERATED, not how strongly the candidate evidence is GRADED. Grade the cluster at the HIGHEST maturity level the candidate has ACTUALLY demonstrated; do NOT promote light to transferable, or transferable to direct, merely because the candidate has several adjacent activities or because the posting states the specialization across several bullets. "direct" requires documented OWNERSHIP at substantially the same operating level and environment the role demands: hands-on experimentation, founder/personal-scale building, prototypes, internal tools, or adjacent product work may be meaningful "light" or "transferable" evidence but are NOT automatically "direct" evidence of sustained production deployment, mature evaluation systems, reliability operations, or large-scale consumer/production ownership. When the posting requires multiple facets of a mature AI specialization, set the overall cluster grade from the candidate demonstrated operating MATURITY — do not grade from the strongest adjacent facet while ignoring the missing production-scale facets. For any AI/ML requirement, locate the candidate evidence on whatever AI-maturity scale the profile provides and STATE that level in the ledger evidence text.\n\n'
+    + 'STRICT BLINDNESS — do NOT read any rankings/workbook/tracker/backup or any prior score; do NOT consider Desire, Culture, Practicality, comp, lifestyle, application status, the existing ranking, or the candidate emotional interest. Score purely from the three sources above.\n\n'
+    + 'Return the ledger: hiring_thesis; centrals[] (requirement + THESIS-DEFINING/SUPPORTING + grade + named evidence); narrative_coherence; misclassification_check; compounding_applied; band_setter (the single thesis-defining central or independent compound that set the band); band; score (integer 0-100); profile_notes (ONE durable sentence naming the band-setter). Plus four semantic flags set true ONLY when genuinely ambiguous: hiring_thesis_ambiguous (thesis spans 2+ loosely-related specializations); centrality_ambiguous (a central thesis-defining-vs-supporting call is a coin-flip); independent_gap_ambiguity (two weak centrals might be one gap or two); posting_requirement_conflict (posting unclear whether the band-setting item is central or bonus).'
+}
+function pfAdjPrompt(job, primary, second) {
+  return 'You are the ADJUDICATOR for one job Profile Fit score. Two independent blind scorers materially disagreed. Resolve on the evidence — do NOT average, take the median, pick higher/lower, or anchor to any prior value.\n'
+    + 'Job file: ' + job.abs_path + '\nYou may read the §2 procedure in "' + RUBRIC + '", Part 1 of "' + PROFILE + '", and the posting.\n'
+    + 'PRIMARY: ' + JSON.stringify(primary) + '\nSECOND: ' + JSON.stringify(second) + '\n'
+    + 'Decide the contested points and return hiring_thesis; band_setter; band; score; profile_notes (one sentence naming the band-setter); rejected_interpretations.'
+}
+function pfAgreePrompt(a, b) {
+  return 'Two Profile-Fit ledgers for the SAME job scored within a few points but straddle one band boundary. Decide ONLY whether they SUBSTANTIVELY AGREE — same hiring thesis, thesis-defining centrals, pivotal evidence grade, compounding decision, band-setter, and narrative-coherence. Return substantively_agree=true ONLY if ALL match (wording may differ), else false with a one-line reason. Do not re-score.\nLEDGER A: ' + JSON.stringify(a) + '\nLEDGER B: ' + JSON.stringify(b)
+}
+const PF_GRADE_RANK = { absent: 0, light: 1, transferable: 2, direct: 3 }
+const PF_SEMFLAGS = ['hiring_thesis_ambiguous', 'centrality_ambiguous', 'independent_gap_ambiguity', 'posting_requirement_conflict']
+function pfBandOf(s) { return s >= 97 ? '97-100' : s >= 82 ? '82-96' : s >= 68 ? '68-81' : s >= 50 ? '50-67' : s >= 30 ? '30-49' : '0-29' }
+const PF_BAND_ORDER = ['0-29', '30-49', '50-67', '68-81', '82-96', '97-100']
+function pfBandsAdjacent(x, y) { const i = PF_BAND_ORDER.indexOf(x), j = PF_BAND_ORDER.indexOf(y); return i >= 0 && j >= 0 && Math.abs(i - j) === 1 }
+function pfTD(l) { return (l.centrals || []).filter(c => c.classification === 'thesis-defining') }
+function pfWeakestTD(l) { const td = pfTD(l); if (!td.length) return null; return td.reduce((m, c) => (PF_GRADE_RANK[c.grade] ?? 9) < (PF_GRADE_RANK[m.grade] ?? 9) ? c : m).grade }
+const PF_PLACEHOLDER = new Set(['', 'test', 'n/a', 'na', 'tbd', 'todo', 'none', '...'])
+function pfIsPlaceholder(l) { if (!l) return true; for (const f of ['hiring_thesis', 'band_setter']) { const v = String(l[f] || '').trim(); if (PF_PLACEHOLDER.has(v.toLowerCase()) || v.length < 12) return true } if ((l.centrals || []).some(c => String(c.requirement || '').trim().length < 4)) return true; return false }
+function pfDetFlags(l) { const f = []; const td = pfTD(l); const below68 = l.score < 68
+  if (td.some(c => c.grade === 'absent')) f.push('absent_thesis_central')
+  if (td.some(c => c.grade === 'light') && below68) f.push('light_thesis_central_sub68')
+  if (l.compounding_applied === true) f.push('compounding')
+  if (below68 && (l.centrals || []).filter(c => c.grade === 'direct').length >= 2) f.push('sub68_despite_directs')
+  if ((l.centrals || []).some(c => (c.grade === 'direct' || c.grade === 'transferable') && !(c.evidence || '').trim())) f.push('positive_grade_without_evidence')
+  if (!(l.band_setter || '').trim()) f.push('missing_band_setter'); return f }
+function pfSemFlags(l) { return PF_SEMFLAGS.filter(k => l[k] === true) }
+function pfNeedsSecond(l) { const d = pfDetFlags(l), s = pfSemFlags(l); return { need: !!(d.length || s.length), det: d, sem: s } }
+async function pfScorePass(job, passId, phaseName, tries) {
+  tries = tries || 3; let reason = null
+  for (let i = 0; i < tries; i++) {
+    try { const r = await agent(pfScorerPrompt(job, passId + '-r' + i), { schema: PF_LEDGER_SCHEMA, phase: phaseName, label: passId + ':' + job.key + (i ? '#' + i : '') })
+      if (r && !pfIsPlaceholder(r)) return { ledger: r, retries: i }; reason = r ? 'placeholder ledger' : 'null/failed result'
+    } catch (e) { reason = String((e && e.message) || e) } }
+  return { ledger: null, retries: tries, error: reason }
+}
+const PF_CONCURRENCY = 3
+async function pfChunked(items, size, fn) { const out = []; for (let i = 0; i < items.length; i += size) { const res = await parallel(items.slice(i, i + size).map(x => () => fn(x))); for (const r of res) out.push(r) } return out }
+
+phase('ProfileFit')
+const pfJobs = rows.map((r) => ({ key: r.job_file, abs_path: r.abs_path }))
+const pfResults = await pfChunked(pfJobs, PF_CONCURRENCY, async (job) => {
+  const p1 = await pfScorePass(job, 'p1', 'ProfileFit', 3)
+  if (!p1.ledger) return { key: job.key, final_score: null, validation: { second_pass: false, adjudicated: false, primary_retries: p1.retries, failure_reason: p1.error } }
+  const primary = p1.ledger, gate = pfNeedsSecond(primary)
+  let out = { key: job.key, final_score: primary.score, band: pfBandOf(primary.score), status: 'fresh',
+    ledger: primary, profile_notes: primary.profile_notes, risk_flags: [...gate.det, ...gate.sem],
+    validation: { second_pass: false, adjudicated: false, primary_retries: p1.retries }, passes: [primary] }
+  if (!gate.need) return out
+  const p2 = await pfScorePass(job, 'p2', 'ProfileFitVerify', 3)
+  out.validation.second_pass = true; out.validation.second_retries = p2.retries
+  if (!p2.ledger) { out.validation.failure_reason = 'second pass failed: ' + p2.error; return out }
+  const second = p2.ledger; out.passes.push(second)
+  const spread = Math.abs(primary.score - second.score)
+  const sameBand = pfBandOf(primary.score) === pfBandOf(second.score)
+  const adjBand = pfBandsAdjacent(pfBandOf(primary.score), pfBandOf(second.score))
+  const samePivotal = pfWeakestTD(primary) === pfWeakestTD(second)
+  const compDiff = !!primary.compounding_applied !== !!second.compounding_applied
+  const materialNum = spread > 10 || (!sameBand && !adjBand) || compDiff
+  if (!materialNum && spread <= 5 && samePivotal && sameBand) return out
+  if (!materialNum && spread <= 5 && samePivotal && adjBand) {
+    const agree = await agent(pfAgreePrompt(primary, second), { schema: PF_AGREE_SCHEMA, phase: 'ProfileFitVerify', label: 'pfagree:' + job.key })
+    if (agree && agree.substantively_agree) { out.validation.adjacent_band_accepted = true; return out }
+  }
+  const adj = await agent(pfAdjPrompt(job, primary, second), { schema: PF_ADJ_SCHEMA, phase: 'ProfileFitAdjudicate', label: 'pfadj:' + job.key })
+  if (adj) { out.validation.adjudicated = true; out.status = 'adjudicated'; out.final_score = adj.score; out.band = pfBandOf(adj.score); out.profile_notes = adj.profile_notes; out.adjudication = adj }
+  else { out.validation.failure_reason = 'adjudication failed' }
+  return out
+})
+const pfByKey = {}
+for (const res of pfResults) if (res && res.key) pfByKey[res.key] = res
+// FAIL-CLOSED: an unresolved Profile-Fit result (no score / failed pass) must stop the batch BEFORE
+// any CSV/workbook write, so a broken run can never overwrite the user's tracker.
+const pfUnresolved = pfResults.filter((r) => !r || r.final_score == null || (r.validation && r.validation.failure_reason))
+if (pfUnresolved.length > 0) {
+  return { error: 'Profile Fit unresolved for ' + pfUnresolved.length + ' job(s) — batch halted before writing (fail-closed).',
+    unresolved: pfUnresolved.map((r) => ({ key: r && r.key, reason: (r && r.validation && r.validation.failure_reason) || 'no score' })),
+    folder: discovery.root }
+}
+for (const r of rows) {
+  const p = pfByKey[r.job_file] || null
+  r.market_perception_score = p ? p.final_score : null
+  r.scope_fit_notes = p ? (p.profile_notes || '') : ''
+  r._profile_fit = p
 }
 
 // ---- Resolve dimension weights from the scoring card (fall back to 35/30/20/15) ----
@@ -634,12 +764,44 @@ const metaContent = JSON.stringify({
   },
 }, null, 2) + '\n'
 
-// ---- Phase 3: write the three files ----
+// ---- Phase 3: assemble ----
 phase('Assemble')
 const WRITE_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['wrote'],
   properties: { wrote: { type: 'array', items: { type: 'string' } } },
 }
+
+// ---- Provenance transaction: persist the Profile-Fit ledger + input hashes BEFORE any user-facing
+// write, and FAIL CLOSED if it can't be written (a rebuild-safe durable record, not a sidecar). ----
+const pfResultsPath = `${outRoot}/profile-fit-results.json`
+const pfProvPath = `${outRoot}/profile-fit-provenance.json`
+const pfProvPayload = JSON.stringify({ results: rows.map((r) => ({
+  key: r.job_file, abs_path: r.abs_path,
+  final_score: r.market_perception_score,
+  band: r._profile_fit ? r._profile_fit.band : null,
+  status: (r._profile_fit && r._profile_fit.status) || 'fresh',
+  profile_notes: r.scope_fit_notes,
+  ledger: r._profile_fit ? r._profile_fit.ledger : null,
+  risk_flags: (r._profile_fit && r._profile_fit.risk_flags) || [],
+  validation: (r._profile_fit && r._profile_fit.validation) || {},
+})) }, null, 1)
+await agent(
+  `Write this file EXACTLY as given, overwriting if it exists. Do not modify the content.\n\n=== FILE: ${pfResultsPath} ===\n${pfProvPayload}`,
+  { phase: 'Assemble', label: 'write pf-results', schema: WRITE_SCHEMA }
+)
+const PROV_SCHEMA = { type: 'object', additionalProperties: false, required: ['provenance_written'],
+  properties: { provenance_written: { type: 'boolean' }, note: { type: 'string' } } }
+const provRes = await agent(
+  `Run this bash command and report whether provenance was written. Set provenance_written=true ONLY if the command exits 0 and prints a line starting with "provenance OK"; else false with the error in note.\n` +
+  `\`\`\`bash\nPY=".venv/bin/python"; [ -x "$PY" ] || PY="python3"; "$PY" ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/persist_profile_fit.py --results "${pfResultsPath}" --provenance "${pfProvPath}" --card "${RUBRIC}" --profile "${PROFILE}" --prompt ".claude/workflows/vet-jobs.js" --date "$(date +%F)"\n\`\`\``,
+  { phase: 'Assemble', label: 'persist provenance', schema: PROV_SCHEMA }
+)
+if (!provRes || !provRes.provenance_written) {
+  // Fail closed: do NOT write the CSV/workbook if provenance could not be persisted.
+  return { error: 'Profile Fit provenance persistence failed — batch halted before writing user-facing artifacts (fail-closed).',
+    note: provRes && provRes.note, folder: discovery.root }
+}
+
 await agent(
   `Write these three files EXACTLY as given, overwriting if they exist. Do not modify the content.
 

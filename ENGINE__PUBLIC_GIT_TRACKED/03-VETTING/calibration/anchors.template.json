@@ -1,0 +1,28 @@
+{
+  "schema": "profile-fit-calibration-anchors/v1",
+  "note": "TEMPLATE (public, no user data). Copy to PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/calibration/anchors.json and fill in with YOUR real jobs + approved reasoning. These anchors gate future card/profile/prompt/model changes: a change must reproduce them before it may replace your stored scores. Keep this file private — it encodes your accepted judgments.",
+  "duplicate_control": {
+    "job_key": "<a stable job filename to score N times as a reproducibility control>",
+    "runs": 3, "max_spread": 5,
+    "why": "Same posting through independent workers must reproduce (spread<=5, one band)."
+  },
+  "anchors": [
+    {
+      "job_key": "<job .txt filename>",
+      "status": "approved",
+      "source": "<how this anchor was established, e.g. a blind-panel adjudication on YYYY-MM-DD>",
+      "hiring_thesis": "<one line: the identity the employer is hiring>",
+      "thesis_defining_centrals": ["<central 1>", "<central 2>"],
+      "pivotal_grade": "direct | transferable | light | absent",
+      "compounding": false,
+      "expected_band": "97-100 | 82-96 | 68-81 | 50-67 | 30-49 | 0-29",
+      "accepted_range": [0, 100],
+      "traps": ["<known misclassification traps for this role>"]
+    }
+  ],
+  "archetypes_to_include": [
+    "one clear excellent fit", "one clear adjacent fit", "one clear poor fit",
+    "one credential-gated role (<30)", "a duplicate-control posting",
+    "roles that previously produced surprising or hard-to-reproduce scores"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "profile-fit-synthetic-calibration/v1",
+  "note": "PUBLIC. Fabricated jobs + a fabricated profile (synthetic/profile.md) that test the GENERAL engine logic without any real user data. Each case states the expected reasoning the engine should reproduce. The validation runner scores each posting through the isolated Profile-Fit path (using synthetic/profile.md) and checks the expectations. These test the engine; they carry no user-specific judgment.",
+  "cases": [
+    {"key": "syn-clear-excellent", "expected_band": "82-96", "expected_pivotal_grade": "direct", "expected_compounding": false,
+     "tests": "clear excellent fit; thesis == the candidate's throughline",
+     "posting": "Senior PM, Consumer Onboarding & Activation. Own the new-user onboarding and activation surfaces for our 30M-user consumer app: notification journeys, first-run experience, retention experiments. Required: 8+ years consumer PM owning onboarding/activation/retention; ran user research; shipped 0->1. Bonus: growth-loop experience."},
+    {"key": "syn-clear-adjacent", "expected_band": "68-81", "expected_pivotal_grade": "transferable", "expected_compounding": false,
+     "tests": "adjacent fit; core skill transfers, one reframe needed",
+     "posting": "Senior PM, Workflow Automation (B2B). Own the workflow-automation product for mid-market teams: templates, triggers, integrations. Required: 7+ years PM owning workflow/productivity products; discovery-driven; cross-functional with eng. Bonus: B2B SaaS."},
+    {"key": "syn-missing-specialization", "expected_band": "30-49", "expected_pivotal_grade": "absent", "expected_compounding": false,
+     "tests": "a thesis-defining specialization is genuinely absent -> low band",
+     "posting": "Staff PM, ML Ranking & Relevance. Own the ML ranking systems: you have shipped production ML/ranking models, defined offline+online eval systems, and worked daily with ML engineers on model quality at scale. Required: 5+ years owning production ML/ranking products; deep eval-system ownership."},
+    {"key": "syn-bonus-not-central", "expected_band": "82-96", "expected_pivotal_grade": "direct", "expected_compounding": false,
+     "tests": "a deep item listed under BONUS must not set the band",
+     "posting": "PM, Consumer Onboarding. Own onboarding/activation for our consumer app. Required: consumer PM owning onboarding/activation; user research; 0->1. Bonus Points: experience with production ML personalization; eval frameworks."},
+    {"key": "syn-credential-gate", "expected_band": "0-29", "expected_pivotal_grade": "absent", "expected_compounding": false,
+     "tests": "a hard credential gate she cannot meet -> <30",
+     "posting": "PM, Clinical Systems. MUST be a licensed physician (MD required) with active clinical practice. You will own clinical-decision tooling. Required: MD; 5+ years practicing."},
+    {"key": "syn-one-gap-twice-no-compound", "expected_band": "50-67", "expected_pivotal_grade": "light", "expected_compounding": false,
+     "tests": "two bullets describing ONE underlying gap must NOT compound to a lower band (count one gap once)",
+     "posting": "PM, Lifecycle Marketing Product. Own lifecycle/retention. Required: (1) hands-on lifecycle-marketing execution in an ESP like Klaviyo; (2) deep experience running marketing-automation campaigns and segmentation in a marketing-automation tool. Plus: retention product ownership (which she has)."}
+  ]
+}
