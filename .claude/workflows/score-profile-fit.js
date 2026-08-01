@@ -5,17 +5,28 @@ export const meta = {
     { title: 'Primary', detail: 'one isolated §2 pass per job' },
     { title: 'Verify', detail: 'bounded second blind pass on risk-flagged jobs' },
     { title: 'Adjudicate', detail: 'resolve only material disagreements' },
+    { title: 'Persist', detail: 'write results + provenance (migration mode, fail-closed)' },
   ],
 }
 
 // args: { jobs: [{key, abs_path}], card, profile, priorByKey?: {key: {score, status}}, anchorsByKey?: {key: anchor} }
 // Accept args as an object OR a JSON string (the harness may deliver either).
 const A = (typeof args === 'string' && args.trim()) ? JSON.parse(args) : (args || {})
-const JOBS = A.jobs || []
+// Jobs may be given as {key, abs_path} objects, or — with srcDir set — as bare filename strings
+// (or {key} objects); abs_path is then srcDir/key. Keeps the launch args compact for large batches.
+const SRCDIR = (A && typeof A === 'object' && A.srcDir) ? A.srcDir : null
+const JOBS = (A.jobs || []).map((j) => {
+  if (typeof j === 'string') return { key: j, abs_path: SRCDIR ? `${SRCDIR}/${j}` : j }
+  if (j.abs_path) return j
+  return { key: j.key, abs_path: SRCDIR ? `${SRCDIR}/${j.key}` : j.key }
+})
 const CARD = A.card || 'PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/01-scoring-card.md'
 const PROFILE = A.profile || 'PRIVATE__YOUR_FILES_GITIGNORED/03-VETTING__YOUR_PRIVATE_INFO/02-candidate-profile.md'
 const PRIOR = A.priorByKey || {}
 const ANCHORS = A.anchorsByKey || {}
+// Dedicated migration mode: when outDir is set, persist results + provenance to disk (fail-closed),
+// so this workflow is self-sufficient for a Profile-Fit-only rescore — no 3-dimension bundle involved.
+const OUT = (A && typeof A === 'object' && A.outDir) ? A.outDir : null
 
 // Ledger schema — includes the four SCORER-EMITTED semantic ambiguity flags. Python routing
 // reads these booleans; it does not try to infer them from prose.
@@ -212,4 +223,35 @@ const results = await chunked(JOBS, CONCURRENCY, async (job) => {
   return out
 })
 
-return { results: results.filter(Boolean) }
+const finalResults = results.filter(Boolean)
+
+// ---- Dedicated migration-mode persistence: write results + provenance (fail-closed) ---- //
+if (OUT) {
+  phase('Persist')
+  const byKey = {}
+  for (const j of JOBS) byKey[j.key] = j.abs_path
+  const resultsPath = `${OUT}/profile-fit-results.json`
+  const provPath = `${OUT}/profile-fit-provenance.json`
+  const payload = JSON.stringify({ results: finalResults.map((r) => ({
+    key: r.key, abs_path: byKey[r.key] || null,
+    final_score: r.final_score, band: r.band, status: r.status || 'fresh',
+    profile_notes: r.profile_notes,
+    ledger: r.ledger || null, risk_flags: r.risk_flags || [], validation: r.validation || {},
+    adjudication: r.adjudication || null,
+  })) }, null, 1)
+  const WRITE_SCHEMA = { type: 'object', additionalProperties: false, required: ['wrote'],
+    properties: { wrote: { type: 'array', items: { type: 'string' } } } }
+  await agent(
+    `Write this file EXACTLY as given, overwriting if it exists. Do not modify the content.\n\n=== FILE: ${resultsPath} ===\n${payload}`,
+    { phase: 'Persist', label: 'write pf-results', schema: WRITE_SCHEMA })
+  const PROV_SCHEMA = { type: 'object', additionalProperties: false, required: ['provenance_written'],
+    properties: { provenance_written: { type: 'boolean' }, note: { type: 'string' } } }
+  const provRes = await agent(
+    `Run this bash command and report whether provenance was written. Set provenance_written=true ONLY if the command exits 0 and prints a line starting with "provenance OK"; else false with the error in note.\n` +
+    `\`\`\`bash\nPY=".venv/bin/python"; [ -x "$PY" ] || PY="python3"; "$PY" ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/persist_profile_fit.py --results "${resultsPath}" --provenance "${provPath}" --card "${CARD}" --profile "${PROFILE}" --prompt ".claude/workflows/score-profile-fit.js" --date "$(date +%F)"\n\`\`\``,
+    { phase: 'Persist', label: 'persist provenance', schema: PROV_SCHEMA })
+  return { results: finalResults, persisted: !!(provRes && provRes.provenance_written),
+    resultsPath, provPath, provNote: provRes && provRes.note }
+}
+
+return { results: finalResults }

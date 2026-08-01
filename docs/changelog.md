@@ -11,6 +11,45 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-01 — Profile-Fit-only migration mode + full tailoring-triage pass over the active tracker
+
+Added a dedicated **Profile-Fit-only migration mode** to `score-profile-fit.js`: when given an `outDir`,
+the workflow now persists its results + provenance (via an agent that writes the results JSON and runs
+`persist_profile_fit.py`, fail-closed) so it is self-sufficient for a Profile-Fit rescore with NO
+3-dimension bundle involved — the other scored dimensions are never computed, so they cannot be
+touched. Also accepts a compact `srcDir` + bare-filename job list (abs_path derived as `srcDir/key`)
+to keep launch args small for large batches. `node --check` clean; the earlier reliability tests still
+pass.
+
+Used it to run the two-stage refresh the user asked for. **Stage 1 — Profile-Fit-only rescore of every
+active legacy job** through the migration mode (isolated blind scorer, chunked concurrency, prior
+scores fed only to the deterministic risk gate so every mover got a second verification pass; ~2
+transient StructuredOutput errors recovered via bounded retry, 0 held out). Applied surgically to the
+live unified tracker via the proven stage→verify→atomic-replace transaction: Profile Fit + notes +
+recomputed FINAL only, every non-target row byte-identical, the already-adjudicated rows carried over
+untouched, all human fields/dates/statuses/resume cells preserved, provenance merged (adjudicated +
+fresh). Stable carryover re-verified (rebuild causes no drift). The scores discriminate rather than
+uniformly inflate — some jobs stayed in low bands with light/absent pivotal grades — and the large
+upward moves landed exactly on the rows the 07-31 audit had identified as deflated by the 07-30 bundle
+failure.
+
+**Stage 2 — tailoring triage** ran the `job-applier` agent (autonomous) once per active job, in
+priority waves under the 20-agent concurrency cap, each writing only its own job folder (draft + a
+`comparison.json` sidecar) and returning the Step 9.8 base-vs-improved resume-comparison scores. The
+tracker's four resume-comparison columns were then written by a **single serialized pass** (each
+`update_rankings_row.py` call rewrites the file, so they must never run concurrently) — this is the
+data-quality guardrail for parallel tailoring. Blanks are left where a base has no resolvable
+resume-only PDF (never estimated). Delta = improved − base is the "worth hand-tailoring vs send as-is"
+signal. Reports written to the batch: `TAILORING-TRIAGE-REPORT.md` + the PF rescore table.
+
+Two recurring base-resume defects surfaced by many agents (flagged, NOT auto-fixed — canonical source
+is off-limits to the tailor step): a retired "build, buy, or partner" line still living in a shared
+`.pages` base and propagating into copies, and several base resume-only PDFs that actually carry a
+trailing bundled cover-letter page. Worth a source cleanup so future copy-don't-rebuild runs stop
+inheriting them.
+
+---
+
 ## 2026-07-31 — Profile Fit calibration PASSED after two anchor decisions; eight audit-approved values applied transactionally
 
 Closed the loop on the Profile Fit production calibration. Two engine changes let the private
