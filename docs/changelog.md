@@ -11,6 +11,30 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-01 — Base-resume name normalizer: hyphen separator, PM abbreviation, hyphen-date fix
+
+The `Tailored? (Base Resume)` column came out inconsistent after a big tailoring batch — the same base
+appeared with different separators (` - ` vs ` — `) and role spellings (`Product Manager` vs `PM`)
+because each tailoring agent phrased its `recommended_base` differently, and `terse_base()` only
+normalized prose + "Professional Services". Hardened `update_rankings_row.terse_base` (the single choke
+point, applied to every `--base` write) to canonicalize:
+
+- **Separator → spaced hyphen.** A spaced em/en-dash separator becomes ` - `, matching the resume
+  FILES/FOLDERS on disk (which use a spaced hyphen) rather than the index's display em-dash — so the
+  column value is what you'd actually search for on disk.
+- **`Product Manager` → `PM`** (alongside the existing `Professional Services` → `Prof. Services`).
+- **Hyphen-form date parens** `(07-17-26)` → `(7/17/26)`. Previously a hyphen date wasn't recognized as
+  the name's terminator, so the name got truncated at an abbreviation — a base like `<Co> - Sr. PM,
+  Consumer (07-17-26)` was landing as `<Co> - Sr`. Now restored in full.
+
+New `tests/test_terse_base.py` (9 cases) locks the behavior; suite 386 → 395. Also re-normalized the
+existing column in the current batch's tracker from the per-job sidecars (one genuinely verbose base,
+where an agent named two resumes in one string, was set to the exemplar actually copied). Rows outside
+the tailoring set keep any human note (e.g. a `, submitted` marker) with only the separator repaired.
+The CSV/XLSX are gitignored; only the engine + test changes are tracked.
+
+---
+
 ## 2026-08-01 — Profile-Fit-only migration mode + full tailoring-triage pass over the active tracker
 
 Added a dedicated **Profile-Fit-only migration mode** to `score-profile-fit.js`: when given an `outDir`,

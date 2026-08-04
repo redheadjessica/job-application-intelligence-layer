@@ -95,6 +95,12 @@ def terse_base(s: str) -> str:
     s = re.sub(r'\*\*', '', (s or "").strip())
     s = re.sub(r'^\s*[-*•]\s+', '', s)   # leading markdown bullet
     s = _LABEL.sub('', s).strip()
+    # A hyphen-form date paren "(07-17-26)" -> slash form "(7/17/26)" so the slash-based anchors
+    # below recognize it. Without this the name has no date to anchor on and gets truncated at an
+    # abbreviation like "Sr." — a base like "Globex - Sr. PM, Consumer (07-17-26)" was landing as
+    # "Globex - Sr".
+    s = re.sub(r'\((\d{1,2})-(\d{1,2})-(\d{2})\)',
+               lambda m: f'({int(m.group(1))}/{int(m.group(2))}/{m.group(3)})', s)
     # Collapse a date-paren that carries extra words INSIDE it: "(7/1/26 finalized submission)"
     # -> "(7/1/26)". Do this BEFORE _DATE_END so the paren is a clean date to anchor on.
     s = re.sub(r'\((\d{1,2}/\d{1,2}/\d{2}|\d{1,2}/\d{2})[^)]*\)', r'(\1)', s)
@@ -114,7 +120,13 @@ def terse_base(s: str) -> str:
         return f"({MONTHS[mon]}/{mm.group(2)[-2:]})" if mon in MONTHS else mm.group(0)
 
     s = re.sub(r'\(([A-Z][a-z]{2,8})\s+(\d{4})\)', _d, s)
-    return s.replace("Professional Services", "Prof. Services")
+    # House style, so the same base always reads identically and matches the resume FILES/FOLDERS on
+    # disk (which use a spaced hyphen, e.g. "Acme - Senior PM, Growth"): a spaced em/en-dash separator
+    # becomes a spaced hyphen, and the role is abbreviated. Agents write the separator and role
+    # inconsistently ("Acme — Product Manager, Growth" vs "Acme - PM, Growth"); this collapses them to
+    # one canonical spelling.
+    s = re.sub(r'\s+[–—]\s+', ' - ', s)
+    return s.replace("Professional Services", "Prof. Services").replace("Product Manager", "PM")
 
 
 def _col(headers, prefixes):
