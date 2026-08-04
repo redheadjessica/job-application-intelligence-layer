@@ -38,7 +38,7 @@ can be read out of the PDF itself — ask your assistant to measure them rather 
 
 **The .docx is always exactly what the agent produced — you never edit it.** Your edits happen
 in your own editor, and the version you submit is always a PDF. That makes:
-- `.docx` (or `_cl_work/final.md`) = the agent's final recommendation (learning baseline)
+- `.docx` (or `_JAIL Agent Work/final.md`; legacy folders: `_cl_work/final.md`) = the agent's final recommendation (learning baseline)
 - submitted PDF = ground truth of what you actually sent
 
 The post-submission reconcile pass diffs the two; the delta IS your feedback. Nothing else in
@@ -47,7 +47,7 @@ the folder should be treated as "final".
 **Corollary — never overwrite an original; new letters are new versions.** Because that original
 `final.md`/`.docx`/packet is the immutable learning baseline, a request for a *new or revised*
 cover letter for a job that already has one must be written to NEW filenames, never a clobber:
-`_cl_work/final-v2.md` (`-v3`…), the `.docx` with ` - v2` before the extension, the packet with
+`_JAIL Agent Work/final-v2.md` (`-v3`…), the `.docx` with ` - v2` before the extension, the packet with
 ` - v2` before `.md`. The original stays byte-for-byte intact. Overwriting it silently destroys the
 reconcile signal — the system can no longer learn what it recommended vs. what you actually sent.
 

@@ -15,5 +15,5 @@ Statuses: `pending` · `promoted YYYY-MM-DD` · `rejected YYYY-MM-DD (reason)`
 
 ### {{Company — Role (submitted MM-DD-YY)}} · status: pending
 **{{The candidate lesson as a question: "You did Y — on purpose? Make it the default?"}}**
-- **Baseline (`_cl_work/final.md`):** {{what the agent's version said}}
+- **Baseline (`_JAIL Agent Work/final.md`, or the legacy `_cl_work/final.md`):** {{what the agent's version said}}
 - **Submitted:** {{what your submitted PDF said}}

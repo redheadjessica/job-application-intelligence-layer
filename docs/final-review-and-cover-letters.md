@@ -8,7 +8,7 @@ JAIL can write cover letters, but **only after it has learned your voice** — t
 
 1. **Set up once with `/cover-letter-intake`.** It studies your past letters and public writing, distills a voice spec, an exemplar set (your best real letter becomes the gold standard), an anecdote bank, and an optional writing-links key — and stages it all for your approval before anything is saved. Like everything personal in JAIL, these are gitignored instances; only blank templates are tracked.
 2. **Then run `cover-letter {job: "<path to job .txt>"}`** on any job you're tailoring. It drafts in your voice, gates the draft through a deterministic lint (banned AI-tell phrases, link billboards, punctuation rules), scores it adversarially for Fit and Voice, revises surgically (an anti-smoothing lint blocks the classic AI failure of sanding your personality off), and packages a `.docx` paste source + a compact review packet with its open questions at the top.
-3. **You still own the words.** Read the packet's Questions first, edit in your own editor, and submit as PDF. The agent's `_cl_work/final.md` stays frozen as the learning baseline: reconcile diffs it against your submitted PDF, and only lessons you explicitly confirm become rules for future letters.
+3. **You still own the words.** Read the packet's Questions first, edit in your own editor, and submit as PDF. The agent's `_JAIL Agent Work/final.md` stays frozen as the learning baseline: reconcile diffs it against your submitted PDF, and only lessons you explicitly confirm become rules for future letters.
 
 If you don't do cover letters, skip all of this — nothing else depends on it.
 

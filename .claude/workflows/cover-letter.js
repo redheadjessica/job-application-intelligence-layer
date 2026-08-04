@@ -97,7 +97,7 @@ PY=".venv/bin/python3"; [ -x "$PY" ] || PY="python3"; "$PY" ENGINE__PUBLIC_GIT_T
 
 If a folder with exactly that canonical name already exists there (the resume-tailoring step creates it with the same command), use it — do not create a second variant folder. mkdir -p with quoted paths.`}
 
-Inside the job folder create a work directory "_cl_work/" and write your draft to "_cl_work/draft-v1.md". Run the lint gate on it as your spec requires. ${NO_WRAP}
+Inside the job folder create the agent work directory "_JAIL Agent Work/" and write your draft to "_JAIL Agent Work/draft-v1.md". Run the lint gate on it as your spec requires. (Legacy folders may still have the old "_cl_work/" directory — if one exists, keep reading from it, but write every NEW file into "_JAIL Agent Work/".) ${NO_WRAP}
 
 Return (structured): job_folder, draft_path, company, role, links_used [{anchor,url,why}], word_count, lint_errors (must be 0), lint_warnings [strings], open_questions [strings]. "company" and "role" must be the CANONICAL values from the canonicalizer output (role = the part after "<Company> - ") — they are interpolated verbatim into the .docx and packet filenames downstream.`,
       { agentType: 'cover-letter-writer', phase: 'Draft', schema: DRAFT_SCHEMA, label: `draft:${jobPath.split('/').pop()}` }
@@ -116,7 +116,7 @@ Draft: ${draft.draft_path}
 Job description: ${jobPath}
 Job folder (check for application_resume_output): ${draft.job_folder}
 
-Write your evaluation to "${draft.job_folder}/_cl_work/eval-1.md". Keep it TERSE — max ~40 lines, findings only, no restating the letter. ${NO_WRAP}
+Write your evaluation to "${draft.job_folder}/_JAIL Agent Work/eval-1.md". Keep it TERSE — max ~40 lines, findings only, no restating the letter. ${NO_WRAP}
 
 Return (structured): fit_score, voice_score, eval_path, must_fix [strings, each citing the line], considerations [strings], comparison_note (one sentence vs the GOLD exemplar).`,
       { agentType: 'cover-letter-evaluator', phase: 'Evaluate', schema: EVAL_SCHEMA, label: `eval:${draft.company}` }
@@ -138,14 +138,17 @@ Job description: ${jobPath}
 Job folder: ${draft.job_folder}
 
 ⚠️ NEVER OVERWRITE AN ORIGINAL (church-and-state, HARD RULE for every user — see formatting-spec.md).
-FIRST, check whether "_cl_work/final.md" already exists in this job folder (ls it).
-- If it does NOT exist: this is the first letter for this job. Use the un-versioned target names below
+FIRST, check whether a final.md already exists in this job folder — look in BOTH "_JAIL Agent Work/final.md"
+and the legacy "_cl_work/final.md" (older folders predate the rename; ls both).
+- If neither exists: this is the first letter for this job. Use the un-versioned target names below
   (final.md / the standard .docx name / the standard packet name).
-- If it DOES exist: an immutable learning baseline is already here (reconcile diffs that ORIGINAL
+- If EITHER exists: an immutable learning baseline is already here (reconcile diffs that ORIGINAL
   final.md/.docx against the PDF the candidate actually submits — overwriting it destroys that signal).
-  You MUST NOT touch the existing final.md, its .docx, or its packet. Write THIS run's outputs to the
-  next unused versioned names instead: "_cl_work/final-v2.md" (or -v3…), the .docx with " - v2" before
-  the extension, and the packet with " - v2" before ".md". Leave every original byte-for-byte intact.
+  You MUST NOT touch the existing final.md, its .docx, or its packet — in either directory. Write THIS
+  run's outputs to the next unused versioned names instead: "_JAIL Agent Work/final-v2.md" (or -v3…),
+  the .docx with " - v2" before the extension, and the packet with " - v2" before ".md". Leave every
+  original byte-for-byte intact. New files ALWAYS go to "_JAIL Agent Work/", even when the baseline
+  they are versioning past lives in a legacy "_cl_work/".
 Call the resolved names <final-md>, <docx>, and <packet> below. (draft-v1.md is always left untouched.)
 
 Steps, in order:
@@ -159,7 +162,7 @@ Steps, in order:
 
    (Omit --candidate-name to fall back to candidate.name in jail.config.json.) Use its printed string verbatim as <docx-name>, then run: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/make_cover_letter_docx.py "<final-md>" -o "${draft.job_folder}/<docx-name>"  — inserting the " - v2" suffix before the extension if versioning per the rule above.
 3. Link QA: for each link, curl -sIL -o /dev/null -w "%{http_code}" --max-time 10 "<url>". 200/30x = pass; Medium/LinkedIn 403/999 bot-blocks = verify the URL character-for-character against PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/writing-links.md and mark "matches writing-links". Anything else = flag.
-4. Write the COMPACT review packet to <packet> ("${draft.job_folder}/application_coverletter_output - ${draft.company} - ${draft.role}.md", plus the " - v2" suffix if versioning) — target ~35 lines, do NOT include the letter text (reconcile reads _cl_work/final.md directly). Exactly these sections:
+4. Write the COMPACT review packet to <packet> ("${draft.job_folder}/_JAIL Agent Work/coverletter_agent_output - ${draft.company} - ${draft.role}.md", plus the " - v2" suffix if versioning) — target ~35 lines, do NOT include the letter text (reconcile reads final.md directly). Exactly these sections:
    # Cover Letter — ${draft.company} — ${draft.role}
    ## Questions for you (resolve before sending)   <- open questions + the writer's declined-fix disagreements + link-QA flags; "None" if empty
    ## Scorecard   <- 3-4 lines: "Fit ${evaluation.fit_score}/5 · Voice ${evaluation.voice_score}/5 (adversarial eval) — N must-fix, all resolved, preservation lint clean"; the one-line GOLD-exemplar comparison; any lint warnings left standing
@@ -232,5 +235,5 @@ return {
   letters: ok,
   failed: jobList.length - ok.length,
   table,
-  note: `Prepared ${ok.length}/${jobList.length} cover letter(s). Open each "application_coverletter_output - …" packet first (Questions at top), then copy from the .docx into your letter template with a formatting-preserving paste (in Pages: never "Paste and Match Style"). The .docx is the agent's verbatim output — edit only in your own editor; submit as PDF. Each job's "Cover Letter?" column was also marked Y in its batch rankings where one exists. Copy/paste table for your tracker is in the "table" field.`,
+  note: `Prepared ${ok.length}/${jobList.length} cover letter(s). Open each "_JAIL Agent Work/coverletter_agent_output - …" packet first (Questions at top), then copy from the .docx into your letter template with a formatting-preserving paste (in Pages: never "Paste and Match Style"). The .docx is the agent's verbatim output — edit only in your own editor; submit as PDF. Each job's "Cover Letter?" column was also marked Y in its batch rankings where one exists. Copy/paste table for your tracker is in the "table" field.`,
 }

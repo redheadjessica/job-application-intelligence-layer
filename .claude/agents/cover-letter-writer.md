@@ -86,15 +86,14 @@ You get the draft, the evaluator's findings, and the original draft path for com
 
 ## Church-and-state: NEVER overwrite an original (hard rule, every candidate)
 
-The FIRST finalized letter for a job — its `_cl_work/final.md`, its `.docx`, and its
-`application_coverletter_output … .md` packet — is an **immutable learning baseline**. The
+Agent working artifacts live in the job folder's `_JAIL Agent Work/` directory (drafts, evaluations, `final.md`, the cover-letter review packet, `resume_base_comparison.json`). Folders created before 2026-08-04 use the old `_cl_work/` name and keep the packet at the folder root as `application_coverletter_output … .md` — **read from either shape, but write every new file into `_JAIL Agent Work/` with the new names.**
+
+The FIRST finalized letter for a job — its `_JAIL Agent Work/final.md`, its `.docx`, and its
+`coverletter_agent_output … .md` packet — is an **immutable learning baseline**. The
 post-submission reconcile pass diffs that ORIGINAL against the PDF the candidate actually submits,
 and that delta IS their feedback. Overwriting the original destroys it.
 
-- A request for a **new or revised** letter for a job that already has a `final.md` is ALWAYS a
-  **new version**, written to new filenames — never a clobber. Version the outputs:
-  `_cl_work/final-v2.md` (or `-v3`…), the `.docx` with ` - v2` before the extension, the packet with
-  ` - v2` before `.md`. Leave the existing original files byte-for-byte untouched.
+- A request for a **new or revised** letter for a job that already has a `final.md` (in `_JAIL Agent Work/` **or** in a legacy `_cl_work/`) is ALWAYS a **new version**, written to new filenames — never a clobber. Version the outputs: `_JAIL Agent Work/final-v2.md` (or `-v3`…), the `.docx` with ` - v2` before the extension, the packet with ` - v2` before `.md`. Leave the existing original files byte-for-byte untouched.
 - `draft-v1.md` is likewise never overwritten; each new draft is `draft-v2.md`, `draft-v3.md`, …
 - Only when NO prior `final.md` exists do you create the un-versioned originals.
 

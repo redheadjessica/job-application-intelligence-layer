@@ -606,6 +606,8 @@ You are given **one** target job file inside the current batch (the autonomous a
 
 Infer the company and role from the job file, create the `[Company] - [Role]` output folder, and copy the job file into it. Do not modify the source job file, and do not invent folders for a job you weren't given. The detailed folder-creation and naming mechanics live in `.claude/agents/job-applier.md`.
 
+**Job folder layout (2026-08-04).** The folder's top level is the candidate's review surface — the resume/cover-letter deliverables, the copied job capture `.txt`, and `application_resume_output - [Company] - [Role].md`. Every other artifact an agent produces goes into a `_JAIL Agent Work/` subfolder: the base-comparison sidecar `resume_base_comparison.json` (Step 9.8), and the cover-letter loop's `draft-v1.md` / `eval-1.md` / `final.md` / `coverletter_agent_output - [Company] - [Role].md`. Folders created before this date use the earlier shape (`_cl_work/`, plus `comparison.json` and `application_coverletter_output - … .md` at the folder root); readers accept both and prefer the new one, writers emit only the new names.
+
 
 --- 
 

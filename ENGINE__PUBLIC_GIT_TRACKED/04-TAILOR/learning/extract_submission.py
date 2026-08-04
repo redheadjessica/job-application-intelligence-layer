@@ -9,8 +9,9 @@ reconcile agents never re-read PDFs (or pay vision costs) on any later run:
   _extracted/submitted-answers.txt      application Q&A (pasted application-answers.txt wins;
                                         else answer-classified PDF pages; screenshots are listed
                                         in the manifest for one-time agent transcription)
-  _extracted/coverletter-diff.txt       sentence-level unified diff: _cl_work/final.md (baseline,
-                                        normalized) vs the submitted cover letter. THE feedback signal.
+  _extracted/coverletter-diff.txt       sentence-level unified diff: "_JAIL Agent Work/final.md"
+                                        (baseline, normalized; legacy folders: "_cl_work/final.md")
+                                        vs the submitted cover letter. THE feedback signal.
   _extracted/MANIFEST.txt               what was found, how pages were classified, what's missing
 
 The candidate's identity chrome (signature line, personal domains) is read from
@@ -37,6 +38,70 @@ except ImportError:
 
 SIGNOFFS = ("looking forward", "warmly,", "sincerely", "best,", "thank you for", "i'd love the chance")
 RESUME_MARKERS = ("experience", "skills", "education", "summary", "professional")
+
+# Agent working artifacts moved out of the job folder's top level on 2026-08-04: the directory
+# "_cl_work/" became "_JAIL Agent Work/" and took the cover-letter review packet and the resume
+# base-comparison sidecar in with it. Already-submitted archive folders still sit on disk in the
+# old shape, so every READER accepts both, newest name first; writers only ever emit the new one.
+AGENT_WORK_DIRS = ("_JAIL Agent Work", "_cl_work")
+
+# The " - v2" / " - v3" revision suffix (unchanged by the rename).
+VERSION_SUFFIX_RE = re.compile(r" - v\d+$", re.I)
+
+
+def agent_work_dir(folder):
+    """The folder's agent-work directory. Returns the first that exists (new name preferred),
+    else the NEW-name path — so a writer that calls this always creates the new shape."""
+    folder = Path(folder)
+    for name in AGENT_WORK_DIRS:
+        if (folder / name).is_dir():
+            return folder / name
+    return folder / AGENT_WORK_DIRS[0]
+
+
+def find_agent_artifact(folder, *relnames):
+    """First existing <folder>/<work dir>/<relname> across both work-dir spellings, else None.
+    Multiple relnames are tried in preference order within each directory."""
+    folder = Path(folder)
+    for name in AGENT_WORK_DIRS:
+        for rel in relnames:
+            p = folder / name / rel
+            if p.is_file():
+                return p
+    return None
+
+
+def coverletter_baseline(folder):
+    """The frozen cover-letter learning baseline, or None. New location preferred; falls back to
+    the legacy "_cl_work/final.md" so reconcile keeps working on pre-rename archive folders."""
+    return find_agent_artifact(folder, "final.md")
+
+
+def resume_base_comparison(folder):
+    """The tailoring step's base-vs-improved sidecar, or None. New:
+    "_JAIL Agent Work/resume_base_comparison.json"; legacy: "comparison.json" at the folder root."""
+    folder = Path(folder)
+    found = find_agent_artifact(folder, "resume_base_comparison.json", "comparison.json")
+    if found:
+        return found
+    legacy = folder / "comparison.json"
+    return legacy if legacy.is_file() else None
+
+
+def coverletter_packet(folder):
+    """The cover-letter review packet, or None. New: "_JAIL Agent Work/coverletter_agent_output - ….md";
+    legacy: "application_coverletter_output - ….md" at the folder root. The un-versioned ORIGINAL
+    always wins over "- v2"/"- v3" revisions — it is the immutable learning baseline, and plain
+    name-sorting would pick the wrong one (" - v2.md" sorts BEFORE ".md")."""
+    folder = Path(folder)
+    candidates = [(folder / name, "coverletter_agent_output - *.md") for name in AGENT_WORK_DIRS]
+    candidates.append((folder, "application_coverletter_output - *.md"))
+    for d, pattern in candidates:
+        if d.is_dir():
+            hits = sorted(d.glob(pattern), key=lambda p: (bool(VERSION_SUFFIX_RE.search(p.stem)), p.name))
+            if hits:
+                return hits[0]
+    return None
 
 
 def load_identity():
@@ -186,20 +251,21 @@ def main():
         manifest.append("SCREENSHOTS (transcribe once into submitted-answers.txt if they hold Q&A not already captured): " + ", ".join(shots))
 
     # cover-letter diff vs baseline — use ONE letter copy (prefer the dedicated CoverLetter PDF)
-    baseline = folder / "_cl_work" / "final.md"
-    if baseline.exists() and letter_by_pdf:
+    baseline = coverletter_baseline(folder)
+    if baseline and letter_by_pdf:
         pick = next((n for n in letter_by_pdf if "coverletter" in n.lower().replace(" ", "").replace("-", "")),
                     next(iter(letter_by_pdf)))
         manifest.append(f"COVERLETTER-DIFF source: {pick}")
+        base_label = f"{baseline.parent.name}/{baseline.name}"
         base_sents = normalize_for_diff(baseline.read_text(encoding="utf-8"), is_markdown=True)
         sub_sents = normalize_for_diff("\n".join(letter_by_pdf[pick]))
         diff = list(difflib.unified_diff(base_sents, sub_sents, lineterm="",
-                                         fromfile="baseline (_cl_work/final.md)", tofile="submitted (PDF)", n=1))
+                                         fromfile=f"baseline ({base_label})", tofile="submitted (PDF)", n=1))
         (out / "coverletter-diff.txt").write_text(
             "\n".join(diff) if diff else "(no differences — submitted letter matches the baseline)", encoding="utf-8")
         manifest.append(f"COVERLETTER-DIFF: {sum(1 for d in diff if d[:1] in '+-' and d[:3] not in ('+++','---'))} changed sentence(s)")
     elif letter_parts:
-        manifest.append("COVERLETTER-DIFF: no baseline (_cl_work/final.md missing — letter predates the cover-letter workflow); style observations only")
+        manifest.append('COVERLETTER-DIFF: no baseline (no "_JAIL Agent Work/final.md" or legacy "_cl_work/final.md" — letter predates the cover-letter workflow); style observations only')
     else:
         manifest.append("COVERLETTER-DIFF: no cover letter found in any PDF")
 

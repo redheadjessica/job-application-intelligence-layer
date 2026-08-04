@@ -24,10 +24,10 @@ if needed, or wherever `out` points):
   copy, and paste into your own letter template with a formatting-preserving paste (in Pages:
   regular **Paste**, never "Paste and Match Style" — it strips the inline links). Styling per
   `formatting-spec.md` + `config.json`.
-- **`application_coverletter_output - Company - Role.md`** — the review packet: Questions for you
-  at top, fit/voice scorecard, links used and why, and the paste checklist.
-- `_cl_work/` — intermediates (draft-v1, evaluations, final.md). `final.md` is the reconcile
-  baseline; leave it alone.
+- `_JAIL Agent Work/` — everything the agents produced along the way, kept out of the folder's top level: the review packet, intermediates (draft-v1, evaluations, final.md), and the tailoring step's `resume_base_comparison.json`. `final.md` is the reconcile baseline; leave it alone.
+  - **`_JAIL Agent Work/coverletter_agent_output - Company - Role.md`** — the review packet: Questions for you at top, fit/voice scorecard, links used and why, and the paste checklist.
+
+Folders created before 2026-08-04 use the older shape — a `_cl_work/` directory, with the packet named `application_coverletter_output - Company - Role.md` at the folder's top level and `comparison.json` beside it. Everything that reads a job folder accepts both shapes; only new files use the new names.
 
 ## The loop
 
@@ -45,10 +45,10 @@ if needed, or wherever `out` points):
 
 ## Church and state (the learning rule)
 
-- **`_cl_work/final.md` is FROZEN once the loop completes.** It is the learning baseline:
+- **`_JAIL Agent Work/final.md` is FROZEN once the loop completes.** It is the learning baseline:
   reconcile diffs it against your submitted PDF, and that diff must show YOUR edits only.
   Any later revision — a v3, a new-paragraph request, anything — is a NEW file
-  (`_cl_work/final-vN-proposal.md` + a `- vN.docx` beside the original), never an overwrite. If
+  (`_JAIL Agent Work/final-vN-proposal.md` + a `- vN.docx` beside the original), never an overwrite. If
   you submit from a vN, reconcile still diffs against the original `final.md`; the proposal
   files show which changes were agent-assisted.
 - **You never edit the .docx.** It is always the agent's verbatim output. Your edits happen in
