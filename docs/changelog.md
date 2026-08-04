@@ -11,6 +11,12 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-01 — `/split-resume-pdf` skill: one export → the 3 canonical PDF artifacts
+
+New skill (`.claude/skills/split-resume-pdf/` + `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/split_resume_pdf.py`) automates the manual post-export file dance: the candidate exports one 3-page PDF from Pages (pages 1-2 = résumé, page 3 = cover letter), and the skill produces, in the same folder, the exact naming `resume_artifacts.py` already expects — `<name> FULL.pdf` (the 3-page bundle), `<name>.pdf` (résumé-only, pages 1-2 — the authoritative exact-name artifact the résumé-comparison scorer resolves), and `<name>`-with-"Resume"→"CoverLetter"`.pdf` (cover letter, page 3). Uses pypdf (already a dep); writes atomically (FULL first, so overwriting the base name never loses content); **fails closed** if the input isn't exactly 3 pages or lacks a "Resume" token, so a mis-export is caught rather than silently mis-split. Side benefit: this is the reliable fix for the recurring "resume-only PDF had a bundled cover-letter page 3" flag several tailoring runs hit — the split now happens the same way every time. Scope boundary: file creation only — it never attaches to a job posting or submits (that stays the candidate's step).
+
+---
+
 ## 2026-08-01 — Feedback loop rebuilt: capture chat, harvest content, apply the candidate's decisions immediately
 
 Root problem this fixes: the learning loop only read submitted résumés (never chat), captured *patterns* not *content* (it would note "an experience expanded" but never harvest the actual bullets), and treated the candidate's own decisions as proposals awaiting their review — so feedback given in chat evaporated when a session ended, and the candidate played whack-a-mole re-stating settled decisions.
