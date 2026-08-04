@@ -924,6 +924,14 @@ When a completed resume or prior approved page is provided:
 
 When the resume index designates a canonical page-one base for a given lane or role archetype, adapt from it rather than rebuilding from the experience bank from scratch.
 
+### ⭐ Base recency prior — chassis only, scoped to family (soft, overridable)
+
+Pick the base's **family/archetype by fit first** (the lane, level, and role archetype the JD calls for). Then, **among the finalized bases in that same family, prefer the MOST RECENT one as the chassis, all else equal** — a newer base in the same family has already absorbed every refinement the candidate made since (better structure, wording, and the latest canonical corrections), so starting from an older same-family base throws that accumulated work away. This is a **soft prior on the CHASSIS**, not a mandate: override it only when an older same-family base is a materially better fit for THIS JD, and say so explicitly. This recency preference applies to the **base chassis only — NOT to individual bullets.** Bullets are chosen for best evidence for the role from the experience bank, age-blind: an older bullet is often the strongest evidence for a specific JD, and must not be swapped out merely because a newer one exists. (As the experience bank grows richer, base-chassis recency matters progressively less, because content increasingly comes from the bank rather than from whichever bullets are frozen into the chosen base.)
+
+### ⭐ Quantified evidence must not crowd out stronger role-specific evidence
+
+A quantified bullet is valuable and protected — but "protected" does not mean "kept at the cost of a better bullet." When a role's real priority is evidence a quantified bullet does not speak to (e.g. org-leadership for a Group PM / Director role, where two structurally-similar quantified feature bullets are weaker than genuine leadership evidence), it is EXPLICITLY ALLOWED to drop one quantified bullet to surface the stronger role-specific evidence. Do not let the "protect concrete proof" rule pin two near-duplicate quantified bullets in place while the role's actual thesis-defining evidence stays off the page. (Experience-specific applications of this rule — e.g. a "rebuild this experience's section around org-leadership for leadership roles" note — live in the relevant experience-bank cluster.)
+
 A small amount of unused space is acceptable. Do not add a marginal bullet simply because one line remains available.
 
 ## Output Format for Work Experience

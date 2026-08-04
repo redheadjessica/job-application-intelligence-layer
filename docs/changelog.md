@@ -11,6 +11,21 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-01 — Feedback loop rebuilt: capture chat, harvest content, apply the candidate's decisions immediately
+
+Root problem this fixes: the learning loop only read submitted résumés (never chat), captured *patterns* not *content* (it would note "an experience expanded" but never harvest the actual bullets), and treated the candidate's own decisions as proposals awaiting their review — so feedback given in chat evaporated when a session ended, and the candidate played whack-a-mole re-stating settled decisions.
+
+Engine changes (all users):
+- **Three-layer knowledge model, made explicit:** Evidence (facts/bullets about the candidate), Behavior Rules (how the pipeline acts), and a new **Decisions Log** (`04-TAILOR__…/learning/decisions-log.md`, append-only/dated/human-readable) — the durable home for the candidate's own rulings so a settled decision is never re-litigated. Added `decisions-log.template.md`.
+- **reconcile-spec §0 (v2 capture policy):** observed content is FACT and applied immediately with no review gate — both the candidate's chat feedback AND the actual bullets on a résumé they told the system to reconcile. The only thing gated is the *system's inference about what a change means*, surfaced as a plain question. Reconcile now also reads chat (the invoking message + transcripts since the last run + the feedback inbox), harvests the actual shipped bullets into Evidence (not just patterns), echoes every capture back in chat (never files silently), and ends with a loop-health line (unapplied items · prominent-experiences-missing-a-canonical-file · last capture date).
+- **Feedback-capture hook backstop:** a `UserPromptSubmit` hook (`.claude/hooks/capture-feedback.sh`, registered in `.claude/settings.json`) appends each prompt to a gitignored `feedback-inbox.md`, so feedback survives even in threads where `/reconcile` is never run; the hook is fail-safe (no stdout, always exit 0) and a silent no-op on fresh clones. `/reconcile` processes + clears the inbox.
+- **CLAUDE.md directive** documenting the policy as a light reminder (explicitly not the durable mechanism — the hook + `/reconcile` are).
+- **Tailoring `00` spec:** added a **base recency prior** (prefer the most recent finalized base *within the same family* as the chassis, soft/overridable — chassis only, never bullets, which stay merit-selected and age-blind) and a **"quantified evidence must not crowd out stronger role-specific evidence"** rule (leadership roles may drop one of two structurally-similar quantified feature bullets to surface real org-leadership evidence).
+
+Candidate-instance work (gitignored, not committed): consolidated the candidate's scattered org-leadership / breadth / experimentation bullets for a heavily-featured past role — plus a program-lead bullet's canonical verb and its concise-default / longer-leadership variants (do-not-reword) — into the experience bank so they're reachable on the next run, and logged today's rulings in the Decisions Log. (A deeper experience-canonical file for that role is being built separately.) No candidate specifics entered any tracked file.
+
+---
+
 ## 2026-08-01 — Base-resume name normalizer: hyphen separator, PM abbreviation, hyphen-date fix
 
 The `Tailored? (Base Resume)` column came out inconsistent after a big tailoring batch — the same base

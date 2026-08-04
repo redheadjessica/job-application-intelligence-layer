@@ -12,6 +12,28 @@ The ledger and queue are **maintenance/learning files. They are NOT in the tailo
 
 ---
 
+## 0. ⭐ Feedback capture (v2) — the candidate's content and decisions apply IMMEDIATELY; only the SYSTEM's inferences are gated
+
+This section governs everything below. It exists because the v1 loop had three holes: it only read submitted resumes (never chat), it captured *patterns* not *content* (it would note "an experience expanded" but never harvest the actual bullets), and it treated the candidate's own decisions as "proposals awaiting review." All three are fixed here.
+
+**The fact-vs-inference rule (the core policy).**
+- **Observed content is FACT and is applied immediately — no review gate, ever.** Two things count as observed content: (1) feedback the candidate states directly (in chat, including the message that invokes reconcile), and (2) the actual bullets, wording, base choice, and section structure on a résumé the candidate told you to reconcile. The candidate's submitted applications are ground truth; a bullet they shipped is approved and final. Apply it to the layer it governs — **Evidence** (experience bank / `03*-canonical.md` / approved-truths / summaries / skills) or **Behavior Rule** (`00`, agent files, routing) — on the same pass, and record it in `decisions-log.md`.
+- **The ONLY thing that is not fact is an inference YOU draw about what a change *means*.** "The candidate removed X from the last four applications" is a fact; "so they must want X retired everywhere" is an inference. Inferences are surfaced to the candidate as a plain question and decided together — e.g. *"I noticed <that optional label> dropped off your last four applications — should we retire it, or keep it for certain cases?"* Only these inferences use `source-update-queue.md`. The queue is for the machine's guesses, never for the candidate's decisions.
+
+**Read chat, not just resumes.** Reconcile's inputs now include, in addition to the submitted résumés: (a) the feedback in the message that invoked reconcile, and (b) the session transcripts since the last reconcile run (`~/.claude/projects/<project>/*.jsonl`) — plus the feedback inbox (`PRIVATE__…/04-TAILOR__YOUR_PRIVATE_INFO/learning/feedback-inbox.md`) that the capture hook appends to. Harvest feedback from all of them under the same fact-vs-inference rule. (Transcript reading is search-first: filter to the candidate's typed messages; never load whole transcripts into context.)
+
+**Harvest content, not patterns.** When a finalized résumé diverges from the recommended draft, extract the *actual bullets and wording the candidate shipped* and promote them into the Evidence layer (the relevant experience-bank cluster / canonical file) — do not merely record "that experience expanded to 8 bullets." The observation is worthless without the substance; the substance is the whole point.
+
+**Surface every capture in chat — never file silently.** Every time you capture or apply something, emit a one-line chat confirmation: what you learned, which file it went to, and whether it was applied-now (candidate content/decision) or surfaced-for-confirm (your inference). Silent capture is untrustworthy even when correct, because the candidate can't verify it.
+
+**Decisions Log.** The candidate's applied decisions live in `decisions-log.md` (append-only, dated, human-readable) — the durable, auditable record so a settled decision is never re-litigated. Read it at the start of a run to avoid re-proposing anything already decided.
+
+**Loop-health self-check.** At the end of a run (and available at vet time), surface a short status line so a stalled loop is never silent: *N candidate-confirmed items applied this run · M system-inferences awaiting your confirm · K experiences that feature prominently but still lack a `03*-canonical.md` file · last feedback captured <date>.*
+
+Everything in §1–§13 below still applies, with one amendment: wherever v1 routed the candidate's own content or explicit decisions "to the queue, gated on review," that content now applies immediately per this section. The queue's gate remains only for genuine system inferences.
+
+---
+
 ## 1. The manual reconcile workflow (v1)
 
 Input: the path to **one** completed application folder in your archive, e.g. `{{your submitted-applications archive}}/<Company> - <Role> - <date>`.

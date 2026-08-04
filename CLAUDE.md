@@ -81,6 +81,16 @@ A local, git-tracked workspace — routine file changes are reversible, so optim
 
 ---
 
+## Capturing user feedback (required — applies to every agent)
+
+The tailoring system improves only if the user's feedback is captured and used — the failure mode is feedback given in chat that evaporates when the session ends. Three layers hold the system's knowledge: **Evidence** (facts/bullets about the user — experience bank, `03*-canonical.md`, approved-truths, summaries, skills), **Behavior Rules** (how the pipeline acts — `00-job_application_agent.md`, agent files, routing), and the **Decisions Log** (`PRIVATE__…/04-TAILOR__YOUR_PRIVATE_INFO/learning/decisions-log.md` — the append-only, dated record of the user's own rulings).
+
+The governing policy (full spec: `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/reconcile-spec.md` §0):
+- **Observed content is FACT, applied immediately, no review gate.** Both the user's chat feedback and the actual bullets on a résumé they told you to reconcile. A bullet they shipped is approved and final — never ask them to confirm their own résumé back to them. Apply it to the Evidence or Rules layer on the same turn and record it in the Decisions Log.
+- **Only YOUR inference about what a change *means* is uncertain** — surface it in chat as a plain question, decided together. Inferences are the only thing that use `source-update-queue.md`.
+- **Surface every capture in chat** — one line naming what you learned, which file it went to, and whether it was applied-now or surfaced-for-confirm. Never file silently.
+- A `UserPromptSubmit` hook (`.claude/hooks/capture-feedback.sh`) appends each prompt to a gitignored `feedback-inbox.md` as a backstop, so feedback survives even in threads where `/reconcile` is never run; `/reconcile` processes and clears it. This CLAUDE.md directive is only a reminder — do not rely on it alone; the hook and `/reconcile` are the durable mechanisms.
+
 ## Known assumptions
 
 - **Resume bases** can be Word (`.docx`), PDF, plain text/Markdown, or Apple Pages — point intake at whatever you use (Google Docs: export to `.docx`/PDF first). The Tailor step reads each format with the right tool (docx/pdf skills; `.txt`/`.md` directly; `.pages` via the bullet previews in the resume index) and copies the base in its native format, keeping the original extension.
