@@ -11,6 +11,12 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-04 — Hard rule: the revise flow must never silently change the candidate's own words
+
+A surgical revise of a draft the candidate hand-wrote silently genericized a word she'd chosen — "defense" → "regulated, high-stakes environments" — because the assistant's brief to the writer *hedged* about a possible RIDG client-confidentiality issue, and the writer resolved the ambiguity by "playing it safe" and editing her word out. She caught it: "Defense is fine to use. Why are you changing words I literally wrote myself?" The failure is that a concern about her text was treated as license to rewrite it, rather than as a question to ask her. Fix, in three places: (1) a HARD RULE in `cover-letter.js`'s REVISE-WITH-FEEDBACK prompt — when she hand-wrote the baseline, preserve her exact wording everywhere the feedback doesn't explicitly ask for a change; a confidentiality/truth-boundary/accuracy concern means keep her words verbatim and raise it in the packet Questions, never silently swap or "play it safe"; (2) the matching guardrail in the `/revise-cover-letter` skill, including that briefs to the writer must not hedge in a way that invites editing her wording (say preserve-and-flag); (3) captured to the candidate's cover-letter feedback-ledger and decisions-log. This extends the existing "canon beats general heuristics — never silently fix submitted wording" rule from approved canon bullets to her hand-written draft text. The letter itself was corrected by restoring her exact words verbatim (a new version, originals untouched), not by re-running the agent — re-running risked repeating the offense.
+
+---
+
 ## 2026-08-04 — Cover-letter lint: canonical-wording exemptions (first occurrence only)
 
 A banned style word can be genuinely correct inside the candidate's OWN canonical, repeatedly-submitted

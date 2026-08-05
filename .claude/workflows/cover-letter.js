@@ -110,6 +110,8 @@ ${BASELINE
 
 Revise so that you (a) do everything the feedback asks, (b) keep the structure, opener shape, bullets, closing, and inline links the candidate said she likes EXCEPT where the feedback changes them, and (c) surface any newly-relevant evidence the feedback points to — pull it from the experience bank / anecdote bank, never invent. Keep the letter one page.
 
+⭐ HARD RULE — the candidate's OWN words are FACT (§0). When she hand-wrote the baseline, preserve her exact wording everywhere the feedback does not explicitly ask you to change it. Do NOT "improve", tighten, smooth, genericize, or reword any sentence she wrote and did not flag — verbatim preservation is the default, changes are the exception, and the exceptions are only the ones she named. If any of her wording raises a concern (a confidentiality wall, a truth boundary, a possible inaccuracy), KEEP HER WORDS VERBATIM and raise it as a question in the review packet — a concern about her text is a question to ask her, never a license to quietly rewrite it, and never grounds to "play it safe" by editing her word out. Silently altering a word she wrote herself is a failure, even when the replacement seems safer.
+
 Write your revised letter to the next unused "_JAIL Agent Work/draft-v<N>.md" (e.g. draft-v3.md if draft-v1.md and draft-v2.md exist). NEVER overwrite an existing draft or any final*.md. Run the lint gate on your new draft as your spec requires.`
       : `DRAFT mode. Write ONE cover letter per your spec (.claude/agents/cover-letter-writer.md rules apply — read the candidate's canon files first; feedback-ledger newest entries win).
 
