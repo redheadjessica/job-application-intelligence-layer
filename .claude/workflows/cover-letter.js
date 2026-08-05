@@ -1,7 +1,7 @@
 export const meta = {
   name: 'cover-letter',
-  description: 'Draft -> lint -> dual eval (fit + voice) -> finalize (surgical revise + .docx + link QA + compact scorecard), for one or more jobs.',
-  whenToUse: 'Pass {jobs: ["path/to/job.txt", ...]} (or {job: "path"}). Optional {out: "explicit output folder"} when a job folder already exists. Requires the cover-letter instances (run /cover-letter-intake first).',
+  description: 'Draft (or revise-with-feedback) -> lint -> dual eval (fit + voice) -> finalize (surgical revise + .docx + link QA + compact scorecard), for one or more jobs.',
+  whenToUse: 'Pass {jobs: ["path/to/job.txt", ...]} (or {job: "path"}). Optional {out: "explicit output folder"} when a job folder already exists. Optional {feedback: "the candidate\'s targeted feedback on an EXISTING letter"} switches Stage 1 from draft-from-scratch to REVISE-WITH-FEEDBACK: the writer revises the most recent letter in the job folder (or {baseline: "path/to/final-vN.md"}) to address the feedback, then the same eval + finalize loop runs and versions the result (never overwriting the original). Requires the cover-letter instances (run /cover-letter-intake first).',
   phases: [
     { title: 'Draft', detail: 'writer agent, lint-gated' },
     { title: 'Evaluate', detail: 'fit + voice scores, adversarial, self-pushback' },
@@ -22,6 +22,10 @@ if (!jobList || jobList.length === 0) {
   throw new Error('Pass {jobs: ["path/to/job.txt", ...]} or {job: "path/to/job.txt"}.')
 }
 const outOverride = (A && typeof A === 'object' && A.out) ? A.out : null
+// REVISE-WITH-FEEDBACK mode: when the candidate gives targeted feedback on an existing letter,
+// Stage 1 revises the latest letter instead of drafting from scratch. Everything downstream is unchanged.
+const FEEDBACK = (A && typeof A === 'object' && typeof A.feedback === 'string' && A.feedback.trim()) ? A.feedback.trim() : null
+const BASELINE = (A && typeof A === 'object' && A.baseline) ? A.baseline : null
 
 // Derive the batch the same way tailor-jobs does, so letters land beside resume drafts.
 function batchOf(p) {
@@ -81,29 +85,50 @@ const FINALIZE_SCHEMA = {
 const results = await pipeline(
   jobList,
 
-  // ---- Stage 1: Draft ----
+  // ---- Stage 1: Draft (or Revise-with-feedback) ----
   async (jobPath) => {
     const destParent = outOverride || `__READY_TO_REVIEW__PRIVATE_GITIGNORED/${batchOf(jobPath)}/2 - Tailored Resumes`
-    const draft = await agent(
-      `DRAFT mode. Write ONE cover letter per your spec (.claude/agents/cover-letter-writer.md rules apply — read the candidate's canon files first; feedback-ledger newest entries win).
-
-Job description file (read this exact file): ${jobPath}
-
-Working location: ${outOverride
-        ? `use this existing folder directly: "${outOverride}"`
-        : `find or create the job folder inside "${destParent}". The folder name is the canonical "Company - Role" string — obtain it by running the shared canonicalizer FIRST with the company and role from the job post, and use its printed output verbatim (no date; never invent your own abbreviations):
+    const locationInstr = outOverride
+      ? `use this existing folder directly: "${outOverride}"`
+      : `find or create the job folder inside "${destParent}". The folder name is the canonical "Company - Role" string — obtain it by running the shared canonicalizer FIRST with the company and role from the job post, and use its printed output verbatim (no date; never invent your own abbreviations):
 
 PY=".venv/bin/python3"; [ -x "$PY" ] || PY="python3"; "$PY" ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py --application-name --company '<Company>' --role '<Role/title>'
 
-If a folder with exactly that canonical name already exists there (the resume-tailoring step creates it with the same command), use it — do not create a second variant folder. mkdir -p with quoted paths.`}
+If a folder with exactly that canonical name already exists there (the resume-tailoring step creates it with the same command), use it — do not create a second variant folder. mkdir -p with quoted paths.`
 
-Inside the job folder create the agent work directory "_JAIL Agent Work/" and write your draft to "_JAIL Agent Work/draft-v1.md". Run the lint gate on it as your spec requires. (Legacy folders may still have the old "_cl_work/" directory — if one exists, keep reading from it, but write every NEW file into "_JAIL Agent Work/".) ${NO_WRAP}
+    const modeInstr = FEEDBACK
+      ? `REVISE-WITH-FEEDBACK mode. The candidate has read an EXISTING cover letter for this job and given targeted feedback. Produce the next version that FULLY addresses the feedback while preserving what already works. Follow your spec (.claude/agents/cover-letter-writer.md — read the candidate's canon files FIRST; the cover-letter feedback-ledger's newest entries win, and today's entries were written to capture exactly this feedback). Respect every truth boundary in canon (e.g. no formal PM direct reports; never name a RIDG client or client industry; Ascend private-alpha guardrails).
 
-Return (structured): job_folder, draft_path, company, role, links_used [{anchor,url,why}], word_count, lint_errors (must be 0), lint_warnings [strings], open_questions [strings]. "company" and "role" must be the CANONICAL values from the canonicalizer output (role = the part after "<Company> - ") — they are interpolated verbatim into the .docx and packet filenames downstream.`,
-      { agentType: 'cover-letter-writer', phase: 'Draft', schema: DRAFT_SCHEMA, label: `draft:${jobPath.split('/').pop()}` }
+The candidate's targeted feedback (this is FACT — apply it; her own words and rulings outrank any general guidance):
+"""
+${FEEDBACK}
+"""
+
+${BASELINE
+        ? `The letter to revise is: "${BASELINE}". Read it in full first.`
+        : `The letter to revise is the MOST RECENT letter in the job folder's "_JAIL Agent Work/": the highest-numbered "final-v*.md" if any exist, else "final.md", else "draft-v1.md". ls the directory, pick it, and read it in full before revising. (Legacy folders may use "_cl_work/" — read from there if that's where the letters are.)`}
+
+Revise so that you (a) do everything the feedback asks, (b) keep the structure, opener shape, bullets, closing, and inline links the candidate said she likes EXCEPT where the feedback changes them, and (c) surface any newly-relevant evidence the feedback points to — pull it from the experience bank / anecdote bank, never invent. Keep the letter one page.
+
+Write your revised letter to the next unused "_JAIL Agent Work/draft-v<N>.md" (e.g. draft-v3.md if draft-v1.md and draft-v2.md exist). NEVER overwrite an existing draft or any final*.md. Run the lint gate on your new draft as your spec requires.`
+      : `DRAFT mode. Write ONE cover letter per your spec (.claude/agents/cover-letter-writer.md rules apply — read the candidate's canon files first; feedback-ledger newest entries win).
+
+Inside the job folder create the agent work directory "_JAIL Agent Work/" and write your draft to "_JAIL Agent Work/draft-v1.md". Run the lint gate on it as your spec requires. (Legacy folders may still have the old "_cl_work/" directory — if one exists, keep reading from it, but write every NEW file into "_JAIL Agent Work/".)`
+
+    const draft = await agent(
+      `${modeInstr}
+
+Job description file (read this exact file): ${jobPath}
+
+Working location: ${locationInstr}
+
+Always create/write inside the agent work directory "_JAIL Agent Work/" (never at the job-folder top level). ${NO_WRAP}
+
+Return (structured): job_folder, draft_path (the file you just wrote), company, role, links_used [{anchor,url,why}], word_count, lint_errors (must be 0), lint_warnings [strings], open_questions [strings]. "company" and "role" must be the CANONICAL values from the canonicalizer output (role = the part after "<Company> - ") — they are interpolated verbatim into the .docx and packet filenames downstream.`,
+      { agentType: 'cover-letter-writer', phase: 'Draft', schema: DRAFT_SCHEMA, label: `${FEEDBACK ? 'revise' : 'draft'}:${jobPath.split('/').pop()}` }
     )
-    if (!draft) throw new Error(`draft agent failed for ${jobPath}`)
-    if (draft.lint_errors > 0) log(`WARNING: draft for ${draft.company} returned with ${draft.lint_errors} lint errors`)
+    if (!draft) throw new Error(`${FEEDBACK ? 'revise' : 'draft'} agent failed for ${jobPath}`)
+    if (draft.lint_errors > 0) log(`WARNING: ${FEEDBACK ? 'revised draft' : 'draft'} for ${draft.company} returned with ${draft.lint_errors} lint errors`)
     return { jobPath, draft }
   },
 
