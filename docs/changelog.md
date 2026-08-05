@@ -11,6 +11,31 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-04 — Cover-letter lint: canonical-wording exemptions (first occurrence only)
+
+A banned style word can be genuinely correct inside the candidate's OWN canonical, repeatedly-submitted
+phrasing. The concrete collision: the résumé canon mandates "Spearheaded <Company>'s Associate Product
+Manager (APM) program…" as the candidate's own submitted wording, while the cover-letter lint bans
+"spearheaded" outright as AI vocabulary (it appears in ~40% of AI cover letters). Two agents hit this on
+two different letters in one day and worked around it with paraphrases, which is the wrong resolution —
+the candidate's own words outrank a generic style default, the same precedence the résumé canon already
+uses.
+
+New `lint.phrase_exemptions` config option: `[{pattern, reason, all_occurrences}]`. A banned-phrase hit
+falling inside an exemption match is not reported. Deliberately narrow in two ways: the pattern must
+carry enough surrounding context to bind it to one specific claim (a bare `\bspearhead\w*\b` exemption
+would defeat the rule), and **only the FIRST match is exempt unless `all_occurrences` is set** — so
+exempting a word for one true sentence can never license repeating it. That second constraint came from
+the candidate directly: the point of the ban is partly frequency, and an exemption that scaled with
+usage would reintroduce the tic it exists to prevent.
+
+Also fixed a time-bomb in the capture-gate suite: `test_original_dated_after_latest_fails` hardcoded
+"July 31, 2026 at 5:00 PM ET" as a date guaranteed to be LATER than the fixture's own run-time stamps,
+to fabricate an ORIGINAL-after-LATEST inversion. Once the clock passed that literal the inversion stopped
+inverting, the gate correctly did not fire, and the test failed (8/4/26) — after silently testing nothing
+in the window before that. Now derives the date as now + 365 days. Lesson worth generalizing: never pin a
+"later than now" value to a literal in a test whose fixtures are stamped with the current time.
+
 ## 2026-08-04 — Cover-letter REVISE-WITH-FEEDBACK mode + `/revise-cover-letter` skill
 
 "Rewrite this letter with my notes" kept happening ad hoc: the chat assistant would hand-write the new letter, skip the adversarial eval pass, and let the feedback evaporate instead of landing in canon. Two changes close that loop. **(1)** `cover-letter.js` gained a `feedback` input (plus optional `baseline`): when present, Stage 1 switches from draft-from-scratch to REVISE-WITH-FEEDBACK — the `cover-letter-writer` agent reads the candidate's canon (feedback-ledger newest-wins), revises the most recent letter in the job folder to address the feedback while preserving what works, and writes the next unused `draft-v<N>.md`. Everything downstream is unchanged: the same fit+voice eval and surgical finalize run, and the existing church-and-state versioning writes `final-v<N>` without ever overwriting the original (the immutable baseline `/reconcile` diffs against). **(2)** New `/revise-cover-letter` skill wraps the flow with the part that was being skipped: capture the candidate's feedback into canon FIRST (§0 — her chat words are fact: generalizable rulings → cover-letter `feedback-ledger.md`, new/ reframed stories → `anecdote-bank.md`, new career claims → résumé canon + `decisions-log.md`), surface each capture in chat, THEN run the workflow so the agent (not the assistant) writes the letter with the verify loop. The skill is explicit that the agent does the writing — hand-drafting in chat and skipping the eval is the exact failure mode it removes.

@@ -28,6 +28,7 @@ The positive fixture is the golden BetterUp capture: the gate must pass it clean
 The gate is wired into process_urls: a failing capture is quarantined into
 Needs Review with status `needs-review`, never silently USABLE.
 """
+import datetime
 import re
 from pathlib import Path
 
@@ -226,8 +227,14 @@ def test_original_dated_after_latest_fails(tmp_path):
         assert any("immutable and earliest" in p
                    for p in qa.validate_capture(swapped, filename="acme__pm.txt"))
     else:
-        inverted = good.replace(f"Captured At: {dates[0]}",
-                                "Captured At: July 31, 2026 at 5:00 PM ET", 1)
+        # Both stamps are the fixture's run time, so fabricate the inversion by pushing ORIGINAL
+        # into the FUTURE relative to that run time. Derive it — a hardcoded date is a time bomb:
+        # this line used to read "July 31, 2026 at 5:00 PM ET", which stopped being later than the
+        # fixture's own timestamp once the clock passed it, and the test silently stopped testing
+        # anything (it failed on 8/4/26). Never pin a "later than now" date to a literal.
+        later = datetime.datetime.now() + datetime.timedelta(days=365)
+        stamp = later.strftime("%B %-d, %Y at %-I:%M %p ET")
+        inverted = good.replace(f"Captured At: {dates[0]}", f"Captured At: {stamp}", 1)
         assert any("immutable and earliest" in p
                    for p in qa.validate_capture(inverted, filename="acme__pm.txt"))
 

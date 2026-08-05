@@ -41,6 +41,15 @@ DEFAULT_CONFIG = {
         "disabled_rules": [],        # rule ids: em-dash, semicolon, phrase, contraction,
                                      # triads, links, link-anchor, energy, rhythm, length
         "extra_banned_phrases": [],  # [{"pattern": regex, "message": str, "level": "error"|"warn"}]
+        # Canonical-wording carve-outs. A banned-phrase hit falling inside an exemption match is
+        # NOT reported. Why this exists: a banned word can be genuinely correct inside the
+        # candidate's OWN canonical, repeatedly-submitted phrasing (their words beat a generic
+        # style rule — the same precedence the résumé canon uses). Kept deliberately narrow:
+        # the pattern must include enough surrounding context to bind it to that one claim, and
+        # by default only the FIRST occurrence is exempt, so an exempted word can't quietly
+        # become a verbal tic. Set "all_occurrences": true to exempt every match.
+        # [{"pattern": regex, "reason": str, "all_occurrences": bool}]
+        "phrase_exemptions": [],
     },
 }
 
@@ -57,9 +66,32 @@ def load_config(path):
         lint_user = user.get("lint", {})
         for key in ("links", "body_words"):
             cfg["lint"][key].update(lint_user.get(key, {}))
-        for key in ("disabled_rules", "extra_banned_phrases"):
+        for key in ("disabled_rules", "extra_banned_phrases", "phrase_exemptions"):
             cfg["lint"][key] = lint_user.get(key, cfg["lint"][key])
     return cfg
+
+
+def exempt_spans(prose, exemptions):
+    """Character ranges in `prose` where a banned-phrase hit is allowed to stand.
+
+    Narrow by design: an exemption pattern must carry enough context to bind it to one specific
+    canonical claim, and by default only its FIRST match is exempt — so exempting a word for one
+    true sentence can never license repeating it. Returns [(start, end, reason), ...]."""
+    spans = []
+    for ex in exemptions or []:
+        pat = ex.get("pattern")
+        if not pat:
+            continue
+        try:
+            matches = list(re.finditer(pat, prose, flags=re.IGNORECASE))
+        except re.error as e:
+            print(f"warning: bad phrase_exemptions pattern {pat!r}: {e}", file=sys.stderr)
+            continue
+        if not ex.get("all_occurrences"):
+            matches = matches[:1]
+        for m in matches:
+            spans.append((m.start(), m.end(), ex.get("reason", "canonical wording")))
+    return spans
 
 
 # ---------------------------------------------------------------- text prep
@@ -211,8 +243,12 @@ def lint(raw, cfg, prev_raw=None, is_exemplar=False):
     extra_rules = [(r.get("pattern"), r.get("message", "Banned phrase (from config)"),
                     r.get("level", "error")) for r in cfg["lint"]["extra_banned_phrases"]
                    if r.get("pattern")]
+    spans = exempt_spans(prose, cfg["lint"].get("phrase_exemptions"))
     for pattern, message, level in PHRASE_RULES + extra_rules:
         for m in re.finditer(pattern, prose, flags=re.IGNORECASE):
+            # A hit sitting inside an exemption span is the candidate's own canonical wording.
+            if any(s <= m.start() and m.end() <= e for s, e, _ in spans):
+                continue
             add(level, "phrase", message, None,
                 prose[max(0, m.start() - 40):m.end() + 40].replace("\n", " "))
 
