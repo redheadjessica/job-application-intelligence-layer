@@ -79,8 +79,20 @@ These defaults reflect what reads as human in current hiring; edit any that don'
 Target **{{WORD RANGE — e.g. 350–620}} words** for the body (salutation through closing).
 One page, always.
 
-**Header block** (fixed): `Re: **[Role Title]**` + date, then `Dear [Company] team,` (or the hiring
-manager's name if known — never "To Whom It May Concern").
+**Header block** (fixed). Three lines, in this exact order, each its own paragraph with a blank line between:
+
+```
+[Weekday, Month D, YYYY]
+
+Re: **[Role Title]**
+
+Dear [Company] team,
+```
+
+- **The date stands alone on the top line** (full weekday + month + day + year, e.g. `Tuesday, August 4, 2026`).
+- **`Re: **[Role Title]**` is its own line below it** — role bolded, no date appended to it.
+- Then the salutation: `Dear [Company] team,` (or the hiring manager's name if known — never "To Whom It May Concern").
+- Do **not** put the date on the `Re:` line or share a line/block between them.
 
 **Opening paragraph — start with the real hook, not application boilerplate.**
 The first sentence is the emotional or product thesis. Proven shapes:
