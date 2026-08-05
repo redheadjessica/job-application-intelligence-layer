@@ -11,6 +11,12 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-05 — Tailoring packet: a reorder/trim never re-pastes the résumé (extends the earlier unchanged-section fix)
+
+Earlier today's fix stopped *fully-unchanged* résumé sections from re-pasting the base. A later tailoring run exposed the bigger case: a section changed only by **reordering and dropping one bullet** (no wording change) still got a complete re-paste of the whole bullet block — because the spec explicitly *mandated* it ("a single clean block of the complete final bullets… restating unchanged neighbors is allowed, because the block must paste as a unit"). That hands the candidate back her own unchanged words, the exact thing she has rejected many times. Rewrote `00-job_application_agent.md`'s Work Experience format: a section changed only by order/inclusion gets a short `Base status: reordered/trimmed` note describing the new order + drops **by short label**, no paste block; a section with genuinely new/reworded bullets reproduces **only** those bullets' text and references unchanged neighbors by label. The "complete block / restate unchanged neighbors / paste-as-a-unit" instruction is retired. **Rule now: never reproduce a bullet whose wording is unchanged from the base.**
+
+---
+
 ## 2026-08-05 — Reconcile cover-letter baseline: lock it to the FIRST version, never the newest
 
 A reconcile pass editorialized that the cover-letter v1→submitted diff looked "noisy" (because some of the delta came from agent revisions the candidate had requested) and suggested switching the baseline to the newest `final-vN.md`. That is exactly backwards. The candidate's design (confirmed 8/5): the cover-letter lane mirrors the résumé lane — baseline = the ORIGINAL un-versioned `final.md` (the first finalized letter, before any feedback), compared against the PDF she actually submitted. The whole point is "where the agent started → what she used"; intermediate revisions are ignored, and the "noise" is the signal. The code was already correct (`extract_submission.py`'s resolver sorts the un-versioned original ahead of every `- v2`/`- v3`), so no code changed — but the *instructions* were hardened so no future reconcile agent second-guesses it: an explicit ⭐ BASELINE RULE in `reconcile.js`'s inlined rules and in `reconcile-spec.md` §12, stating the baseline is always the first version, never a `final-vN`, and never switch it to "reduce noise."
