@@ -1052,6 +1052,34 @@ def _location_materially_disagrees(structured: str, prose_cities: list[str]) -> 
     return True
 
 
+# A published pay figure can appear ONLY as total comp / OTE / base+bonus, with no
+# separate base band — the "Ordergroove shape" (e.g. "The total compensation range
+# (base + annual bonus) for this role is starting at $209,000 + equity"). Such a figure
+# is deliberately kept OUT of the Base Salary band (it is not a base band) and carried
+# on the Additional Compensation line. But it IS the employer publishing pay, so
+# completeness must read it as FOUND — otherwise the Verification line shows
+# "Compensation —" and the scorer reads "no comp published" for a role that clearly
+# stated $209K.
+_TOTAL_COMP_CONTEXT_RE = re.compile(
+    r"(?i)total\s+(?:cash\s+|target\s+)?comp(?:ensation)?|\bOTE\b|on[-\s]?target\s+earnings"
+    r"|base\s*\+|\+\s*(?:an\s+)?(?:annual\s+)?bonus|base\s+(?:salary\s+)?(?:and|&)\s+bonus"
+    r"|\(\s*base\s*\+")
+_TOTAL_COMP_MONEY_RE = re.compile(r"\$\s?\d[\d,]*(?:\.\d+)?\s?[kK]?\b")
+
+
+def _total_comp_figure_present(body: str) -> bool:
+    """True when the JD publishes a real dollar figure that reads as TOTAL comp / OTE /
+    base+bonus rather than a base band (the "Ordergroove shape"). The employer HAS
+    posted pay in that case, so completeness treats it as found, not not-posted."""
+    if not body:
+        return False
+    for m in _TOTAL_COMP_MONEY_RE.finditer(body):
+        context = body[max(0, m.start() - 140): m.end() + 60]
+        if _TOTAL_COMP_CONTEXT_RE.search(context):
+            return True
+    return False
+
+
 def assess_completeness(meta: dict | None, body: str, questions: list | None) -> dict:
     """Per-field capture status for the ranking gate. Each of compensation and
     working-location (plus title/description presence) is exactly one of:
@@ -1104,6 +1132,13 @@ def assess_completeness(meta: dict | None, body: str, questions: list | None) ->
         fs["compensation"] = FOUND
         fs["compensation_source"] = "description"
         fs["compensation_prose"] = comp_prose
+    elif _total_comp_figure_present(body):
+        # Pay published ONLY as total comp / OTE / base+bonus, with no base band (the
+        # "Ordergroove shape"). The employer DID post pay; it just isn't a base band, so
+        # it rides the Additional Compensation line. Mark FOUND so the ranking gate and
+        # the Verification line don't report "no comp" for a role that stated a figure.
+        fs["compensation"] = FOUND
+        fs["compensation_source"] = "total_comp"
     elif meta.get("comp_expected"):
         # A structured source expected comp but it came back empty -> capture failure.
         fs["compensation"] = CAPTURE_FAILED
@@ -2528,6 +2563,11 @@ def build_output_text(url: str, title: str, company: str, body_text: str, *,
         lines.append("Base Salary:")
         for b in bands:
             lines.append(f"- {b}")
+    elif fs.get("compensation_source") == "total_comp":
+        # Pay was published as total comp / OTE / base+bonus (no base band). Point to the
+        # Additional Compensation line rather than "Employer did not mention compensation,"
+        # which reads as "no comp found" for a role that did state a figure.
+        lines.append("Base Salary: Not broken out separately (see Additional Compensation below).")
     else:
         lines.append(f"Base Salary: {_honest(None, 'compensation', 'compensation')}")
     lines.append("")

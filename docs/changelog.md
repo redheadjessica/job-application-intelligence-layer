@@ -11,6 +11,16 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-05 — Prep: total-comp-only pay is now FOUND, not "no comp" (the Ordergroove shape)
+
+A role that publishes pay only as total comp / OTE / base+bonus with no separate base band (e.g. "The total compensation range (base + annual bonus) for this role is starting at $209,000 + equity") was being reported as `Compensation —` (not-posted) on the Verification line, and the Base Salary line read "Employer did not mention compensation" — even though the employer clearly stated a figure. Root cause: total-comp figures are deliberately kept out of the *base* prose (they aren't a base band) and ride the Additional Compensation line, but `assess_completeness` only consulted the base band / base prose, so with no base band the status fell through to `NOT_POSTED`. That misled the scorer into treating a role that published $209K as having no comp. Fix (`prep_common.py`): a `_total_comp_figure_present()` detector (a dollar figure in total-comp / OTE / base+bonus context), a new `assess_completeness` branch that marks such pay `FOUND` with `compensation_source="total_comp"`, and a Base Salary line that then reads "Not broken out separately (see Additional Compensation below)" instead of "Employer did not mention compensation." Two regression tests added (total-comp-only → FOUND; genuinely-absent comp → still NOT_POSTED); full prep suite 468 passing. Benefits every user, not just this candidate.
+
+## 2026-08-05 — Tailoring spec: an unchanged résumé section never gets a re-pasted block
+
+The Ordergroove résumé packet gave most unchanged sections the required one-liner ("No changes — use the base's section as-is") but appended a full "paste-ready RIDG block (unchanged from base, included for a complete paste)" for the RIDG section — inconsistent, and a violation of the existing rule (an unchanged section gets one line, no reproduced bullets). The likely rationalization was that RIDG is a multi-variant section needing disambiguation. Hardened `00-job_application_agent.md` line 504: the rule holds even for complex/multi-variant sections; disambiguate the variant *inside* the one-liner, never by pasting the block, and inconsistency between sections is itself the defect.
+
+---
+
 ## 2026-08-05 — Cover-letter header: fix date-on-own-line template drift
 
 The candidate ruled (8/4) that the cover-letter date must sit on its own top line, above `Re: **[Role Title]**`, then the salutation. That landed in her voice-spec *instance* but the tracked *template* (`voice-spec.template.md`) still described the old one-line form (`Re: **[Role Title]**` + date), so every new user — and any regeneration reading the template — would get the wrong header. Fixed the template's header block to the three-line form (date / `Re:` / `Dear …`) with an explicit "do not put the date on the `Re:` line." The generator renders the letter body verbatim (no hardcoded date) and `formatting-spec.template.md` only describes docx scope, so no other file needed changing. Surfaced by the first live v2 `/reconcile` run, which correctly flagged it as a confirmed-but-unapplied engine edit rather than silently touching the locked spec.

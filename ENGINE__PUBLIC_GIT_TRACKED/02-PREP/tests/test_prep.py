@@ -483,6 +483,42 @@ def test_prose_compensation_variants():
     assert pc._prose_compensation("Worked there 2019 - 2023 building teams.") is None
 
 
+def test_total_comp_only_is_found_not_not_posted():
+    # The "Ordergroove shape": pay published ONLY as total comp (base + bonus), no base
+    # band. Must be FOUND (employer posted pay), not NOT_POSTED, so the Verification line
+    # shows a real value and the scorer doesn't read "no comp."
+    body = ("About the role\nWe help brands build subscription commerce. "
+            "The total compensation range (base + annual bonus) for this role is "
+            "starting at $209,000 + equity. " + ("x " * 40))
+    meta = {"title": "Group PM", "source": "ashby", "structured_source": True,
+            "compensation": None, "comp_expected": False,
+            "working_location": "Remote", "location_expected": True}
+    fs = pc.assess_completeness(meta, body, [])
+    assert fs["compensation"] == pc.FOUND
+    assert fs.get("compensation_source") == "total_comp"
+    out = pc.build_output_text("http://x", "Group PM", "Acme", body,
+                               meta=meta, field_status=fs, methods_tried=["ats"])
+    comp_block = out.split("COMPENSATION")[1].split("APPLICATION QUESTIONS")[0]
+    # The base line must NOT read as "no comp"; it points at Additional Compensation.
+    assert "did not mention compensation" not in comp_block
+    assert "Not broken out separately" in comp_block
+    assert "209,000" in comp_block  # the published figure survives on the Additional line
+    # And the Verification footer must not mark compensation as not-posted.
+    assert pc.missing_hard_fields(fs) == []
+
+
+def test_true_no_comp_still_not_posted():
+    # Guard the fix doesn't over-fire: a structured source with genuinely no pay figure
+    # (and no total-comp language) stays NOT_POSTED.
+    body = ("About the role\nWe are hiring a Product Manager to own the roadmap. "
+            "Join a mission-driven team. " + ("x " * 40))
+    meta = {"title": "PM", "source": "ashby", "structured_source": True,
+            "compensation": None, "comp_expected": False,
+            "working_location": "Remote", "location_expected": True}
+    fs = pc.assess_completeness(meta, body, [])
+    assert fs["compensation"] == pc.NOT_POSTED
+
+
 def test_prose_working_location_found_from_named_city():
     body = ("About the team\nThis position is based in Austin, TX and works with "
             "partners nationwide. " + ("y " * 40))
