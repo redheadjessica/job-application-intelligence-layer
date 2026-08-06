@@ -34,7 +34,8 @@ const REVIEW_ROOT = f.includes('All Job Posts (full text)') ? f.split('/3 - Sour
 const SOURCE = f.includes('All Job Posts (full text)') ? f : `${REVIEW_ROOT}/${SRC_SUB}`
 const BATCH = REVIEW_ROOT.replace(/\/+$/, '').split('/').pop()
 const RANKINGS_DIR = `${REVIEW_ROOT}/1 - Rankings`
-const RESUMES_DIR = `${REVIEW_ROOT}/2 - Tailored Resumes`
+// (Tailored resumes land in "${REVIEW_ROOT}/2 - Tailored Resumes"; tailor-jobs computes that path
+// itself from each job's batch, so run-batch no longer needs to name it here.)
 
 // ---- Phase 1: vet (always) — rankings land in "1 - Rankings/", named after the batch ----
 phase('Vet')
@@ -76,45 +77,21 @@ if (picks.length < TOP_N) {
   log(`Only ${picks.length} of the top ${TOP_N} are above the Skip threshold — tailoring those.`)
 }
 
-const CONFIRM_SCHEMA = {
-  type: 'object', additionalProperties: false,
-  required: ['job_folder', 'output_file', 'recommended_base', 'open_questions'],
-  properties: {
-    job_folder: { type: 'string' },
-    output_file: { type: 'string' },
-    recommended_base: { type: 'string' },
-    open_questions: { type: 'integer', description: 'count of items in the Questions for the candidate section' },
-  },
-}
-
-const tailorOne = (r, i) => agent(
-  `Tailor a resume for ONE job, in autonomous mode.
-
-Job description file (read this exact file): ${r.abs_path}
-Company: ${r.company}
-Role/title: ${r.title_and_link}
-It ranked #${i + 1} this batch with a final score of ${r.final_score} (${r.status}).
-
-Create the destination job folder INSIDE "${RESUMES_DIR}" using the naming convention
-"Company - Role" (NO date — the parent batch folder is already dated; abbreviate long titles sensibly, e.g. Senior -> Sr,
-Vice President -> VP). Use mkdir -p and quote paths since they contain spaces. Copy the job file in,
-and write the output file ("application_resume_output - [Company] - [Role].md") there per your spec,
-with the "Questions for the candidate" section at the top. Do not ask questions — defer them to that section.`,
-  { agentType: 'job-applier', model: 'sonnet', phase: 'Tailor', schema: CONFIRM_SCHEMA, label: r.company }
-).then((res) => (res ? { rank: i + 1, ...r, ...res } : null))
-
-let tailored
-if (TAILOR_PARALLEL) {
-  log(`Tailoring ${picks.length} jobs in parallel`)
-  tailored = (await parallel(picks.map((r, i) => () => tailorOne(r, i)))).filter(Boolean)
-} else {
-  tailored = []
-  for (let i = 0; i < picks.length; i++) {
-    log(`Tailoring ${i + 1}/${picks.length}: ${picks[i].company} (rank #${i + 1}, score ${picks[i].final_score})`)
-    const res = await tailorOne(picks[i], i)
-    if (res) tailored.push(res)
-  }
-}
+// Delegate the whole tailor pass to tailor-jobs, rather than tailoring inline here. Two reasons:
+//  1. tailor-jobs owns the Record phase that writes each job's chosen base AND its resume-comparison
+//     block (Base/Improved Resume Score, delta, Why It Improves) back into "1 - Rankings/" via
+//     update_rankings_row.py. run-batch's old inline loop had NONE of that — it didn't even ask the
+//     agent for the comparison scores — so the front-door vet+tailor flow left all six of those
+//     tracker columns blank while the hand-picked tailor-jobs flow filled them. Collapsing to ONE
+//     tailoring path makes the rankings writeback happen at the end of EVERY tailoring run, for all
+//     users, without prompting — and structurally prevents that drift from ever recurring.
+//  2. tailor-jobs names each folder from the shared canonicalizer (norm_contracts --application-name),
+//     the same source of truth vetting uses, instead of an ad-hoc "Company - Role" abbreviation.
+// One level of nesting only (run-batch -> tailor-jobs); tailor-jobs uses agent() and never calls
+// workflow(), so this stays within the engine's one-level limit, exactly like run-batch -> vet-jobs.
+const jobs = picks.map((r) => ({ abs_path: r.abs_path, company: r.company, title_and_link: r.title_and_link }))
+const tj = await workflow({ scriptPath: '.claude/workflows/tailor-jobs.js' }, { jobs, parallel: TAILOR_PARALLEL })
+const tailored = (tj && Array.isArray(tj.tailored)) ? tj.tailored : []
 
 return {
   mode: 'vet+tailor',
@@ -124,5 +101,10 @@ return {
   markdown: vet.markdown,
   xlsx: vet.xlsx,
   tailored,
-  note: `Prepared ${tailored.length} resume draft(s). Everything is in "${REVIEW_ROOT}" — open "1 - Rankings", then each folder in "2 - Tailored Resumes" (start with the "Questions for the candidate" section).`,
+  // Surface tailor-jobs' own writeback signals so a misrouted batch or an unmatched rankings row is
+  // never silent here either.
+  table: tj && tj.table,
+  warnings: tj && tj.warnings,
+  record_summary: tj && tj.record_summary,
+  note: `${(tj && tj.warnings && tj.warnings.length) ? '⚠️ ' + tj.warnings.join(' ') + '\n\n' : ''}Prepared ${tailored.length} resume draft(s). Everything is in "${REVIEW_ROOT}" — open "1 - Rankings", then each folder in "2 - Tailored Resumes" (start with the "Questions for the candidate" section). Each tailored job's chosen base and its resume-comparison block (Base/Improved Resume Score, delta, Why It Improves) were written back into "1 - Rankings/". Copy/paste table for your tracker is in the "table" field.`,
 }

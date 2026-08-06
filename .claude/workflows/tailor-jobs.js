@@ -46,6 +46,11 @@ if (!raw || raw.length === 0) {
   throw new Error('Pass {jobs: ["path/to/jobA.txt", ...]} — the specific job files to tailor.')
 }
 const picks = raw.map((j) => (typeof j === 'string' ? { abs_path: j } : j))
+// Sequential by default (in the order given). `parallel` (or `tailorParallel`) fans the tailoring
+// agents out at once — used by run-batch's overnight mode, which delegates the whole tailor+Record
+// pass here so there is exactly ONE tailoring path and the rankings writeback can never drift back
+// out of the front door again.
+const PARALLEL = !!(A && typeof A === 'object' && (A.parallel || A.tailorParallel))
 
 // Consolidated review home: __READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/. Derive <batch> from each job file's
 // parent folder (e.g. __READY_TO_REVIEW__PRIVATE_GITIGNORED/06-02-26/foo.txt -> 06-02-26) so hand-picked jobs land alongside
@@ -119,9 +124,7 @@ function nameCmdFor(p) {
 }
 
 phase('Tailor')
-const tailored = []
-for (let i = 0; i < picks.length; i++) {
-  const p = picks[i]
+const tailorOne = async (p, i) => {
   const who = p.company || p.abs_path
   log(`Tailoring ${i + 1}/${picks.length}: ${who}`)
   const resumesDir = `__READY_TO_REVIEW__PRIVATE_GITIGNORED/${batchOf(p.abs_path)}/2 - Tailored Resumes`
@@ -151,7 +154,19 @@ file. The finished .md must reflect every current credential, confirmed gap, and
 re-derive, don't ratify the old draft.`,
     { agentType: 'job-applier', model: 'sonnet', phase: 'Tailor', schema: CONFIRM_SCHEMA, label: who }
   )
-  if (res) tailored.push({ order: i + 1, ...p, ...res })
+  return res ? { order: i + 1, ...p, ...res } : null
+}
+
+let tailored
+if (PARALLEL) {
+  log(`Tailoring ${picks.length} job(s) in parallel`)
+  tailored = (await parallel(picks.map((p, i) => () => tailorOne(p, i)))).filter(Boolean)
+} else {
+  tailored = []
+  for (let i = 0; i < picks.length; i++) {
+    const res = await tailorOne(picks[i], i)
+    if (res) tailored.push(res)
+  }
 }
 
 // ---- Write each chosen base back into the batch's rankings (added 7/16/26) ----
