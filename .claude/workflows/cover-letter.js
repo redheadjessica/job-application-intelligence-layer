@@ -106,16 +106,22 @@ ${FEEDBACK}
 
 ${BASELINE
         ? `The letter to revise is: "${BASELINE}". Read it in full first.`
-        : `The letter to revise is the MOST RECENT letter in the job folder's "_JAIL Agent Work/": the highest-numbered "final-v*.md" if any exist, else "final.md", else "draft-v1.md". ls the directory, pick it, and read it in full before revising. (Legacy folders may use "_cl_work/" — read from there if that's where the letters are.)`}
+        : `The letter to revise is whatever this prints — do NOT ls and guess, and do NOT assume a location (folders exist in several historical shapes):
+    .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/job_folder_layout.py "<job folder>" --find latest-letter
+It resolves the highest-numbered "final-v*.md", else "final.md", else the first draft. Read it in full before revising.`}
 
 Revise so that you (a) do everything the feedback asks, (b) keep the structure, opener shape, bullets, closing, and inline links the candidate said she likes EXCEPT where the feedback changes them, and (c) surface any newly-relevant evidence the feedback points to — pull it from the experience bank / anecdote bank, never invent. Keep the letter one page.
 
 ⭐ HARD RULE — the candidate's OWN words are FACT (§0). When she hand-wrote the baseline, preserve her exact wording everywhere the feedback does not explicitly ask you to change it. Do NOT "improve", tighten, smooth, genericize, or reword any sentence she wrote and did not flag — verbatim preservation is the default, changes are the exception, and the exceptions are only the ones she named. If any of her wording raises a concern (a confidentiality wall, a truth boundary, a possible inaccuracy), KEEP HER WORDS VERBATIM and raise it as a question in the review packet — a concern about her text is a question to ask her, never a license to quietly rewrite it, and never grounds to "play it safe" by editing her word out. Silently altering a word she wrote herself is a failure, even when the replacement seems safer.
 
-Write your revised letter to the next unused "_JAIL Agent Work/draft-v<N>.md" (e.g. draft-v3.md if draft-v1.md and draft-v2.md exist). NEVER overwrite an existing draft or any final*.md. Run the lint gate on your new draft as your spec requires.`
+Get the directory to write into (create it if needed):
+    .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/job_folder_layout.py "<job folder>" --write-dir cover-letter
+Write your revised letter there as the next unused "draft-v<N>.md" (e.g. draft-v3.md if draft-v1.md and draft-v2.md exist). NEVER overwrite an existing draft or any final*.md. Run the lint gate on your new draft as your spec requires.`
       : `DRAFT mode. Write ONE cover letter per your spec (.claude/agents/cover-letter-writer.md rules apply — read the candidate's canon files first; feedback-ledger newest entries win).
 
-Inside the job folder create the agent work directory "_JAIL Agent Work/" and write your draft to "_JAIL Agent Work/draft-v1.md". Run the lint gate on it as your spec requires. (Legacy folders may still have the old "_cl_work/" directory — if one exists, keep reading from it, but write every NEW file into "_JAIL Agent Work/".)`
+Ask for the directory to write into, create it, and write your draft there as "draft-v1.md":
+    .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/job_folder_layout.py "<job folder>" --write-dir cover-letter
+Run the lint gate on it as your spec requires. Never compose that path yourself — the command already accounts for every historical folder shape.`
 
     const draft = await agent(
       `${modeInstr}
@@ -124,7 +130,7 @@ Job description file (read this exact file): ${jobPath}
 
 Working location: ${locationInstr}
 
-Always create/write inside the agent work directory "_JAIL Agent Work/" (never at the job-folder top level). ${NO_WRAP}
+Always create/write inside the directory the --write-dir command prints (never at the job-folder top level, and never a path you composed yourself). ${NO_WRAP}
 
 Return (structured): job_folder, draft_path (the file you just wrote), company, role, links_used [{anchor,url,why}], word_count, lint_errors (must be 0), lint_warnings [strings], open_questions [strings]. "company" and "role" must be the CANONICAL values from the canonicalizer output (role = the part after "<Company> - ") — they are interpolated verbatim into the .docx and packet filenames downstream.`,
       { agentType: 'cover-letter-writer', phase: 'Draft', schema: DRAFT_SCHEMA, label: `${FEEDBACK ? 'revise' : 'draft'}:${jobPath.split('/').pop()}` }
@@ -143,7 +149,7 @@ Draft: ${draft.draft_path}
 Job description: ${jobPath}
 Job folder (check for application_resume_output): ${draft.job_folder}
 
-Write your evaluation to "${draft.job_folder}/_JAIL Agent Work/eval-1.md". Keep it TERSE — max ~40 lines, findings only, no restating the letter. ${NO_WRAP}
+Write your evaluation to "eval-v1.md" (or the next unused "eval-v<N>.md") inside the directory printed by: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/job_folder_layout.py "${draft.job_folder}" --write-dir cover-letter Keep it TERSE — max ~40 lines, findings only, no restating the letter. ${NO_WRAP}
 
 Return (structured): fit_score, voice_score, eval_path, must_fix [strings, each citing the line], considerations [strings], comparison_note (one sentence vs the GOLD exemplar).`,
       { agentType: 'cover-letter-evaluator', phase: 'Evaluate', schema: EVAL_SCHEMA, label: `eval:${draft.company}` }
@@ -165,17 +171,19 @@ Job description: ${jobPath}
 Job folder: ${draft.job_folder}
 
 ⚠️ NEVER OVERWRITE AN ORIGINAL (church-and-state, HARD RULE for every user — see formatting-spec.md).
-FIRST, check whether a final.md already exists in this job folder — look in BOTH "_JAIL Agent Work/final.md"
-and the legacy "_cl_work/final.md" (older folders predate the rename; ls both).
+FIRST, ask whether an immutable baseline already exists — never ls and judge for yourself, because the
+answer decides whether you may write final.md at all:
+    .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/job_folder_layout.py "${draft.job_folder}" --find coverletter-baseline
+It prints the baseline's path if one exists (in ANY historical folder shape), or nothing if none does.
 - If neither exists: this is the first letter for this job. Use the un-versioned target names below
   (final.md / the standard .docx name / the standard packet name).
 - If EITHER exists: an immutable learning baseline is already here (reconcile diffs that ORIGINAL
   final.md/.docx against the PDF the candidate actually submits — overwriting it destroys that signal).
-  You MUST NOT touch the existing final.md, its .docx, or its packet — in either directory. Write THIS
-  run's outputs to the next unused versioned names instead: "_JAIL Agent Work/final-v2.md" (or -v3…),
-  the .docx with " - v2" before the extension, and the packet with " - v2" before ".md". Leave every
-  original byte-for-byte intact. New files ALWAYS go to "_JAIL Agent Work/", even when the baseline
-  they are versioning past lives in a legacy "_cl_work/".
+  You MUST NOT touch the existing final.md, its .docx, or its packet — wherever they live. Write THIS
+  run's outputs to the next unused versioned names instead: "final-v2.md" (or -v3…) in the --write-dir
+  directory, the .docx with " - v2" before the extension, and the packet with " - v2" before ".md".
+  Leave every original byte-for-byte intact. New files ALWAYS go to the --write-dir directory, even
+  when the baseline they are versioning past lives somewhere older.
 Call the resolved names <final-md>, <docx>, and <packet> below. (draft-v1.md is always left untouched.)
 
 Steps, in order:
@@ -184,12 +192,13 @@ Steps, in order:
         : `No revision needed (strong first draft). Copy the draft to <final-md> and run: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/lint_cover_letter.py "<final-md>" (must be 0 errors).`}
 2. Generate the deliverable. DERIVE the filename — never compose it yourself (the candidate half was being improvised, producing two spellings of the same artifact type in one run). Read signature_name from PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/config.json and pass it through the shared canonicalizer, which owns both halves of the name:
 
-     .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py --cover-letter-filename \
-         --candidate-name "<signature_name>" --company "${draft.company}" --role "${draft.role}" --ext .docx
+     .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py --cover-letter-draft-filename \
+         --company "${draft.company}" --role "${draft.role}"
 
-   (Omit --candidate-name to fall back to candidate.name in jail.config.json.) Use its printed string verbatim as <docx-name>, then run: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/make_cover_letter_docx.py "<final-md>" -o "${draft.job_folder}/<docx-name>"  — inserting the " - v2" suffix before the extension if versioning per the rule above.
+   (It takes no candidate name: this .docx is a copy-paste source for the candidate's own template,
+   not the artifact they submit — that is the exported PDF, which keeps its candidate prefix.) Use its printed string verbatim as <docx-name>, then run: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/make_cover_letter_docx.py "<final-md>" -o "${draft.job_folder}/<docx-name>"  — inserting the " - v2" suffix before the extension if versioning per the rule above.
 3. Link QA: for each link, curl -sIL -o /dev/null -w "%{http_code}" --max-time 10 "<url>". 200/30x = pass; Medium/LinkedIn 403/999 bot-blocks = verify the URL character-for-character against PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/writing-links.md and mark "matches writing-links". Anything else = flag.
-4. Write the COMPACT review packet to <packet> ("${draft.job_folder}/_JAIL Agent Work/coverletter_agent_output - ${draft.company} - ${draft.role}.md", plus the " - v2" suffix if versioning) — target ~35 lines, do NOT include the letter text (reconcile reads final.md directly). Exactly these sections:
+4. Write the COMPACT review packet to <packet> ("coverletter_agent_output - ${draft.company} - ${draft.role}.md" inside the --write-dir directory, plus the " - v2" suffix if versioning) — target ~35 lines, do NOT include the letter text (reconcile reads final.md directly). Exactly these sections:
    # Cover Letter — ${draft.company} — ${draft.role}
    ## Questions for you (resolve before sending)   <- open questions + the writer's declined-fix disagreements + link-QA flags; "None" if empty
    ## Scorecard   <- 3-4 lines: "Fit ${evaluation.fit_score}/5 · Voice ${evaluation.voice_score}/5 (adversarial eval) — N must-fix, all resolved, preservation lint clean"; the one-line GOLD-exemplar comparison; any lint warnings left standing

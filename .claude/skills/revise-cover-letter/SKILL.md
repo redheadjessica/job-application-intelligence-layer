@@ -13,12 +13,12 @@ The candidate has an existing cover letter for a job and specific feedback on it
 
 - The cover-letter system is set up (`PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/` instances exist — run `/cover-letter-intake` first if not).
 - The job's résumé tailoring is already done (never run the cover-letter step before the résumé for that job — see the sequencing rule in memory/canon).
-- An existing letter for the job (a `final*.md` in the job folder's `_JAIL Agent Work/`). If there is none, this is a first draft — use the plain `cover-letter` workflow instead.
+- An existing letter for the job — check with `.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/job_folder_layout.py "<job folder>" --find latest-letter`. If it prints nothing, this is a first draft — use the plain `cover-letter` workflow instead.
 
 ## Steps
 
 ### 1. Locate the job folder and the letter being revised
-Find the job folder under `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/2 - Tailored Resumes/<Company - Role>/`. Confirm the job `.txt` (the JD capture) and the most recent letter (`_JAIL Agent Work/final-v*.md`, highest number, else `final.md`). Read the current letter and the JD so you understand what the feedback is reacting to.
+Find the job folder under `__READY_TO_REVIEW__PRIVATE_GITIGNORED/<batch>/2 - Tailored Resumes/<Company - Role>/`. Confirm the job `.txt` (the JD capture), then get the letter being revised from `.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/job_folder_layout.py "<job folder>" --find latest-letter` (highest `final-v*.md`, else `final.md`, else the first draft — in whatever shape that folder uses). Don't `ls` and pick one yourself. Read the current letter and the JD so you understand what the feedback is reacting to.
 
 ### 2. Capture the feedback into canon FIRST (§0 — the candidate's words are FACT, applied now)
 The candidate's chat feedback is fact, not a proposal. Before running the writer, route each piece to where it durably belongs, and **surface each capture in chat** (one line: what you captured → which file):

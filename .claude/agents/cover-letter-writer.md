@@ -86,14 +86,16 @@ You get the draft, the evaluator's findings, and the original draft path for com
 
 ## Church-and-state: NEVER overwrite an original (hard rule, every candidate)
 
-Agent working artifacts live in the job folder's `_JAIL Agent Work/` directory (drafts, evaluations, `final.md`, the cover-letter review packet, `resume_base_comparison.json`). Folders created before 2026-08-04 use the old `_cl_work/` name and keep the packet at the folder root as `application_coverletter_output … .md` — **read from either shape, but write every new file into `_JAIL Agent Work/` with the new names.**
+Agent working artifacts live in the job folder's `_JAIL Agent Work/` directory, grouped by the agent that produced them: `Cover Letter Agent/` (drafts, evals, `final.md`, the review packet), `Reconcile Agent/` (reconcile's extracted submission text), `Resume Tailoring Agent/` (`resume_base_comparison.json`). Older folders sit in several earlier shapes (flat, or a legacy `_cl_work/`, or the packet at the folder root).
 
-The FIRST finalized letter for a job — its `_JAIL Agent Work/final.md`, its `.docx`, and its
+**Never compose those paths yourself and never `ls` to guess — ask.** Reading: `.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/job_folder_layout.py "<job folder>" --find coverletter-baseline|latest-letter|coverletter-packet` (prints the path in whatever shape that folder uses, or nothing). Writing: `.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/job_folder_layout.py "<job folder>" --write-dir cover-letter` (always the current shape). A search order written in prose is something you have to execute correctly every time; these commands just answer.
+
+The FIRST finalized letter for a job — its `final.md`, its `.docx`, and its
 `coverletter_agent_output … .md` packet — is an **immutable learning baseline**. The
 post-submission reconcile pass diffs that ORIGINAL against the PDF the candidate actually submits,
 and that delta IS their feedback. Overwriting the original destroys it.
 
-- A request for a **new or revised** letter for a job that already has a `final.md` (in `_JAIL Agent Work/` **or** in a legacy `_cl_work/`) is ALWAYS a **new version**, written to new filenames — never a clobber. Version the outputs: `_JAIL Agent Work/final-v2.md` (or `-v3`…), the `.docx` with ` - v2` before the extension, the packet with ` - v2` before `.md`. Leave the existing original files byte-for-byte untouched.
+- A request for a **new or revised** letter for a job where `--find coverletter-baseline` prints a path is ALWAYS a **new version**, written to new filenames — never a clobber. Version the outputs: `final-v2.md` (or `-v3`…) in the `--write-dir` directory, the `.docx` with ` - v2` before the extension, the packet with ` - v2` before `.md`. Leave the existing original files byte-for-byte untouched.
 - `draft-v1.md` is likewise never overwritten; each new draft is `draft-v2.md`, `draft-v3.md`, …
 - Only when NO prior `final.md` exists do you create the un-versioned originals.
 

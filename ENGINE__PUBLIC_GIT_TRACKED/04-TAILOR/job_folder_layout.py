@@ -176,3 +176,67 @@ def coverletter_packet(folder):
             if hits:
                 return hits[0]
     return None
+
+
+# --------------------------------------------------------------------------- #
+# CLI. Agent prompts call this instead of describing a search order in prose.
+#
+# A code fallback chain is deterministic; an LLM working through a four-location chain
+# written in English is not, and it now has more shapes to consider than a sentence can
+# carry reliably. This also means a future shape change edits one file rather than the ~30
+# hardcoded literals the 2026-08-04 rename left scattered across JS and Markdown.
+# --------------------------------------------------------------------------- #
+_ARTIFACTS = {
+    "coverletter-baseline": coverletter_baseline,
+    "coverletter-packet": coverletter_packet,
+    "resume-base-comparison": resume_base_comparison,
+    "extraction-dir": extraction_dir_for_read,
+}
+_LANES_BY_FLAG = {
+    "cover-letter": LANE_COVER_LETTER,
+    "reconcile": LANE_RECONCILE,
+    "resume": LANE_RESUME,
+}
+
+
+def latest_letter(folder):
+    """The newest cover letter to revise FROM: highest `final-vN.md`, else `final.md`, else the
+    first draft. Distinct from `coverletter_baseline()`, which is deliberately pinned to v1 —
+    a revision continues from the newest text, while learning always measures against the first."""
+    versioned = []
+    for d in search_dirs(folder, LANE_COVER_LETTER):
+        if not d.is_dir():
+            continue
+        for p in d.glob("final-v*.md"):
+            m = re.fullmatch(r"final-v(\d+)", p.stem)
+            if m:
+                versioned.append((int(m.group(1)), p))
+    if versioned:
+        return max(versioned, key=lambda t: t[0])[1]
+    return coverletter_baseline(folder) or find_agent_artifact(
+        folder, "draft-v1.md", lane=LANE_COVER_LETTER)
+
+
+def main(argv=None):
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("folder")
+    ap.add_argument("--find", choices=sorted(list(_ARTIFACTS) + ["latest-letter"]),
+                    help="print the resolved path (empty if not found)")
+    ap.add_argument("--write-dir", choices=sorted(_LANES_BY_FLAG),
+                    help="print the directory a writer should create for that lane")
+    a = ap.parse_args(argv)
+    folder = Path(a.folder).expanduser()
+    if a.write_dir:
+        print(lane_dir_for_write(folder, _LANES_BY_FLAG[a.write_dir]))
+        return 0
+    if a.find:
+        fn = latest_letter if a.find == "latest-letter" else _ARTIFACTS[a.find]
+        found = fn(folder)
+        print(found if found else "")
+        return 0 if found else 1
+    ap.error("pass --find or --write-dir")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

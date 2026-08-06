@@ -6,7 +6,7 @@ Question+answer pairs harvested by reconcile from submitted applications. Seeds 
 drafting; never read during resume tailoring.
 
 Maintenance rules:
-- **Reconcile is the sole writer.** Entries come from `_extracted/submitted-answers.txt` only —
+- **Reconcile is the sole writer.** Entries come from `<extraction dir>/submitted-answers.txt` only —
   the candidate's own submitted words.
 - **Key by archetype** (why-this-company, concept-to-shipped-tradeoff, how-you-use-AI, …); create
   a new `##` archetype heading only when no existing one fits.

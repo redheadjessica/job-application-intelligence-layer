@@ -53,7 +53,7 @@ reconcile signal — the system can no longer learn what it recommended vs. what
 ## Regenerating
 
 ```
-.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/make_cover_letter_docx.py path/to/letter.md -o "path/to/<Your-Name>-CoverLetter - Company - Role.docx"
+.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/make_cover_letter_docx.py path/to/letter.md -o "path/to/Cover-Letter-Draft - Company - Role.docx"
 ```
 
 If you hit paste friction (wrong size, spacing, link loss), fix it HERE and in `config.json` —

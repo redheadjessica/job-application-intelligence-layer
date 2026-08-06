@@ -613,7 +613,24 @@ You are given **one** target job file inside the current batch (the autonomous a
 
 Infer the company and role from the job file, create the `[Company] - [Role]` output folder, and copy the job file into it. Do not modify the source job file, and do not invent folders for a job you weren't given. The detailed folder-creation and naming mechanics live in `.claude/agents/job-applier.md`.
 
-**Job folder layout (2026-08-04).** The folder's top level is the candidate's review surface — the resume/cover-letter deliverables, the copied job capture `.txt`, and `application_resume_output - [Company] - [Role].md`. Every other artifact an agent produces goes into a `_JAIL Agent Work/` subfolder: the base-comparison sidecar `resume_base_comparison.json` (Step 9.8), and the cover-letter loop's `draft-v1.md` / `eval-1.md` / `final.md` / `coverletter_agent_output - [Company] - [Role].md`. Folders created before this date use the earlier shape (`_cl_work/`, plus `comparison.json` and `application_coverletter_output - … .md` at the folder root); readers accept both and prefer the new one, writers emit only the new names.
+**Job folder layout (lanes, 2026-08-06).** The folder's top level is the candidate's review surface and stays uncluttered — the resume/cover-letter deliverables, the copied job capture `.txt`, `application_resume_output - [Company] - [Role].md`, and the reconcile report. Every other artifact an agent produces goes into `_JAIL Agent Work/`, **grouped by the agent that produced it**:
+
+| Lane | Holds |
+|---|---|
+| `Cover Letter Agent/` | `draft-v*.md`, `eval-v*.md`, `final.md` (+ `final-v*.md`), `coverletter_agent_output - [Company] - [Role].md` |
+| `Reconcile Agent/` | the extracted submission text + diff (`MANIFEST.txt`, `submitted-*.txt`, `coverletter-diff.txt`) |
+| `Resume Tailoring Agent/` | `resume_base_comparison.json` (Step 9.8) |
+
+The generated `.docx` is named `Cover-Letter-Draft - [Company - Role].docx` and carries **no** candidate-name prefix — it is a copy-paste source for the candidate's own template, not the artifact they submit (that is the exported PDF, which keeps its prefix).
+
+**Never compose these paths, and never `ls` to guess which shape a folder uses.** Folders exist in several earlier shapes — flat inside `_JAIL Agent Work/` (2026-08-04), a legacy `_cl_work/`, sidecars at the folder root, and reconcile's pre-lane top-level `_extracted/`. Ask instead:
+
+```
+.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/job_folder_layout.py "<job folder>" --find coverletter-baseline|latest-letter|coverletter-packet|resume-base-comparison|extraction-dir
+.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/job_folder_layout.py "<job folder>" --write-dir cover-letter|reconcile|resume
+```
+
+Readers get whatever shape that folder actually has; writers always get the current one. Never rename or move a legacy file as a side effect of a run — the migration script is the only thing that moves anything.
 
 
 --- 
