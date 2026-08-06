@@ -4,14 +4,25 @@
   "signature_name": null,
   "personal_domains": [],
   "lint": {
-    "links": { "min": 1, "max": 5 },
-    "body_words": { "min": 240, "max": 650, "target_min": 350, "target_max": 620 },
+    "links": {
+      "min": 1,
+      "max": 5
+    },
+    "body_words": {
+      "min": 240,
+      "max": 650,
+      "target_min": 350,
+      "target_max": 620
+    },
     "disabled_rules": [],
     "extra_banned_phrases": []
   },
   "docx": {
     "font": "Helvetica Neue",
     "size_pt": 10,
-    "color_hex": "3F3F3F"
+    "color_hex": "3F3F3F",
+    "bullet_indent_in": 0.25,
+    "bullet_text_indent_in": 0.5,
+    "bullet_space_after_pt": 8
   }
 }

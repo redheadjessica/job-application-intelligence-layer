@@ -32,7 +32,17 @@ except ImportError:
     sys.exit(2)
 
 # Defaults; overridden by the "docx" section of config.json when present.
-DEFAULTS = {"font": "Helvetica Neue", "size_pt": 10, "color_hex": "3F3F3F"}
+DEFAULTS = {
+    "font": "Helvetica Neue", "size_pt": 10, "color_hex": "3F3F3F",
+    # Bullet blocks are INDENTED as a group, not flush with the body prose: the bullet
+    # glyph sits at `bullet_indent_in` and the text at `bullet_text_indent_in`, so
+    # wrapped lines align under the text rather than under the "•". Without the group
+    # indent the list reads as more body paragraphs; with it, the letter has a visible
+    # scannable middle. `bullet_space_after_pt` is the gap BETWEEN bullets.
+    "bullet_indent_in": 0.25,
+    "bullet_text_indent_in": 0.5,
+    "bullet_space_after_pt": 8,
+}
 
 
 def load_docx_config(path):
@@ -46,6 +56,22 @@ def load_docx_config(path):
         cfg.update(user.get("docx", {}))
     cfg["color_hex"] = cfg["color_hex"].lstrip("#").upper()
     return cfg
+
+
+def _set_tab_stop(paragraph, position):
+    """Pin an explicit left tab stop at `position` for the bullet's "•\\t".
+
+    Without it Word falls back to its default half-inch grid, so the text lands
+    wherever that grid happens to sit rather than at the hanging indent — the bullet
+    and its wrapped lines then disagree, which is exactly the ragged look this
+    formatting is meant to remove.
+    """
+    tabs = OxmlElement("w:tabs")
+    tab = OxmlElement("w:tab")
+    tab.set(qn("w:val"), "left")
+    tab.set(qn("w:pos"), str(int(position.twips)))
+    tabs.append(tab)
+    paragraph._p.get_or_add_pPr().append(tabs)
 
 
 INLINE = re.compile(r"(\[([^\]]+)\]\(([^)\s]+)\))|(\*\*([^*]+)\*\*)")
@@ -66,6 +92,9 @@ class DocBuilder:
         self.size = Pt(cfg["size_pt"])
         self.color = RGBColor.from_string(cfg["color_hex"])
         self.color_hex = cfg["color_hex"]
+        self.bullet_indent = Inches(float(cfg["bullet_indent_in"]))
+        self.bullet_text_indent = Inches(float(cfg["bullet_text_indent_in"]))
+        self.bullet_space_after = Pt(float(cfg["bullet_space_after_pt"]))
 
     def style_run(self, run, bold=False, underline=False):
         run.font.name = self.font
@@ -142,10 +171,15 @@ class DocBuilder:
             if all(ln.lstrip().startswith(("- ", "• ")) for ln in lines):
                 for ln in lines:
                     p = doc.add_paragraph()
-                    p.paragraph_format.left_indent = Inches(0.25)
-                    p.paragraph_format.first_line_indent = Inches(-0.25)
-                    p.paragraph_format.space_after = Pt(6)
+                    # Text at the deeper indent; the bullet hangs back to the shallower
+                    # one (a NEGATIVE first-line indent of exactly the difference), so
+                    # wrapped lines align under the text, not under the glyph.
+                    p.paragraph_format.left_indent = self.bullet_text_indent
+                    p.paragraph_format.first_line_indent = -(
+                        self.bullet_text_indent - self.bullet_indent)
+                    p.paragraph_format.space_after = self.bullet_space_after
                     p.paragraph_format.line_spacing = 1.0
+                    _set_tab_stop(p, self.bullet_text_indent)
                     self.style_run(p.add_run("•\t"))
                     self.add_inline(p, ln.lstrip()[2:].strip())
             else:

@@ -48,7 +48,7 @@ WL_MATRIX = [
     ("IRL NYC - 1 day", "IRL NYC - 1 day", WL_YELLOW),
     ("IRL NYC - 2 days", "IRL NYC - 2 days", WL_YELLOW),
     ("IRL NYC - 3 days", "IRL NYC - 3 days", WL_YELLOW),
-    ("IRL NYC/SF - 3 days", "IRL NYC/SF - 3 days", WL_YELLOW),
+    ("IRL NYC/SF - 3 days", "IRL NYC - 3 days (or SF hub, 3 days)", WL_YELLOW),
     ("IRL NYC - 3 days (Mon/Wed/Thu)", "IRL NYC - 3 days (Mon/Wed/Thu)", WL_YELLOW),
     ("IRL NYC - 3+ days", "IRL NYC - 3+ days", WL_ORANGE),
     ("IRL NYC - at least 3 days", "IRL NYC - 3+ days", WL_ORANGE),
@@ -59,7 +59,7 @@ WL_MATRIX = [
     # In-person outside the home geography, no remote/home-metro option -> red.
     ("IRL SF - 3 days", "IRL SF - 3 days", WL_RED),
     # The mechanical-repair case that motivated this module: missing "IRL " prefix.
-    ("NYC/SF - 3 days", "IRL NYC/SF - 3 days", WL_YELLOW),
+    ("NYC/SF - 3 days", "IRL NYC - 3 days (or SF hub, 3 days)", WL_YELLOW),
     # Bare "<City> hybrid" phrasing repairs to known-city-unknown-cadence.
     ("New York hybrid", "IRL NYC - unknown days", WL_ORANGE),
     # --- cadence-fidelity + multi-city/detail cases (2026-07-29 defect pass) ---
@@ -69,12 +69,12 @@ WL_MATRIX = [
     # "Remote or IRL ..." keeps EVERY genuinely-available office and its trailing detail.
     ("Remote or IRL NYC/SF - unknown days (hub-office salary range; remote elsewhere in "
      "US possible at 80-100% of range)",
-     "Remote or IRL NYC/SF - unknown days (hub-office salary range; remote elsewhere in "
-     "US possible at 80-100% of range)", WL_GREEN),
+     "Remote or IRL NYC - unknown days (hub-office salary range; remote elsewhere in "
+     "US possible at 80-100% of range; or SF hub, unknown days)", WL_GREEN),
     ("IRL NYC - 3 days (Mon/Tue/Thu)", "IRL NYC - 3 days (Mon/Tue/Thu)", WL_YELLOW),
     ("IRL NYC - 5 days (non-negotiable in-office)",
      "IRL NYC - 5 days (non-negotiable in-office)", WL_ORANGE),
-    ("IRL NYC/SF - unknown days", "IRL NYC/SF - unknown days", WL_ORANGE),
+    ("IRL NYC/SF - unknown days", "IRL NYC - unknown days (or SF hub, unknown days)", WL_ORANGE),
     ("", "Unknown", WL_ORANGE),
     ("IRL Menlo Park, CA - unknown days", "IRL Menlo Park, CA - unknown days", WL_RED),
     ("IRL Sunnyvale/Kirkland - unknown days", "IRL Sunnyvale/Kirkland - unknown days", WL_RED),
@@ -132,7 +132,7 @@ def test_unparseable_becomes_unknown_with_loud_warning():
     ("NYC - 2-3 days", "IRL NYC - 2-3 days"),
     ("Hybrid New York, 2-3 days per week in office", "IRL NYC - 2-3 days"),
     ("NYC — 4-5 days", "IRL NYC - 4-5 days"),
-    ("NYC/SF - 2-3 days", "IRL NYC/SF - 2-3 days"),
+    ("NYC/SF - 2-3 days", "IRL NYC - 2-3 days (or SF hub, 2-3 days)"),
 ])
 def test_day_ranges_are_preserved_never_collapsed(raw, expected):
     """`2-3 days` used to normalize to `3 days` — silently rewriting a cadence the
@@ -150,12 +150,12 @@ def test_range_color_comes_from_the_maximum():
 
 @pytest.mark.parametrize("raw,expected", [
     # Every genuinely-available office survives, and so does the trailing detail.
-    ("Remote or IRL NYC/SF - unknown days (hub-office salary range)",
-     "Remote or IRL NYC/SF - unknown days (hub-office salary range)"),
+    ("Remote or IRL NYC - unknown days (hub-office salary range; or SF hub, unknown days)",
+     "Remote or IRL NYC - unknown days (hub-office salary range; or SF hub, unknown days)"),
     ("Remote or NYC/SF - unknown days (hub-office salary range)",
-     "Remote or IRL NYC/SF - unknown days (hub-office salary range)"),
+     "Remote or IRL NYC - unknown days (hub-office salary range; or SF hub, unknown days)"),
     ("Remote or hybrid in New York, NY / San Francisco, CA (hub-office salary range)",
-     "Remote or IRL NYC/SF - unknown days (hub-office salary range)"),
+     "Remote or IRL NYC - unknown days (hub-office salary range; or SF hub, unknown days)"),
 ])
 def test_remote_or_irl_keeps_every_office_and_the_trailing_detail(raw, expected):
     """This form used to drop `/SF` AND the whole parenthetical."""
@@ -466,11 +466,11 @@ def test_cli_normalizes_csv_in_place_and_reports_repairs(tmp_path, capsys):
     # Just the one location repair: both rows already carry the `Unknown` placeholder
     # in Posting Last Update (which is what the writer emits), so nothing to fill.
     assert changed == 1
-    assert "RepairMe" in out and "'NYC/SF - 3 days'" in out and "'IRL NYC/SF - 3 days'" in out
+    assert "RepairMe" in out and "'NYC/SF - 3 days'" in out and "'IRL NYC - 3 days (or SF hub, 3 days)'" in out
     with open(csv_path, newline="", encoding="utf-8") as f:
         rows = list(csv.reader(f))
     i = HEADERS.index("Working Location")
-    assert rows[1][i] == "IRL NYC/SF - 3 days"
+    assert rows[1][i] == "IRL NYC - 3 days (or SF hub, 3 days)"
     assert rows[2][i] == "Remote"
 
 
@@ -505,7 +505,7 @@ def test_xlsx_written_cells_carry_the_exact_spec_hexes(tmp_path):
     cases = [
         ("Remote", WL_GREEN),
         ("IRL NYC - 3 days", WL_YELLOW),
-        ("NYC/SF - 3 days", WL_YELLOW),        # repaired on read -> IRL NYC/SF - 3 days
+        ("NYC/SF - 3 days", WL_YELLOW),        # repaired on read -> home-hub-first
         ("IRL NYC - 3+ days", WL_ORANGE),
         ("Unknown", WL_ORANGE),
         ("IRL SF - 3 days", WL_RED),
@@ -525,7 +525,7 @@ def test_xlsx_written_cells_carry_the_exact_spec_hexes(tmp_path):
         color = ws.cell(r, wl_col).font.color
         assert color is None or str(color.rgb).endswith("000000")
     # the repaired cell's TEXT is canonical in the written spreadsheet too
-    assert ws.cell(4, wl_col).value == "IRL NYC/SF - 3 days"
+    assert ws.cell(4, wl_col).value == "IRL NYC - 3 days (or SF hub, 3 days)"
     # no grey anywhere in the populated Working Location column
     greys = {cell_hex(ws.cell(i + 2, wl_col)) for i in range(len(cases))}
     assert "D9D9D9" not in greys
@@ -1595,7 +1595,7 @@ def test_regenerating_the_xlsx_writes_repairs_back_to_a_legacy_csv(tmp_path):
     headers, rows = _csv_cells(csv_path)
     assert headers == HEADERS                   # migrated to the 27-column contract
     got = dict(zip(headers, rows[0]))
-    assert got["Working Location"] == "IRL NYC/SF - 3 days"   # normalized in the CSV
+    assert got["Working Location"] == "IRL NYC - 3 days (or SF hub, 3 days)"   # normalized in the CSV
     assert got["Posting Last Update"] == "2026-06-13"
     # And a second build is a no-op on the CSV (single canonical collection, stable).
     stable = csv_path.read_text(encoding="utf-8")
@@ -2173,3 +2173,49 @@ def test_a_future_date_stays_unpainted(tmp_path):
     ci = [c.value for c in ws[1]].index("Posting Last Update") + 1
     from datetime import datetime as _dt
     assert isinstance(ws.cell(2, ci).value, (_dt, _date))     # a real date, just unpainted
+
+
+# --- Home-hub-first rendering + the two silent city-loss bugs it exposed (2026-08-06) ---
+
+@pytest.mark.parametrize("raw, expected", [
+    # A two-letter CITY after a comma is not a state suffix. "NYC, SF" used to come out
+    # as just "IRL NYC" — the alternate hub deleted with no warning.
+    ("NYC, SF - 2 days", "IRL NYC - 2 days (or SF hub, 2 days)"),
+    ("NYC, DC - 2 days", "IRL NYC - 2 days (or DC hub, 2 days)"),
+    # A real state suffix is still stripped.
+    ("New York, NY - 3 days", "IRL NYC - 3 days"),
+    ("Austin, TX or Denver, CO - 3 days", "IRL Austin/Denver - 3 days"),
+    # "Washington, D.C." is one city, not a city plus a state code.
+    ("Washington, D.C. - 2 days", "IRL DC - 2 days"),
+    # "hub" is how multi-office postings name sites; it must not take the city with it.
+    ("Austin or SF hub - 2 days", "IRL SF/Austin - 2 days"),
+    # A label glued to its value ("Hybrid: NYC") must not swallow the city.
+    ("Hybrid: NYC, SF - 2 days", "IRL NYC - 2 days (or SF hub, 2 days)"),
+    # The real BetterUp shape that prompted the rule.
+    ("Austin, New York City, San Francisco Bay Area, or Washington DC - 2 days per week",
+     "IRL NYC - 2 days (or SF/Austin/DC hub, 2 days)"),
+    # No home metro in the list -> stays a flat slash-list (the alternates ARE the decision).
+    ("Austin or Denver - 3 days", "IRL Austin/Denver - 3 days"),
+    # Employer detail and the alternates share ONE parenthetical (the grammar allows one).
+    ("NYC, SF - 2 days (hub-office salary range)",
+     "IRL NYC - 2 days (hub-office salary range; or SF hub, 2 days)"),
+])
+def test_home_hub_leads_and_no_city_is_silently_dropped(raw, expected):
+    assert norm_contracts.normalize_working_location(raw, CFG) == expected
+
+
+def test_home_hub_form_is_idempotent_and_upgrades_the_legacy_flat_form():
+    """Re-running the normalizer must not re-wrap an already-converted value, and must
+    upgrade a workbook written under the pre-2026-08-06 flat grammar."""
+    once = norm_contracts.normalize_working_location("IRL NYC/SF/Austin - 2 days", CFG)
+    assert once == "IRL NYC - 2 days (or SF/Austin hub, 2 days)"
+    assert norm_contracts.normalize_working_location(once, CFG) == once
+
+
+def test_home_hub_split_does_not_change_the_color():
+    """The color already evaluated the home-metro option; demoting the alternates into
+    the parenthetical is a DISPLAY change only."""
+    flat = "IRL NYC/SF - 2 days"
+    lead = norm_contracts.normalize_working_location(flat, CFG)
+    assert lead != flat
+    assert norm_contracts.working_location_color(lead, CFG) == WL_YELLOW

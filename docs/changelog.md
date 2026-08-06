@@ -11,6 +11,21 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-06 — Working Location leads with the candidate's own hub, and two silent city-drops
+
+A multi-hub posting rendered as `IRL NYC/SF/Austin/DC - 2+ days`. That reads as four commutes to evaluate when only one is real — the candidate works out of their own hub and the rest are alternates. The cell now leads with the home metro and demotes the alternates into the cadence parenthetical: `IRL NYC - 2+ days (or SF/Austin/DC hub, 2+ days)`. No information is lost, the color is unchanged (it already evaluated the home-metro option), and it only applies when a home metro is configured AND present in the list — a genuinely out-of-geo list stays a flat slash-list, because there the alternates *are* the decision. Already-canonical flat values are upgraded in place on re-normalization rather than grandfathered, so an existing workbook repairs itself instead of carrying two shapes forever.
+
+Building it surfaced two pre-existing bugs, both **silent data loss** in city extraction:
+
+1. The state-suffix stripper (`, NY` in "New York, NY") matched any two-letter token after a comma — including cities that are themselves two letters. `NYC, SF - 2 days` came out as `IRL NYC - 2 days`, the alternate hub deleted with no warning. Now only strips a code that is not a known city short form, and "Washington, D.C." is collapsed first so its own "DC" isn't read as a suffix. The pattern stays uppercase-only: a case-insensitive version eats the `, or` / `, at` that separate list members, gluing two cities into one unparseable token and losing both (found by breaking it that way mid-fix).
+2. `hub` was not a location stopword, so "SF hub" failed the all-words-capitalized plausibility check and the city vanished. Same for a label glued to its value — "Hybrid: NYC" kept `Hybrid:` as a word, which matched no stopword and then failed the same check.
+
+Both had been quietly costing cities on real postings. Regression tests cover the new grammar and both bugs, and were verified to fail against the unfixed code first.
+
+## 2026-08-06 — Cover-letter bullets are indented as a group
+
+Bullet blocks were flush with the body prose, so a list read as more paragraphs instead of a scannable middle — and the candidate was hand-fixing the indent in Word after every single export. Now the glyph sits at 0.25" and the text at 0.5" with a matching negative first-line indent, so wrapped lines align under the text rather than under the "•", plus 8pt between bullets. An explicit tab stop is pinned at the text indent; without one Word falls back to its default half-inch grid and the text lands wherever that grid sits, not at the hanging indent. All three values are configurable per user (`docx.bullet_indent_in`, `bullet_text_indent_in`, `bullet_space_after_pt`).
+
 ## 2026-08-06 — Selected Writing / Projects is never inherited from a reused résumé base
 
 A tailoring run reused a previously-finalized résumé for the same company and title, and listed "Projects & Writing" among the sections needing **no changes**. That looked like an efficiency and was actually a defect: a base carries the writing links that were right for whatever role *that base* was originally built for, and those picks then travel invisibly into every descendant résumé. Worse, anything published *after* the base was built can never surface, because the agent only evaluates what the base already contains — which is exactly what happened to a piece written with that specific employer in mind.

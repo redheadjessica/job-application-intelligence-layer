@@ -30,6 +30,16 @@ Allowed values (and nothing else):
   - <cities> is "/"-joined, ordered by the candidate's configured `city_priority`
     (priority cities first, others after in original order). Multi-office lists are
     preserved, never collapsed to one city.
+  - HOME HUB LEADS (2026-08-06). When a multi-office list contains the candidate's
+    home metro, that city is shown ALONE and the alternates move into the cadence
+    parenthetical: "IRL NYC - 2 days (or Austin/SF/DC hub, 2 days)" rather than
+    "IRL NYC/SF/Austin/DC - 2 days". A four-hub slash-list reads as four commutes to
+    evaluate when only one is real — the candidate would work out of their own hub, so
+    the cell should say the commute they'd actually have and keep the rest as context.
+    No information is lost, and the color is unchanged (it already evaluated the
+    home-metro option). Applies only when a home metro is configured AND present in
+    the list; a genuinely out-of-geo list stays a flat slash-list, because there the
+    alternates ARE the whole decision.
   - <cadence> is "N days" (exact), "N-M days" (a range the employer stated — kept
     verbatim, never collapsed to an endpoint), "N+ days" (open-ended minimum —
     "3 days" and "3+ days" are DIFFERENT; open-endedness is preserved), or
@@ -121,6 +131,10 @@ _WL_STOPWORDS = {
     "office", "irl", "required", "full-time", "full time", "days", "day", "week",
     "location", "working location", "workplace", "hq", "headquarters", "or", "and",
     "the", "in", "at", "attend", "must", "per",
+    # "hub" is how multi-office postings name their sites ("SF hub", "one of our hubs").
+    # Without it, "SF hub" failed the all-words-capitalized plausibility check and the
+    # city was dropped entirely — the same silent loss as the state-suffix bug.
+    "hub", "hubs", "offices", "site", "sites", "based", "near",
     # Degree/scope adverbs and non-places. Without these, "Fully remote" minted a city
     # named "Fully" ("IRL Fully - unknown days") — a capitalized word is not a place.
     "fully", "mostly", "primarily", "largely", "partially", "partly", "entirely",
@@ -187,6 +201,31 @@ def _plausible_city(token, known):
     return all(re.fullmatch(r"[A-Z][A-Za-z.'-]*", w) for w in words)
 
 
+def _split_home_hub(cities, cfg):
+    """Split a multi-office city list into (home_metro_city, other_cities).
+
+    A multi-hub posting that includes the candidate's own metro is not really a
+    list of equal options — they would work out of their home hub, and the rest
+    are alternates. Rendering them as one flat "NYC/SF/Austin/DC" slash-list buries
+    the only fact that decides the commute. Returns (None, cities) unchanged when
+    no home-metro city is present (a genuinely out-of-geo list stays a flat list),
+    or when the list has just one city (nothing to demote)."""
+    loc_cfg = (cfg or {}).get("location") or {}
+    aliases = {str(a).strip().lower() for a in (loc_cfg.get("home_metro_aliases") or []) if str(a).strip()}
+    home = str(loc_cfg.get("home_metro") or "").strip().lower()
+    if home:
+        aliases.add(home)
+    if not aliases or len(cities) < 2:
+        return None, cities
+    # Compare on the display short form too, so "New York City" in config matches
+    # the "NYC" the shortener produced.
+    aliases |= {_CITY_SHORT.get(a, a).lower() for a in set(aliases)}
+    for i, c in enumerate(cities):
+        if c.lower() in aliases:
+            return c, cities[:i] + cities[i + 1:]
+    return None, cities
+
+
 def _extract_cities(raw, cfg):
     """Pull city names out of a messy location string, mapped to display short
     forms, deduped, ordered by the candidate's city_priority."""
@@ -199,7 +238,20 @@ def _extract_cities(raw, cfg):
     work = raw
     # Drop parentheticals (detail, not city lists) and state suffixes (", NY").
     work = re.sub(r"\([^)]*\)", " ", work)
-    work = re.sub(r",\s*[A-Z]{2}\b", " ", work)
+    # "Washington, D.C." is ONE city whose second half is also a state-shaped code —
+    # collapse it to the short form before the state-suffix stripper can treat that
+    # "DC" as a suffix. The comma is preserved so it still separates list members.
+    work = re.sub(r"\bwashington,?\s*d\.?\s*c\.?", "DC", work, flags=re.I)
+    # A two-letter suffix is a STATE ("New York, NY"), but several major cities are
+    # themselves two letters (SF, DC, LA). Stripping those blindly silently deleted a
+    # city from every comma-separated list: "NYC, SF - 2 days" came out as just NYC,
+    # and the alternate hub vanished with no warning. Only strip a code that is not a
+    # known city short form. Stays UPPERCASE-only: a case-insensitive version also
+    # eats the ", or" / ", at" that separate list members, gluing two cities into one
+    # unparseable token and losing BOTH.
+    work = re.sub(r",\s*([A-Z]{2})\b",
+                  lambda m: m.group(0) if m.group(1).lower() in _CITY_SHORT else " ",
+                  work)
     # Remote-ish adjectives never name a city ("remote-friendly", "distributed").
     work = re.sub(r"\bremote([- ]friendly)?\b|\bflexible\b|\bdistributed\b", " ", work, flags=re.I)
     # Drop cadence phrasing so day counts don't read as city tokens.
@@ -220,7 +272,11 @@ def _extract_cities(raw, cfg):
         if not t or t.lower() in _WL_STOPWORDS:
             continue
         # strip keyword + pure-punctuation words ("Hybrid NYC", "— New York", "NYC office")
-        words = [w for w in t.split(" ")
+        # Strip per-word punctuation BEFORE the stopword test: a label glued to its
+        # value ("Hybrid: NYC") kept "Hybrid:" as a word, which matched no stopword and
+        # then failed the capitalized-words check, dropping the city with it.
+        words = [w.strip(":;.,") for w in t.split(" ")]
+        words = [w for w in words
                  if w.lower() not in _WL_STOPWORDS and re.search(r"[A-Za-z]", w)]
         if not words:
             continue
@@ -238,6 +294,25 @@ def _extract_cities(raw, cfg):
     return ordered
 
 
+def _apply_home_hub_to_canonical(canonical, cfg):
+    """Rewrite an already-canonical flat multi-hub value into the home-hub-first form.
+    Returns the input unchanged when it is single-city, has no home metro in the list,
+    or is already in the new shape."""
+    m = re.match(rf"^(Remote or )?IRL (.+?) - ({_CADENCE_RE})$", canonical)
+    if not m:
+        return canonical
+    prefix, city_part, cadence = m.group(1) or "", m.group(2), m.group(3)
+    cities = [c.strip() for c in city_part.split("/") if c.strip()]
+    home_city, other_cities = _split_home_hub(cities, cfg)
+    if not (home_city and other_cities):
+        return canonical
+    bare_cadence = re.sub(r"\s*\([^)]*\)\s*$", "", cadence)
+    absorbed = re.search(r"\(([^)]*)\)\s*$", cadence)
+    extras = ([absorbed.group(1).strip()] if absorbed else [])
+    extras.append(f"or {'/'.join(other_cities)} hub, {bare_cadence}")
+    return f"{prefix}IRL {home_city} - {bare_cadence} ({'; '.join(extras)})"
+
+
 def normalize_working_location(text, cfg=None, warn=_warn):
     """Normalize any location string into the canonical Working Location grammar.
     Already-canonical values pass through unchanged; no-signal values become
@@ -246,7 +321,10 @@ def normalize_working_location(text, cfg=None, warn=_warn):
     if raw.lower().strip(" .") in _NO_SIGNAL:
         return "Unknown"
     if _CANON_WL_RE.match(raw):
-        return raw
+        # Canonical, but possibly the pre-2026-08-06 flat multi-hub form
+        # ("IRL NYC/SF - 3 days"). Upgrade it in place so a re-run repairs a workbook
+        # written under the old grammar instead of grandfathering two shapes forever.
+        return _apply_home_hub_to_canonical(raw, cfg)
     low = raw.lower()
     # Remote must be genuine — never inferred from remote-friendly/flexible/distributed.
     remote = bool(re.search(r"\bremote\b(?![\s-]*friendly)", low))
@@ -270,9 +348,25 @@ def normalize_working_location(text, cfg=None, warn=_warn):
                 cadence = "5 days"
             else:
                 cadence = "unknown days"
+        # A multi-hub posting that includes the candidate's own metro leads with THAT
+        # hub; the alternates move into the parenthetical. See _split_home_hub.
+        home_city, other_cities = _split_home_hub(cities, cfg)
+        # The grammar allows exactly ONE parenthetical after the cadence, so alternates
+        # and employer detail share it, joined by "; ". The alternates restate the DAY
+        # COUNT only — reusing a cadence that already absorbed its own parenthetical
+        # would nest a paren inside a paren and duplicate the employer detail.
+        bare_cadence = re.sub(r"\s*\([^)]*\)\s*$", "", cadence)
+        absorbed = re.search(r"\(([^)]*)\)\s*$", cadence)
+        extras = []
+        if absorbed:
+            extras.append(absorbed.group(1).strip())
         if tail_detail:
-            cadence = f"{cadence} ({tail_detail})"
-        irl = f"IRL {'/'.join(cities)} - {cadence}"
+            extras.append(tail_detail)
+        if home_city and other_cities:
+            extras.append(f"or {'/'.join(other_cities)} hub, {bare_cadence}")
+        shown = [home_city] if home_city else cities
+        cadence = f"{bare_cadence} ({'; '.join(extras)})" if extras else bare_cadence
+        irl = f"IRL {'/'.join(shown)} - {cadence}"
         return f"Remote or {irl}" if remote else irl
     if remote:
         # `Remote (<detail>)` is part of the canonical grammar, so employer detail is kept
