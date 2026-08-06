@@ -638,6 +638,13 @@ def canonical_application_name(company, role):
 # --------------------------------------------------------------------------- #
 RESUME_ARTIFACT = "Resume"
 COVER_LETTER_ARTIFACT = "Cover-Letter"
+
+# The agent-generated .docx is NOT a deliverable — it is a copy-paste source for the candidate's
+# own letter template, and what actually gets submitted is the exported PDF. Naming it after the
+# candidate made it look like the finished artifact sitting next to the real one. It carries no
+# candidate-name prefix on purpose: it is the draft, not the person's document.
+#     Cover-Letter-Draft - <Company - Role>.docx
+COVER_LETTER_DRAFT_ARTIFACT = "Cover-Letter-Draft"
 _ARTIFACT_ALIASES = {
     "resume": RESUME_ARTIFACT, "cv": RESUME_ARTIFACT,
     "coverletter": COVER_LETTER_ARTIFACT, "cover letter": COVER_LETTER_ARTIFACT,
@@ -677,6 +684,16 @@ def canonical_cover_letter_filename(candidate_name, company, role, ext=""):
                                           artifact=COVER_LETTER_ARTIFACT)
 
 
+def canonical_cover_letter_draft_filename(company, role, ext=".docx"):
+    """`Cover-Letter-Draft - <Company - Role>.docx` — the agent's copy-paste source.
+
+    Takes no candidate name: this file is deliberately not the person's document. It also means
+    the name works before `candidate.name` is configured, which the deliverable builders cannot
+    say (they hard-error without one)."""
+    return canonical_application_filename("", company, role, ext,
+                                          artifact=COVER_LETTER_DRAFT_ARTIFACT)
+
+
 # `<anything>-Resume - <rest>` / `<anything> Cover Letter - <rest>`: the candidate half is
 # whatever precedes the artifact word, however the agent spelled it.
 _ARTIFACT_SPLIT_RE = re.compile(
@@ -693,6 +710,12 @@ def normalize_application_filename(filename, candidate_name=None):
     stem, dot, ext = name.rpartition(".")
     if not dot or len(ext) > 5 or " " in ext:
         stem, ext = name, ""
+    # The agent's .docx draft is already canonical and has NO candidate prefix by design.
+    # Without this guard it survives only because `_ARTIFACT_SPLIT_RE` wants " - " right after
+    # the artifact word and "-Draft" doesn't match — an accident, not a decision. A later tweak
+    # to that regex would silently rewrite the draft into a deliverable-shaped name.
+    if stem.startswith(COVER_LETTER_DRAFT_ARTIFACT):
+        return name
     m = _ARTIFACT_SPLIT_RE.match(stem)
     if not m:
         return name
@@ -1686,6 +1709,9 @@ def main(argv):
     parser.add_argument("--cover-letter-filename", action="store_true",
                         help="print the canonical cover-letter filename; same inputs as "
                              "--resume-filename")
+    parser.add_argument("--cover-letter-draft-filename", action="store_true",
+                        help="print the agent .docx draft filename; requires --company and "
+                             "--role ONLY (this artifact carries no candidate name)")
     parser.add_argument("--candidate-name", default=None,
                         help="override the candidate name (default: candidate.name in "
                              "jail.config.json)")
@@ -1702,6 +1728,14 @@ def main(argv):
         if not args.role:
             parser.error("--application-role requires --role")
         print(canonical_application_role(args.role))
+        return 0
+    if args.cover_letter_draft_filename:
+        # Deliberately BEFORE the deliverable branch and outside its candidate-name check:
+        # the draft has no candidate half to get wrong, so it must still work on a config
+        # that has no `candidate.name` yet.
+        if not args.company or not args.role:
+            parser.error("--cover-letter-draft-filename requires both --company and --role")
+        print(canonical_cover_letter_draft_filename(args.company, args.role, args.ext or ".docx"))
         return 0
     if args.resume_filename or args.cover_letter_filename:
         if not args.company or not args.role:

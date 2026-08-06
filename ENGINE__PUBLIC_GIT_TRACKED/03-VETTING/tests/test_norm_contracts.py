@@ -2219,3 +2219,34 @@ def test_home_hub_split_does_not_change_the_color():
     lead = norm_contracts.normalize_working_location(flat, CFG)
     assert lead != flat
     assert norm_contracts.working_location_color(lead, CFG) == WL_YELLOW
+
+
+# --- The agent .docx draft filename (2026-08-06) ---------------------------------------------
+
+def test_cover_letter_draft_filename_carries_no_candidate_name():
+    """The .docx is a copy-paste source, not the person's document — naming it after the
+    candidate made it look like the finished artifact next to the real one."""
+    out = norm_contracts.canonical_cover_letter_draft_filename("Courier Health", "Senior Product Manager")
+    assert out == "Cover-Letter-Draft - Courier Health - Senior PM.docx"
+
+
+def test_cover_letter_draft_filename_preserves_a_given_extension():
+    out = norm_contracts.canonical_cover_letter_draft_filename("Acme", "Staff PM", ".md")
+    assert out == "Cover-Letter-Draft - Acme - Staff PM.md"
+
+
+@pytest.mark.parametrize("name", [
+    "Cover-Letter-Draft - Acme - Senior PM, Growth.docx",
+    "Cover-Letter-Draft - Acme - Senior PM - v2.docx",
+])
+def test_the_normalizer_leaves_the_draft_name_alone(name):
+    """It survives today only because _ARTIFACT_SPLIT_RE wants " - " right after the artifact
+    word and "-Draft" doesn't match — an accident. Pinned so a regex tweak can't silently
+    rewrite the draft into a deliverable-shaped name."""
+    assert norm_contracts.normalize_application_filename(name, "Jordan Lee") == name
+
+
+def test_the_deliverable_cover_letter_name_is_unchanged_by_the_draft_addition():
+    """The submitted PDF keeps its candidate prefix — only the .docx draft lost one."""
+    assert (norm_contracts.canonical_cover_letter_filename("Jordan Lee", "Acme", "Senior PM", ".pdf")
+            == "Jordan Lee-Cover-Letter - Acme - Senior PM.pdf")
