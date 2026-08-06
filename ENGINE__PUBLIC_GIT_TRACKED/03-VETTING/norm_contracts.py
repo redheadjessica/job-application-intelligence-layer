@@ -641,6 +641,7 @@ STATUS_VALUES = [
     "Declined (Applied, Rejected)",
     "Down (Applied, No Response)",
     "Down: Closed Before Applying",
+    "Down: Ruled Out",
     "Interviewed: Rejected",
 ]
 

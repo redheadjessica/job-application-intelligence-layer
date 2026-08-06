@@ -123,7 +123,7 @@ def load_meta(csv_path) -> dict:
     merged["order"] = data.get("order") or DEFAULT_METADATA["order"]
     return merged
 
-# ---- Status vocabulary: the 12 dropdown values (vet-jobs statusFor outputs are a subset). ----
+# ---- Status vocabulary: the dropdown values (vet-jobs statusFor outputs are a subset). ----
 # Defined ONCE in norm_contracts, alongside the repair function — a second copy here would be a
 # place for the two to drift, and a status that drifts loses its dropdown match and its color.
 STATUS_VALUES = norm_contracts.STATUS_VALUES
@@ -152,6 +152,7 @@ STATUS_COLORS = {
     "Declined (Applied, Rejected)":                                          ("A52A2A", "FFFFFF"),
     "Down (Applied, No Response)":                                           ("A52A2A", "FFFFFF"),
     "Down: Closed Before Applying":                                          ("A52A2A", "FFFFFF"),
+    "Down: Ruled Out":                                                       ("A52A2A", "FFFFFF"),
     "Interviewed: Rejected":                                                 ("7B3F00", "FFFFFF"),
 }
 
@@ -545,6 +546,7 @@ INSTRUCTIONS = [
     ("Status", True),
     ("\"Status? [You Change]\" starts from the AI's Final Score:  >=80 Apply ASAP  ·  70-79 Apply If Time  ·  60-69 Backup Lane  ·  <60 Or Skip It.  Pick a new value from the dropdown as each application progresses.", False),
     ("\"On Ice\" means you already applied to a different role at that company — don't double-apply.", False),
+    ("\"Down: Ruled Out\" is a manual, human-only status (the AI won't set it): use it when YOU decide not to apply to a role, for any reason — you don't feel you meet the bar well enough, the comp isn't worth it, the location doesn't work, you've lost interest, whatever. It just records that you chose to pass.", False),
     ("", False),
     ("Grouping & sorting", True),
     ("To group by stage, sort by the Status column (use the header filter button, or Data > Sort). The job rows have no merged cells, so sorting works cleanly.", False),
