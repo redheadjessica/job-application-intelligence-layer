@@ -215,3 +215,23 @@ def test_backup_snapshots_are_never_migrated(tmp_path):
     mig.migrate(tmp_path, apply=True, out=lines.append)
     assert _inventory(f) == before
     assert "0 job folder(s)" in "\n".join(lines)
+
+
+def test_a_job_folder_nested_inside_another_is_still_found(tmp_path):
+    """A folder covering two roles at one company keeps the first role's artifacts at its top
+    level and the second in a subfolder. Stopping at the first match strands the nested one."""
+    outer = _flat_folder(tmp_path, "Dropbox - Staff & Principal PM")
+    inner = outer / "Principal PM - Teams & Collab"
+    for n in ("MANIFEST.txt", "submitted-resume.txt"):
+        _write(inner / "_extracted" / n)
+    mig.migrate(tmp_path, apply=True, out=lambda *_: None)
+    assert f"{RC}/MANIFEST.txt" in _inventory(inner)
+    assert f"{CL}/final.md" in _inventory(outer)
+
+
+def test_the_walker_does_not_recurse_into_a_migrated_lane(tmp_path):
+    """Lanes live inside a job folder; treating one as a folder to migrate would loop."""
+    f = _flat_folder(tmp_path)
+    mig.migrate(tmp_path, apply=True, out=lambda *_: None)
+    found = [str(p) for p in mig.find_job_folders(tmp_path)]
+    assert found == [str(f)]

@@ -100,12 +100,19 @@ def find_job_folders(root):
     descending into one would treat its internals as a folder to migrate."""
     out = []
 
+    # Directories that belong to a job folder rather than containing one.
+    interior = {*AGENT_WORK_DIRS, LEGACY_EXTRACTION_DIR}
+
     def walk(d):
         if d.name.endswith(".pages") or d.name.startswith(".") or d.name in EXCLUDED_DIR_NAMES:
             return
+        if d.name in interior:
+            return
         if is_job_folder(d):
             out.append(d)
-            return
+            # Do NOT stop here. A folder covering two roles at one company holds the first
+            # role's artifacts at its top level and the second in a subfolder — stopping at the
+            # first match leaves the nested role permanently unmigrated.
         try:
             children = sorted(p for p in d.iterdir() if p.is_dir())
         except OSError:
