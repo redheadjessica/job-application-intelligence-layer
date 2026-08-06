@@ -11,6 +11,10 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-05 — Tailoring output now includes the writing-piece URLs
+
+The tailoring recommendation (`application_resume_output`) named Selected-Writing / Projects picks by title only, so the candidate had to go look each link up by hand before using them. Fixed at the spec: `00-job_application_agent.md`'s Selected-Writing section now requires each recommended piece to be output as `- "Title" — <full URL> — why`, with the URL pulled verbatim from the writing index (the candidate's writing library / CONTENT-KEY, exposed at the writing-links path), never guessed; a piece with no URL in the index must be flagged, not silently dropped; and this applies to any piece embedded in a work-experience bullet too. The index already carries canonical URLs (markdown links per piece), so no index change was needed — only the output contract. Benefits every user. (A separate one-time backfill adds URLs to the already-generated tailored `.md` files.)
+
 ## 2026-08-06 — Working Location leads with the candidate's own hub, and two silent city-drops
 
 A multi-hub posting rendered as `IRL NYC/SF/Austin/DC - 2+ days`. That reads as four commutes to evaluate when only one is real — the candidate works out of their own hub and the rest are alternates. The cell now leads with the home metro and demotes the alternates into the cadence parenthetical: `IRL NYC - 2+ days (or SF/Austin/DC hub, 2+ days)`. No information is lost, the color is unchanged (it already evaluated the home-metro option), and it only applies when a home metro is configured AND present in the list — a genuinely out-of-geo list stays a flat slash-list, because there the alternates *are* the decision. Already-canonical flat values are upgraded in place on re-normalization rather than grandfathered, so an existing workbook repairs itself instead of carrying two shapes forever.
