@@ -39,6 +39,73 @@ AGENT_WORK_DIRS = (WORK_DIR, *LEGACY_WORK_DIRS)
 # The " - v2" / " - v3" revision suffix on a review packet (unchanged by any rename).
 VERSION_SUFFIX_RE = re.compile(r" - v\d+$", re.I)
 
+# --------------------------------------------------------------------------- #
+# Lanes (2026-08-06). Inside the work directory, artifacts are grouped by the agent that
+# produced them. Before this, everything sat in one flat pile and reconcile's extraction lived
+# in a separate top-level "_extracted/" whose name said nothing about what made it.
+#
+# Casing is canonical on write. Compare case-insensitively on read — APFS is case-insensitive,
+# so a hand-created "cover letter agent/" IS the same directory, but a literal string comparison
+# would miss it.
+# --------------------------------------------------------------------------- #
+LANE_COVER_LETTER = "Cover Letter Agent"
+LANE_RECONCILE = "Reconcile Agent"
+LANE_RESUME = "Resume Tailoring Agent"
+LANES = (LANE_COVER_LETTER, LANE_RECONCILE, LANE_RESUME)
+
+# The pre-lane home of reconcile's extraction, at the job-folder top level.
+LEGACY_EXTRACTION_DIR = "_extracted"
+
+# The sentinel that proves an extraction directory is real and complete.
+EXTRACTION_MANIFEST = "MANIFEST.txt"
+
+
+def search_dirs(folder, lane=None):
+    """Directories to search for an artifact, best shape first.
+
+    Order, and why each tier exists:
+      1. work dir / lane      the current shape
+      2. work dir             flat — the 2026-08-04 shape, still on disk in many folders
+      3. legacy work dirs     "_cl_work", same two tiers again
+      4. cross-lane           a half-migrated folder is a real state, and no filename collides
+                              across lanes, so looking in the wrong lane is unambiguous
+    The folder root is NOT included: only two artifacts ever lived there, and they say so
+    themselves rather than making every lookup scan the deliverables."""
+    folder = Path(folder)
+    for wd in AGENT_WORK_DIRS:
+        if lane:
+            yield folder / wd / lane
+        yield folder / wd
+    if lane:
+        for wd in AGENT_WORK_DIRS:
+            for other in LANES:
+                if other != lane:
+                    yield folder / wd / other
+
+
+def lane_dir_for_write(folder, lane):
+    """Where a writer puts a lane's artifacts: always the current work dir + canonical casing."""
+    return work_dir_for_write(folder) / lane
+
+
+def extraction_dir_for_write(folder):
+    """Where reconcile's extraction is written now."""
+    return lane_dir_for_write(folder, LANE_RECONCILE)
+
+
+def extraction_dir_for_read(folder):
+    """The extraction directory to READ, or the write path when none exists yet.
+
+    Resolved by the presence of MANIFEST.txt, not by directory existence — an empty lane dir
+    left behind by an interrupted run must not read as a completed extraction. This is what the
+    cache check depends on: miss it, and every folder still holding a legacy `_extracted/` gets
+    re-extracted into a second directory that can then diverge from the first."""
+    folder = Path(folder)
+    for d in (extraction_dir_for_write(folder), folder / LEGACY_EXTRACTION_DIR):
+        if (d / EXTRACTION_MANIFEST).is_file():
+            return d
+    return extraction_dir_for_write(folder)
+
 
 def work_dir_for_write(folder):
     """Where a writer creates agent work: ALWAYS the current name.
@@ -59,13 +126,13 @@ def agent_work_dir(folder):
     return folder / WORK_DIR
 
 
-def find_agent_artifact(folder, *relnames):
-    """First existing <folder>/<work dir>/<relname> across both work-dir spellings, else None.
-    Multiple relnames are tried in preference order within each directory."""
-    folder = Path(folder)
-    for name in AGENT_WORK_DIRS:
+def find_agent_artifact(folder, *relnames, lane=None):
+    """First existing <search dir>/<relname>, else None. Directories are tried in `search_dirs`
+    order (current shape first, historical shapes after); within each, relnames are tried in the
+    order given, so a caller can express "current name, then legacy name"."""
+    for d in search_dirs(folder, lane):
         for rel in relnames:
-            p = folder / name / rel
+            p = d / rel
             if p.is_file():
                 return p
     return None
@@ -79,14 +146,15 @@ def coverletter_baseline(folder):
     "what did the agent write before any human touched it" versus what was actually submitted.
     Globbing `final-v*` here would silently re-baseline against a revision and make every later
     diff measure the wrong thing."""
-    return find_agent_artifact(folder, "final.md")
+    return find_agent_artifact(folder, "final.md", lane=LANE_COVER_LETTER)
 
 
 def resume_base_comparison(folder):
     """The tailoring step's base-vs-improved sidecar, or None. Current name in the work dir;
     legacy `comparison.json` in the work dir, then at the folder root (pre-work-dir folders)."""
     folder = Path(folder)
-    found = find_agent_artifact(folder, "resume_base_comparison.json", "comparison.json")
+    found = find_agent_artifact(folder, "resume_base_comparison.json", "comparison.json",
+                                lane=LANE_RESUME)
     if found:
         return found
     legacy = folder / "comparison.json"
@@ -99,7 +167,8 @@ def coverletter_packet(folder):
     wins over "- v2"/"- v3" revisions — it is the immutable learning baseline, and plain
     name-sorting would pick the wrong one (" - v2.md" sorts BEFORE ".md")."""
     folder = Path(folder)
-    candidates = [(folder / name, "coverletter_agent_output - *.md") for name in AGENT_WORK_DIRS]
+    candidates = [(d, "coverletter_agent_output - *.md")
+                  for d in search_dirs(folder, LANE_COVER_LETTER)]
     candidates.append((folder, "application_coverletter_output - *.md"))
     for d, pattern in candidates:
         if d.is_dir():

@@ -61,8 +61,8 @@ def test_bullets_are_indented_as_a_group_not_flush_with_the_body(tmp_path):
     assert len(bullets) == 2
     for p in bullets:
         # Text sits at the deeper stop; the glyph hangs back to the shallower one.
-        assert p.paragraph_format.left_indent.inches == pytest.approx(0.5)
-        assert p.paragraph_format.first_line_indent.inches == pytest.approx(-0.25)
+        assert p.paragraph_format.left_indent.inches == pytest.approx(0.375)
+        assert p.paragraph_format.first_line_indent.inches == pytest.approx(-0.125)
     # Body prose stays flush left — only the list is indented.
     for p in _body(doc):
         assert not p.paragraph_format.left_indent
@@ -85,8 +85,8 @@ def test_each_bullet_pins_an_explicit_tab_stop_at_the_text_indent(tmp_path):
     for p in _bullets(doc):
         stops = p._p.find(qn("w:pPr")).findall(qn("w:tabs") + "/" + qn("w:tab"))
         assert stops, "bullet paragraph has no explicit tab stop"
-        # 0.5 inch == 720 twips
-        assert [s.get(qn("w:pos")) for s in stops] == ["720"]
+        # 0.375 inch == 540 twips
+        assert [s.get(qn("w:pos")) for s in stops] == ["540"]
 
 
 def test_bullets_are_separated_from_each_other(tmp_path):

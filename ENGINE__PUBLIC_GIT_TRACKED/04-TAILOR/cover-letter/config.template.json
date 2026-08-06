@@ -22,7 +22,7 @@
     "size_pt": 10,
     "color_hex": "3F3F3F",
     "bullet_indent_in": 0.25,
-    "bullet_text_indent_in": 0.5,
+    "bullet_text_indent_in": 0.375,
     "bullet_space_after_pt": 8
   }
 }

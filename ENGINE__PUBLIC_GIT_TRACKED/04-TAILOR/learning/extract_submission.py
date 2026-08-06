@@ -4,15 +4,19 @@
 Turns the PDFs in a submitted-application archive folder into cached plain-text artifacts so
 reconcile agents never re-read PDFs (or pay vision costs) on any later run:
 
-  _extracted/submitted-resume.txt       resume pages (from the submitted resume PDF)
-  _extracted/submitted-coverletter.txt  cover-letter pages (found by CONTENT, any PDF)
-  _extracted/submitted-answers.txt      application Q&A (pasted application-answers.txt wins;
-                                        else answer-classified PDF pages; screenshots are listed
-                                        in the manifest for one-time agent transcription)
-  _extracted/coverletter-diff.txt       sentence-level unified diff: "_JAIL Agent Work/final.md"
-                                        (baseline, normalized; legacy folders: "_cl_work/final.md")
-                                        vs the submitted cover letter. THE feedback signal.
-  _extracted/MANIFEST.txt               what was found, how pages were classified, what's missing
+  <extraction dir>/submitted-resume.txt       resume pages (from the submitted resume PDF)
+  <extraction dir>/submitted-coverletter.txt  cover-letter pages (found by CONTENT, any PDF)
+  <extraction dir>/submitted-answers.txt      application Q&A (pasted application-answers.txt wins;
+                                              else answer-classified PDF pages; screenshots are
+                                              listed in the manifest for agent transcription)
+  <extraction dir>/coverletter-diff.txt       sentence-level unified diff: the cover-letter
+                                              baseline (normalized) vs the submitted letter,
+                                              labelled by its real path. THE feedback signal.
+  <extraction dir>/MANIFEST.txt               what was found, how pages were classified, what's missing
+
+The extraction directory is "_JAIL Agent Work/Reconcile Agent/" as of 2026-08-06. Folders extracted
+before that keep their results in a top-level "_extracted/" and are read there, never re-extracted —
+this script prints the resolved path as "EXTRACTION_DIR: <path>" so callers never assume one.
 
 The candidate's identity chrome (signature line, personal domains) is read from
 PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/config.json (signature_name, personal_domains) when it exists, so
@@ -20,8 +24,8 @@ template header/contact lines never pollute the diff. Without that config, gener
 filters still apply.
 
 Usage: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/learning/extract_submission.py "<folder>" [--force]
-Cached: exits immediately if _extracted/MANIFEST.txt exists (use --force to redo).
-Needs pypdf (in the .venv). Only writes inside <folder>/_extracted/.
+Cached: exits immediately if the resolved extraction dir already has MANIFEST.txt (--force redoes it).
+Needs pypdf (in the .venv). Only ever writes inside the job folder.
 """
 
 import difflib
@@ -45,10 +49,13 @@ RESUME_MARKERS = ("experience", "skills", "education", "summary", "professional"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from job_folder_layout import (  # noqa: E402
     AGENT_WORK_DIRS,
+    EXTRACTION_MANIFEST,
     VERSION_SUFFIX_RE,
     agent_work_dir,
     coverletter_baseline,
     coverletter_packet,
+    extraction_dir_for_read,
+    extraction_dir_for_write,
     find_agent_artifact,
     resume_base_comparison,
     work_dir_for_write,
@@ -134,13 +141,24 @@ def main():
     if not folder.is_dir():
         print(f"not a folder: {folder}", file=sys.stderr)
         return 2
-    out = folder / "_extracted"
-    manifest_path = out / "MANIFEST.txt"
+    # Read-resolve first: a folder extracted before the lane split still holds its results in a
+    # top-level "_extracted/". Skipping this check would re-extract every one of those and leave
+    # two extraction directories per folder, free to diverge.
+    cached = extraction_dir_for_read(folder)
+    manifest_path = cached / EXTRACTION_MANIFEST
     if manifest_path.exists() and not force:
+        # Announce the resolved directory before anything else. Readers (the reconcile agent)
+        # take the path from HERE rather than hardcoding one, so a folder in any historical
+        # shape is read from wherever its results actually are.
+        print(f"EXTRACTION_DIR: {cached}")
         print(manifest_path.read_text(encoding="utf-8"))
         print("(cached — pass --force to re-extract)")
         return 0
-    out.mkdir(exist_ok=True)
+    # Re-extraction rewrites in place when the results are already here; a fresh run writes to
+    # the current shape.
+    out = cached if manifest_path.exists() else extraction_dir_for_write(folder)
+    out.mkdir(parents=True, exist_ok=True)
+    print(f"EXTRACTION_DIR: {out}")
 
     manifest = [f"Extraction manifest for: {folder.name}", ""]
     resume_parts, letter_parts, answer_parts = [], [], []
@@ -207,7 +225,10 @@ def main():
         pick = next((n for n in letter_by_pdf if "coverletter" in n.lower().replace(" ", "").replace("-", "")),
                     next(iter(letter_by_pdf)))
         manifest.append(f"COVERLETTER-DIFF source: {pick}")
-        base_label = f"{baseline.parent.name}/{baseline.name}"
+        # Full path relative to the job folder. Under lanes the parent dir alone would
+        # read as a bare "Cover Letter Agent/final.md"; this also reproduces the exact
+        # "_cl_work/final.md" / "_JAIL Agent Work/final.md" labels older folders carry.
+        base_label = str(baseline.relative_to(folder))
         base_sents = normalize_for_diff(baseline.read_text(encoding="utf-8"), is_markdown=True)
         sub_sents = normalize_for_diff("\n".join(letter_by_pdf[pick]))
         diff = list(difflib.unified_diff(base_sents, sub_sents, lineterm="",

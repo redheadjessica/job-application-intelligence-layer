@@ -27,7 +27,7 @@ can be read out of the PDF itself — ask your assistant to measure them rather 
 
 - Single line spacing; one blank line's worth of space between paragraphs (10pt space-after,
   0 space-before) — never hard-wrap prose with manual line breaks.
-- Bullets: "•" with a bold lead-in phrase ending with a period, then regular text continuing on the same line. The block is **indented as a group**, not flush with the body prose — the glyph sits at `docx.bullet_indent_in` (default 0.25") and the text at `docx.bullet_text_indent_in` (default 0.5"), so wrapped lines align under the text rather than under the "•", and `docx.bullet_space_after_pt` (default 8) separates one bullet from the next. `make_cover_letter_docx.py` applies this automatically and pins an explicit tab stop at the text indent; do not hand-fix the indent in Word afterward.
+- Bullets: "•" with a bold lead-in phrase ending with a period, then regular text continuing on the same line. The block is **indented as a group**, not flush with the body prose — the glyph sits at `docx.bullet_indent_in` (default 0.25") and the text at `docx.bullet_text_indent_in` (default 0.375", a tight 0.125" off the glyph — not a wide gutter), so wrapped lines align under the text rather than under the "•", and `docx.bullet_space_after_pt` (default 8) separates one bullet from the next. `make_cover_letter_docx.py` applies this automatically and pins an explicit tab stop at the text indent; do not hand-fix the indent in Word afterward.
 - Inline links: real hyperlinks, **underlined, body text color** — not bright blue, unless your
   template wants that.
 - No headers/footers, no page-margin fiddling (you paste the body only).

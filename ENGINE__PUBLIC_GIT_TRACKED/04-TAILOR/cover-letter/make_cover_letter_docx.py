@@ -38,9 +38,11 @@ DEFAULTS = {
     # glyph sits at `bullet_indent_in` and the text at `bullet_text_indent_in`, so
     # wrapped lines align under the text rather than under the "•". Without the group
     # indent the list reads as more body paragraphs; with it, the letter has a visible
-    # scannable middle. `bullet_space_after_pt` is the gap BETWEEN bullets.
+    # scannable middle. The gap between the glyph and the text is the DIFFERENCE of the
+    # two (0.375 - 0.25 = 0.125"); a wider gap reads as a gutter, so keep the text indent
+    # close to the glyph. `bullet_space_after_pt` is the gap BETWEEN bullets.
     "bullet_indent_in": 0.25,
-    "bullet_text_indent_in": 0.5,
+    "bullet_text_indent_in": 0.375,
     "bullet_space_after_pt": 8,
 }
 

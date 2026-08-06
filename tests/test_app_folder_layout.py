@@ -109,7 +109,7 @@ def _run_extract(tmp_path, monkeypatch, build_shape):
     monkeypatch.setattr(es, "PdfReader", _FakeReader)
     monkeypatch.setattr(sys, "argv", ["extract_submission.py", str(folder)])
     assert es.main() == 0
-    return folder / "_extracted"
+    return es.extraction_dir_for_read(folder)
 
 
 @pytest.mark.parametrize("shape,expected_label", [
@@ -134,3 +134,70 @@ def test_extraction_reports_no_baseline_when_neither_shape_exists(tmp_path, monk
     out = _run_extract(tmp_path, monkeypatch, lambda folder: None)
     assert "COVERLETTER-DIFF: no baseline" in (out / "MANIFEST.txt").read_text(encoding="utf-8")
     assert not (out / "coverletter-diff.txt").exists()
+
+
+# --- Lanes: extraction moved into "_JAIL Agent Work/Reconcile Agent/" (2026-08-06) -----------
+
+def test_fresh_extraction_lands_in_the_reconcile_lane(tmp_path, monkeypatch):
+    out = _run_extract(tmp_path, monkeypatch, _new_shape)
+    folder = tmp_path / "Acme - Senior PM"
+    assert out == folder / "_JAIL Agent Work" / "Reconcile Agent"
+    assert (out / "MANIFEST.txt").is_file()
+    # The pre-lane location is not created alongside it.
+    assert not (folder / "_extracted").exists()
+
+
+def test_a_legacy_extracted_folder_still_reads_as_cached_and_is_not_re_extracted(tmp_path, monkeypatch):
+    """The expensive failure: ~30 archived folders hold their results in a top-level
+    "_extracted/". If the cache check only looked at the new location, every one of them would
+    re-extract into a second directory that can then diverge from the first."""
+    folder = tmp_path / "Acme - Senior PM"
+    (folder / "_extracted").mkdir(parents=True)
+    (folder / "_extracted" / "MANIFEST.txt").write_text("prior run\n", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["extract_submission.py", str(folder)])
+    assert es.main() == 0
+    assert es.extraction_dir_for_read(folder) == folder / "_extracted"
+    # No second extraction directory was created.
+    assert not (folder / "_JAIL Agent Work" / "Reconcile Agent").exists()
+
+
+def test_an_empty_lane_dir_does_not_count_as_a_completed_extraction(tmp_path):
+    """Resolution is by MANIFEST.txt, not directory existence — an interrupted run leaves a
+    bare directory behind and it must not read as cached."""
+    folder = tmp_path / "Acme - Senior PM"
+    (folder / "_JAIL Agent Work" / "Reconcile Agent").mkdir(parents=True)
+    (folder / "_extracted").mkdir()
+    (folder / "_extracted" / "MANIFEST.txt").write_text("real\n", encoding="utf-8")
+    assert es.extraction_dir_for_read(folder) == folder / "_extracted"
+
+
+@pytest.mark.parametrize("where", [
+    ("_JAIL Agent Work", "Cover Letter Agent"),   # current shape
+    ("_JAIL Agent Work",),                        # flat (2026-08-04)
+    ("_cl_work",),                                # legacy
+])
+def test_the_baseline_is_found_in_every_historical_shape(tmp_path, where):
+    folder = tmp_path / "Acme - Senior PM"
+    d = folder.joinpath(*where)
+    d.mkdir(parents=True)
+    (d / "final.md").write_text("hi\n", encoding="utf-8")
+    assert es.coverletter_baseline(folder) == d / "final.md"
+
+
+def test_the_current_shape_wins_when_several_shapes_coexist(tmp_path):
+    """A half-migrated folder is a real state; the newest shape must win, not first-found."""
+    folder = tmp_path / "Acme - Senior PM"
+    for where in (("_cl_work",), ("_JAIL Agent Work",), ("_JAIL Agent Work", "Cover Letter Agent")):
+        d = folder.joinpath(*where)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "final.md").write_text("hi\n", encoding="utf-8")
+    assert es.coverletter_baseline(folder) == folder / "_JAIL Agent Work" / "Cover Letter Agent" / "final.md"
+
+
+def test_write_dir_ignores_a_legacy_dir_that_already_exists(tmp_path):
+    """agent_work_dir() answers the first EXISTING dir, which is right for reading and wrong for
+    writing — it would keep growing "_cl_work/". Writers use work_dir_for_write()."""
+    folder = tmp_path / "Acme - Senior PM"
+    (folder / "_cl_work").mkdir(parents=True)
+    assert es.agent_work_dir(folder) == folder / "_cl_work"          # read: finds the legacy one
+    assert es.work_dir_for_write(folder) == folder / "_JAIL Agent Work"
