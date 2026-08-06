@@ -39,69 +39,20 @@ except ImportError:
 SIGNOFFS = ("looking forward", "warmly,", "sincerely", "best,", "thank you for", "i'd love the chance")
 RESUME_MARKERS = ("experience", "skills", "education", "summary", "professional")
 
-# Agent working artifacts moved out of the job folder's top level on 2026-08-04: the directory
-# "_cl_work/" became "_JAIL Agent Work/" and took the cover-letter review packet and the resume
-# base-comparison sidecar in with it. Already-submitted archive folders still sit on disk in the
-# old shape, so every READER accepts both, newest name first; writers only ever emit the new one.
-AGENT_WORK_DIRS = ("_JAIL Agent Work", "_cl_work")
-
-# The " - v2" / " - v3" revision suffix (unchanged by the rename).
-VERSION_SUFFIX_RE = re.compile(r" - v\d+$", re.I)
-
-
-def agent_work_dir(folder):
-    """The folder's agent-work directory. Returns the first that exists (new name preferred),
-    else the NEW-name path — so a writer that calls this always creates the new shape."""
-    folder = Path(folder)
-    for name in AGENT_WORK_DIRS:
-        if (folder / name).is_dir():
-            return folder / name
-    return folder / AGENT_WORK_DIRS[0]
-
-
-def find_agent_artifact(folder, *relnames):
-    """First existing <folder>/<work dir>/<relname> across both work-dir spellings, else None.
-    Multiple relnames are tried in preference order within each directory."""
-    folder = Path(folder)
-    for name in AGENT_WORK_DIRS:
-        for rel in relnames:
-            p = folder / name / rel
-            if p.is_file():
-                return p
-    return None
-
-
-def coverletter_baseline(folder):
-    """The frozen cover-letter learning baseline, or None. New location preferred; falls back to
-    the legacy "_cl_work/final.md" so reconcile keeps working on pre-rename archive folders."""
-    return find_agent_artifact(folder, "final.md")
-
-
-def resume_base_comparison(folder):
-    """The tailoring step's base-vs-improved sidecar, or None. New:
-    "_JAIL Agent Work/resume_base_comparison.json"; legacy: "comparison.json" at the folder root."""
-    folder = Path(folder)
-    found = find_agent_artifact(folder, "resume_base_comparison.json", "comparison.json")
-    if found:
-        return found
-    legacy = folder / "comparison.json"
-    return legacy if legacy.is_file() else None
-
-
-def coverletter_packet(folder):
-    """The cover-letter review packet, or None. New: "_JAIL Agent Work/coverletter_agent_output - ….md";
-    legacy: "application_coverletter_output - ….md" at the folder root. The un-versioned ORIGINAL
-    always wins over "- v2"/"- v3" revisions — it is the immutable learning baseline, and plain
-    name-sorting would pick the wrong one (" - v2.md" sorts BEFORE ".md")."""
-    folder = Path(folder)
-    candidates = [(folder / name, "coverletter_agent_output - *.md") for name in AGENT_WORK_DIRS]
-    candidates.append((folder, "application_coverletter_output - *.md"))
-    for d, pattern in candidates:
-        if d.is_dir():
-            hits = sorted(d.glob(pattern), key=lambda p: (bool(VERSION_SUFFIX_RE.search(p.stem)), p.name))
-            if hits:
-                return hits[0]
-    return None
+# Where artifacts live inside a job folder is owned by ONE module, so the Python readers, the
+# back-fill migration, and the agent prompts can't drift apart. Re-exported here because this
+# file was the original home and other callers (and the tests) import these names from it.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from job_folder_layout import (  # noqa: E402
+    AGENT_WORK_DIRS,
+    VERSION_SUFFIX_RE,
+    agent_work_dir,
+    coverletter_baseline,
+    coverletter_packet,
+    find_agent_artifact,
+    resume_base_comparison,
+    work_dir_for_write,
+)
 
 
 def load_identity():
