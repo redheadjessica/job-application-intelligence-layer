@@ -146,6 +146,18 @@ def test_a_symlink_skips_the_folder(tmp_path):
     assert target.is_file()
 
 
+def test_an_old_conflicted_copy_does_not_block_the_run(tmp_path):
+    """Two 2015-era "conflicted copy" aliases sit in the real archive. Refusing on those blocks
+    the migration forever over files that say nothing about whether a sync is in flight."""
+    import os, time
+    f = _flat_folder(tmp_path)
+    stale = _write(tmp_path / "old (Jessicas-MacBook's conflicted copy 2015-01-24)")
+    old_t = time.time() - 400 * 24 * 3600
+    os.utime(stale, (old_t, old_t))
+    assert mig.migrate(tmp_path, apply=True, out=lambda *_: None) == 0
+    assert f"{CL}/final.md" in _inventory(f)
+
+
 def test_a_sync_conflict_stops_the_run_before_anything_moves(tmp_path):
     f = _flat_folder(tmp_path)
     _write(tmp_path / "notes (Jessica's conflicted copy 2026-08-06).md")

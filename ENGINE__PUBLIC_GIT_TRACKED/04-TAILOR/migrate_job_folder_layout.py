@@ -21,6 +21,7 @@ within one folder, which a human can undo by hand. Every rule below exists to ke
 import argparse
 import re
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -71,6 +72,9 @@ DRAFT_PREFIX = "Cover-Letter-Draft - "
 # Directories whose whole value is being an unchanged snapshot. Migrating a folder named
 # "pre-folder-rename" defeats the only reason it exists.
 EXCLUDED_DIR_NAMES = {"_backups"}
+
+# How recent a "conflicted copy" has to be to mean "a sync is in flight right now".
+CONFLICT_WINDOW_S = 7 * 24 * 60 * 60
 
 # Top-level files that are the candidate's, not the pipeline's. Never touched.
 PROTECTED_SUFFIXES = {".pdf", ".pages", ".docx", ".doc", ".txt"}
@@ -211,11 +215,19 @@ def migrate(root, apply=False, out=print):
     if not root.is_dir():
         out(f"not a directory: {root}")
         return 2
-    # A mass move during a Dropbox sync multiplies conflicts instead of resolving them.
-    conflicted = next(root.rglob("*conflicted copy*"), None)
-    if conflicted:
-        out(f"REFUSING: sync conflict present under {root} ({conflicted.name}).")
-        out("Let the folder finish syncing and resolve the conflict first.")
+    # A mass move during a Dropbox sync multiplies conflicts instead of resolving them. What
+    # matters is whether a sync is happening NOW — a decade-old "conflicted copy" left in some
+    # unrelated folder says nothing about that, and refusing on it just blocks the run forever.
+    fresh = []
+    for c in root.rglob("*conflicted copy*"):
+        try:
+            if time.time() - c.stat().st_mtime < CONFLICT_WINDOW_S:
+                fresh.append(c)
+        except OSError:
+            continue
+    if fresh:
+        out(f"REFUSING: {len(fresh)} recent sync conflict(s) under {root}, e.g. {fresh[0].name}.")
+        out("Let the folder finish syncing and resolve the conflict(s) first.")
         return 2
 
     folders = find_job_folders(root)
