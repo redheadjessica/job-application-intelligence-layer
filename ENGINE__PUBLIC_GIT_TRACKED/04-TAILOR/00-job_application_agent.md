@@ -137,9 +137,11 @@ Only read it when the candidate explicitly includes `[USE BIO]` in their request
 
 When `[USE BIO]` is absent, do not open this file.
 
-(Application artifact filenames are DERIVED, never composed by hand: run
-`norm_contracts.py --resume-filename` / `--cover-letter-filename`, which take the
-candidate's name from `candidate.name` in `jail.config.json`.)
+(Application artifact filenames are DERIVED, never composed by hand. The two **deliverables** —
+what the candidate actually submits — carry their name: `norm_contracts.py --resume-filename` /
+`--cover-letter-filename`, taking it from `candidate.name` in `jail.config.json`. The agent's
+copy-paste `.docx` is NOT a deliverable and takes no name: `--cover-letter-draft-filename`
+produces `Cover-Letter-Draft - <Company - Role>.docx`.)
 
 ---
 

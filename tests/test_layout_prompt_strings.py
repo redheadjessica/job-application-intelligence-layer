@@ -57,6 +57,10 @@ BASELINE_CONSUMERS = {
     # only uses "final.md" as a scratch filename.
     "tests/test_app_folder_layout.py",
     "tests/test_cover_letter_docx_bullets.py",
+    # The migration names it in order to REFUSE to rename it (a hard-coded refusal, not a flag),
+    # and its test asserts that refusal. Reviewed 2026-08-06: neither writes the file.
+    "ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/migrate_job_folder_layout.py",
+    "tests/test_migrate_job_folder_layout.py",
 }
 
 SEARCH_ROOTS = [".claude", "ENGINE__PUBLIC_GIT_TRACKED", "docs", "tests"]
@@ -131,3 +135,12 @@ def test_workflow_scripts_still_parse(path):
     only shows up at run time, mid-workflow."""
     r = subprocess.run(["node", "--check", str(path)], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+def test_the_docx_step_asks_for_the_draft_name_not_the_deliverable_name():
+    """The .docx is a copy-paste source, not what gets submitted. If the finalize step ever
+    reverts to --cover-letter-filename it silently starts producing a candidate-prefixed name
+    one character from the real deliverable sitting beside it."""
+    text = (REPO / ".claude/workflows/cover-letter.js").read_text(encoding="utf-8")
+    assert "--cover-letter-draft-filename" in text
+    assert "--cover-letter-filename" not in text.replace("--cover-letter-draft-filename", "")
