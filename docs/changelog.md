@@ -31,6 +31,18 @@ Fixed by collapsing to a single tailoring path: `run-batch`'s Tailor phase now d
 
 The tailoring recommendation (`application_resume_output`) named Selected-Writing / Projects picks by title only, so the candidate had to go look each link up by hand before using them. Fixed at the spec: `00-job_application_agent.md`'s Selected-Writing section now requires each recommended piece to be output as `- "Title" — <full URL> — why`, with the URL pulled verbatim from the writing index (the candidate's writing library / CONTENT-KEY, exposed at the writing-links path), never guessed; a piece with no URL in the index must be flagged, not silently dropped; and this applies to any piece embedded in a work-experience bullet too. The index already carries canonical URLs (markdown links per piece), so no index change was needed — only the output contract. Benefits every user. (A separate one-time backfill adds URLs to the already-generated tailored `.md` files.)
 
+## 2026-08-06 — Back-fill complete, and two things only real folders could teach the migration
+
+Ran the back-fill over both roots — the active review workspace and the submitted-applications archive. Re-runs plan zero moves; every legacy work/extraction directory is drained except deliberate exclusions.
+
+Two defects that no synthetic fixture would have produced:
+
+**The sync-conflict guard was asking the wrong question.** It refused to start if any `*conflicted copy*` file existed anywhere under the root. A real archive had two of them **eleven years old** — stale aliases in a folder unrelated to the pipeline. What the guard means is "is the sync client mid-sync right now"; what it asked was "has a conflict ever happened here", which a decade-old artifact answers yes forever. Now scoped to conflicts modified within 7 days.
+
+**A job folder nested inside another job folder was never visited.** The walker stopped descending at the first match — correct for a normal folder, wrong for one covering two roles at the same employer, where the first role's artifacts sit at the top level and the second's in a subfolder. The inner role kept its pre-lane extraction directory. The walker now records the match and keeps walking, skipping the work and extraction directories so it cannot recurse into a folder's own lanes.
+
+Worth knowing the tool is *supposed* to leave some things alone: a few folders still hold a legacy work directory containing exactly one hand-named file — variants like `final-v3-proposal.md` and `final-pre-customer-clause.md`. None is an agent artifact, and the anchored matching that protects them is the same rule that keeps `eval-rubric.md` and hand-authored draft variants intact. Backup snapshots are untouched by design.
+
 ## 2026-08-06 — Agent work is grouped by lane; agents ask where artifacts live instead of assuming
 
 A job folder's `_JAIL Agent Work/` was one flat pile — cover-letter drafts, evals, finals, the review packet, the resume-comparison sidecar — while reconcile wrote its extraction to a *separate* top-level `_extracted/` whose name said nothing about what produced it. Inside the work dir, artifacts are now grouped by the agent that made them: `Cover Letter Agent/`, `Reconcile Agent/` (absorbing `_extracted/`), `Resume Tailoring Agent/`. The job folder's top level is left to the things a human reads.
