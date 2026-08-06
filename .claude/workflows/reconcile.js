@@ -71,99 +71,20 @@ const DISCOVER_SCHEMA = {
   },
 }
 
+// Deliberately TINY. The full findings structure is written by the agent to a JSON
+// sidecar next to its report and read by the Synthesize stage — returning it inline
+// made the output schema large enough to be rejected ("output schema too large to
+// classify safely"), which silently zeroed out every reconcile run. Keep this small.
 const RECONCILE_SCHEMA = {
   type: 'object', additionalProperties: false,
-  required: ['folder_path', 'company', 'role', 'base_recommended', 'base_used', 'agreed_or_overrode',
-    'observed', 'inferred', 'questions', 'candidate_ledger', 'proposed_updates', 'finalized_summary',
-    'base_template_candidate', 'anecdotes', 'answer_pairs', 'cover_letter_findings', 'report_path'],
+  required: ['folder_path', 'company', 'role', 'report_path', 'findings_path', 'headline'],
   properties: {
     folder_path: { type: 'string' },
     company: { type: 'string' },
     role: { type: 'string' },
-    submitted_date: { type: 'string' },
-    base_recommended: { type: 'string' },
-    base_used: { type: 'string' },
-    agreed_or_overrode: { type: 'string', enum: ['agreed', 'overrode', 'mixed', 'unknown'] },
-    observed: { type: 'array', items: { type: 'string' }, description: 'terse factual diffs' },
-    inferred: {
-      type: 'array',
-      items: {
-        type: 'object', additionalProperties: false,
-        required: ['category', 'confidence', 'lesson'],
-        properties: {
-          category: { type: 'string', enum: ['routing', 'missed-evidence', 'claim-boundary', 'voice', 'skills', 'content'] },
-          confidence: { type: 'string', enum: ['high', 'med', 'low'] },
-          lesson: { type: 'string' },
-        },
-      },
-    },
-    questions: { type: 'array', items: { type: 'string' } },
-    candidate_ledger: { type: 'string', description: 'terse ledger entry for this application' },
-    proposed_updates: {
-      type: 'array',
-      items: {
-        type: 'object', additionalProperties: false,
-        required: ['target_file', 'change', 'confidence', 'gate'],
-        properties: {
-          target_file: { type: 'string' },
-          change: { type: 'string' },
-          confidence: { type: 'string', enum: ['high', 'med', 'low'] },
-          gate: { type: 'string', enum: ['needs-confirmation', 'needs-2nd-occurrence'] },
-        },
-      },
-    },
-    finalized_summary: { type: 'string', description: 'the verbatim professional summary from the FINAL submitted PDF' },
-    base_template_candidate: {
-      type: 'object', additionalProperties: false,
-      required: ['is_candidate', 'archetype', 'recommendation'],
-      description: 'Is this finalized resume a clean, reusable base/template for a role archetype (copy-don\'t-rebuild)? Single occurrence is enough to FLAG; promotion is confirmation-only by the candidate.',
-      properties: {
-        is_candidate: { type: 'boolean' },
-        archetype: { type: 'string', description: 'e.g. "healthcare + mobile + retention"; "" if not a candidate' },
-        recommendation: { type: 'string', description: 'why future similar roles should copy this exact resume; "" if not a candidate' },
-      },
-    },
-    anecdotes: {
-      type: 'array',
-      description: 'personal stories/lived details harvested from the submitted letter + answers (spec §13). new=true for stories not in the anecdote bank; new=false to record a reuse for Used-in tracking. Empty if the cover-letter module is not set up.',
-      items: {
-        type: 'object', additionalProperties: false,
-        required: ['slug', 'new', 'story', 'themes', 'use_when'],
-        properties: {
-          slug: { type: 'string', description: 'kebab-case; match the existing bank slug when new=false' },
-          new: { type: 'boolean' },
-          story: { type: 'string', description: 'the story in the candidate\'s own (condensed) words; "" when new=false' },
-          themes: { type: 'string' },
-          use_when: { type: 'string' },
-        },
-      },
-    },
-    answer_pairs: {
-      type: 'array',
-      description: 'application Q&A harvested from submitted-answers.txt (spec §13); empty if no answers found',
-      items: {
-        type: 'object', additionalProperties: false,
-        required: ['archetype', 'question', 'answer_condensed', 'anecdote_slugs'],
-        properties: {
-          archetype: { type: 'string', description: 'e.g. why-this-company, how-you-use-AI' },
-          question: { type: 'string' },
-          answer_condensed: { type: 'string', description: 'verbatim if short, else argument + anecdote slugs' },
-          anecdote_slugs: { type: 'array', items: { type: 'string' } },
-        },
-      },
-    },
-    cover_letter_findings: {
-      type: 'object', additionalProperties: false,
-      required: ['found', 'baseline_found', 'observed', 'candidates'],
-      description: 'Cover-letter lane (spec §12). found = a submitted cover letter was detected (by content, incl. last page of a combined PDF). baseline_found = "_JAIL Agent Work/final.md" (or the legacy "_cl_work/final.md") or the generated .docx existed to diff against.',
-      properties: {
-        found: { type: 'boolean' },
-        baseline_found: { type: 'boolean' },
-        observed: { type: 'array', items: { type: 'string' }, description: 'factual diffs baseline vs submitted (or "no-baseline" style observations)' },
-        candidates: { type: 'array', items: { type: 'string' }, description: 'plain-English candidate lessons: "You did Y on the [Company] letter — on purpose? Make it the default?" with before/after' },
-      },
-    },
     report_path: { type: 'string' },
+    findings_path: { type: 'string' },
+    headline: { type: 'string' },
   },
 }
 
@@ -244,6 +165,7 @@ log(`Reconciling ${discovery.ready.length} folder(s); ${(discovery.skipped || []
 phase('Reconcile')
 const results = (await parallel(discovery.ready.map((f) => async () => {
   const reportName = `reconcile-report - ${f.company} - ${f.role} - ${RUN_DATE}.md`
+  const findingsName = `reconcile-findings - ${f.company} - ${f.role} - ${RUN_DATE}.json`
   const extras = [
     f.cover_letter ? `Cover letter: "${f.cover_letter}"` : null,
     f.answers ? `Application answers: "${f.answers}"` : null,
@@ -270,8 +192,26 @@ Do:
 2b. COVER-LETTER LANE (rules above): interpret $EXTRACTION_DIR/coverletter-diff.txt — every +/- sentence is either formatting noise (say so) or a real edit needing a plain-English candidate lesson. Fill cover_letter_findings either way (found:false is a valid result).
 2c. HARVEST (rules above): fill anecdotes (new stories + reuses of bank slugs) and answer_pairs from the extracted letter + answers.
 3. WRITE the reconcile report to: ${f.folder_path}/${reportName}
-   Use the §2 structure: header (company/role/submitted/reconciled=${RUN_DATE}/status: pending-your-answers/inputs found), then 1.What the agent recommended, 2.What was submitted, 3.Observed changes (fact), 4.Inferred lessons (hypotheses+confidence), 5.Questions for the candidate, 6.Proposed ledger entry, 7.Proposed source-update items (gated), 8.Cover letter (findings, or one line "no cover letter in folder"). This report is your ONLY file write. Do NOT edit any repo source files or the ledger/queue files.
-4. Return the structured result (report_path = the file you wrote).`,
+   Use the §2 structure: header (company/role/submitted/reconciled=${RUN_DATE}/status: pending-your-answers/inputs found), then 1.What the agent recommended, 2.What was submitted, 3.Observed changes (fact), 4.Inferred lessons (hypotheses+confidence), 5.Questions for the candidate, 6.Proposed ledger entry, 7.Proposed source-update items (gated), 8.Cover letter (findings, or one line "no cover letter in folder"). This report plus the step-4 findings sidecar are your ONLY file writes. Do NOT edit any repo source files or the ledger/queue files.
+4. WRITE the machine-readable findings sidecar to: ${f.folder_path}/${findingsName}
+   This is your SECOND (and last) file write. It is a single JSON object with EXACTLY these keys — the Synthesize stage reads this file, so nothing you omit here reaches the learning files:
+   {
+     "folder_path": "${f.folder_path}", "company": "...", "role": "...", "submitted_date": "...",
+     "base_recommended": "...", "base_used": "...",
+     "agreed_or_overrode": "agreed" | "overrode" | "mixed" | "unknown",
+     "observed": ["terse factual diffs"],
+     "inferred": [{"category": "routing|missed-evidence|claim-boundary|voice|skills|content", "confidence": "high|med|low", "lesson": "..."}],
+     "questions": ["..."],
+     "candidate_ledger": "one terse ledger entry for this application",
+     "proposed_updates": [{"target_file": "...", "change": "...", "confidence": "high|med|low", "gate": "needs-confirmation|needs-2nd-occurrence"}],
+     "finalized_summary": "the VERBATIM professional summary from the final submitted resume",
+     "base_template_candidate": {"is_candidate": true|false, "archetype": "e.g. healthcare + mobile + retention", "recommendation": "why future similar roles should COPY this exact resume"},
+     "anecdotes": [{"slug": "kebab-case", "new": true|false, "story": "the candidate's own condensed words", "themes": "...", "use_when": "..."}],
+     "answer_pairs": [{"archetype": "e.g. why-this-company, how-you-use-AI", "question": "...", "answer_condensed": "verbatim if short, else argument + anecdote slugs", "anecdote_slugs": ["..."]}],
+     "cover_letter_findings": {"found": true|false, "baseline_found": true|false, "observed": ["factual diffs baseline vs submitted, or no-baseline observations"], "candidates": ["You did Y on the [Company] letter — on purpose? Make it the default?, with before/after"]}
+   }
+   Field notes: base_template_candidate.archetype/recommendation are "" when is_candidate is false; one occurrence is enough to FLAG (promotion is confirmation-only). anecdotes: new=true adds a story not in the anecdote bank; new=false records a REUSE for Used-in tracking (match the existing bank slug, story=""). Use [] / found:false for empty lanes — an empty lane is a valid result, never omit the key. cover_letter_findings.baseline_found = "_JAIL Agent Work/final.md" (legacy "_cl_work/final.md") or the generated .docx existed to diff against.
+5. Return the small structured result: folder_path, company, role, report_path (step 3), findings_path (step 4), and headline = one sentence summarizing the most important thing you found.`,
     { phase: 'Reconcile', model: 'sonnet', schema: RECONCILE_SCHEMA, label: `${f.company}` }
   )
   return r
@@ -284,7 +224,7 @@ log(`${results.length} reconcile reports written. Synthesizing into the ledger +
 
 // ---- Phase 3: Synthesize (single writer for the global ledger/queue) ----
 phase('Synthesize')
-const RESULTS_JSON = JSON.stringify(results, null, 1)
+const FINDINGS_LIST = results.map((r, i) => `${i + 1}. ${r.company} — ${r.role}\n   findings: "${r.findings_path}"\n   report:   "${r.report_path}"\n   headline: ${r.headline}`).join('\n')
 const synth = await agent(
   `You are the SINGLE writer that merges reconcile results into the global learning files. ${RULES}
 
@@ -297,8 +237,9 @@ Inputs: the per-folder reconcile results (JSON) below, plus the CURRENT state of
 - ${PRIV_APP}/06a-skills-library.md            (the skills calibration log)
 If a needed instance does NOT exist but its "*.template.md" sibling does, create the instance from the template first, then append. Per §0 you MAY apply the candidate's observed verbatim content directly to the Evidence layer (04-experience-bank.md, 05a, 06a) and record it in decisions-log.md; you still never write 01-profile, 05-summary-quick, 06-skills-quick, or apply INFERRED rules without the queue.
 
-RESULTS JSON:
-${RESULTS_JSON}
+PER-FOLDER FINDINGS — read EVERY one of these JSON sidecars with the Read tool FIRST (quote the paths; they contain spaces/&/parens). Each is one object with the keys: folder_path, company, role, submitted_date, base_recommended, base_used, agreed_or_overrode, observed, inferred, questions, candidate_ledger, proposed_updates, finalized_summary, base_template_candidate, anecdotes, answer_pairs, cover_letter_findings. Together they are the "results" every step below refers to. If a sidecar is missing or unparseable, fall back to reading that folder's reconcile report .md and say so in your notes.
+
+${FINDINGS_LIST}
 
 Do, carefully:
 1. Read the current ledger and queue. RESPECT existing resolutions — do NOT re-propose things already marked applied / deferred / resolved in them. (One exception: if cover letters were previously marked "deferred" as a lane, that lane is now LIVE via step 4b below — don't re-defer it.)
