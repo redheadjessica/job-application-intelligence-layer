@@ -11,6 +11,14 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-07 (correction) — The no-AI-posting rule was too broad; it excludes the direct link, not the candidate's AI identity
+
+Same-day correction to the rule below. As first written it excluded "JAIL/Projects & Writing and any other AI-tooling self-reference," which the candidate flagged as "way too limiting." The phrase was broad enough to be read as suppressing their whole identity as someone who builds with AI — which for this candidate is load-bearing evidence in most applications, and is not what the rule was for.
+
+Narrowed to what was actually meant: when a posting explicitly prohibits AI in the application or interview process, exclude the *direct reference* — the JAIL link, the tool by name, and any equivalent application-assistant project. Everything else about building with AI (AI-built products, AI-assisted prototyping, hands-on AI work) stays fully claimable and should still be argued. The distinction is "don't wave a job-application AI at people who asked you not to use AI to apply," not "hide that you build AI products."
+
+Generalizable lesson for anyone writing rules into the engine: a hard exclusion needs its boundary stated as precisely as its trigger. "And any other X" is where an over-broad rule hides — it reads as thoroughness while quietly licensing an agent to strip evidence the candidate wants. The trigger here was already precise; the scope was not.
+
 ## 2026-08-07 — A JD that bans AI in the application process is now a hard exclusion for AI-tooling self-references, not a judgment call
 
 Tailoring treats the candidate's own AI-built projects (JAIL, and the Projects & Writing section generally) as strong evidence, which is right for most roles and wrong for one specific case: a posting that explicitly prohibits using AI in the application or interview process. Citing an AI job-application tool in an application to such a posting reads as ignoring the instruction, whatever the merits of the work. A candidate hit this in practice, dropped the reference by hand, and told us why — so the rule is theirs, not an inference.
