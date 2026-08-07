@@ -11,6 +11,14 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-07 — A JD that bans AI in the application process is now a hard exclusion for AI-tooling self-references, not a judgment call
+
+Tailoring treats the candidate's own AI-built projects (JAIL, and the Projects & Writing section generally) as strong evidence, which is right for most roles and wrong for one specific case: a posting that explicitly prohibits using AI in the application or interview process. Citing an AI job-application tool in an application to such a posting reads as ignoring the instruction, whatever the merits of the work. A candidate hit this in practice, dropped the reference by hand, and told us why — so the rule is theirs, not an inference.
+
+Added to `00-job_application_agent.md` as a hard exclusion rather than a per-application judgment call, deliberately: leaving it to case-by-case reasoning is exactly how it gets missed on the run where it matters. Captured via `/reconcile`'s §0 path (observed candidate instruction → applied immediately, logged in the decisions log, no review gate).
+
+Scope deliberately left narrow for now — the rule as written covers the résumé workflow's AI-tooling self-references. Whether it extends to the cover-letter module, and how it should treat AI-built products that are the candidate's primary evidence rather than application tooling, are open questions for the candidate rather than something to infer. The engine rule carries no company attribution; the confirming application stays in the gitignored decisions log.
+
 ## 2026-08-07 — The cover-letter workflow scored and recorded a letter that was never written; drafts are now confirmed on disk
 
 A `/cover-letter` run on a job whose folder had been deleted mid-run reported complete success: `failed: 0`, Fit 5/5, Voice 5/5, and `Cover Letter Drafted? = Yes` written into the candidate's batch rankings — for a letter that did not exist anywhere on disk. Nothing was drafted, linted, or evaluated.

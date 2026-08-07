@@ -308,6 +308,8 @@ Use full article text when available; if content is unavailable, label the recom
 
 When re-evaluating, read the whole writing library, not just the pieces the base already uses — a piece published *after* the base was built, or written with this specific employer in mind, will never surface if you only look at what the base already contains.
 
+**⭐ Explicit no-AI-in-application JDs override the JAIL/AI-tooling default (required).** If the job posting explicitly prohibits using AI in the application or interview process, exclude JAIL/Projects & Writing and any other AI-tooling self-reference from that application entirely — a hard exclusion, not a per-application judgment call. Confirmed by the candidate 08-07-26.
+
 **Cover letters remain out of scope for this workflow.** **Application-answer drafting is in scope** — the "## Application Question Drafts" section (skeleton derived by `question_drafts.py`; substantive questions answered concisely, logistical questions get guidance + a confirmation ask, `None Found` when empty); never routine/work-auth/visa/comp-expectation answers. Do not insert cover-letter production or length rules into the resume workflow as though they are implemented. Reusable narrative material (motivation, company connection, why the problem matters, location context) may be preserved under **Narrative & Cover-Letter Inputs** in `01-profile.md` for a future module, but the agent does not generate cover letters now.
 
 ## Tailor the Most Prominent Content Most
