@@ -11,6 +11,53 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-07-31 — One home per bullet, and a cold-file read rule that can't erode
+
+Same-day correction to the canonical-file read rule added earlier today. That fix was right about the
+problem — deep evidence was unreachable, so no net-new bullet could be composed from it — and wrong about
+the remedy. It said to read the canonical file "whenever the experience features prominently," which is
+both expensive and a judgment call.
+
+**Why expensive:** the core batch is ~315KB across six files. The canonical files run 28–32KB each, and
+the largest covers an experience that appears on nearly every resume. A conditional read that fires every
+time is an extra core file wearing a disguise. **Why erodible:** "features prominently" is vague enough to
+collapse into always or never depending on context pressure.
+
+But the obvious counter-fix — "skip the canonical file, the experience bank is enough" — would have been
+actively dangerous, and the reason why turned out to be live in the data.
+
+**The real defect was duplication.** Approved bullets existed in BOTH the experience bank and the
+canonical file. On 7/20/26 canon corrected the Ascend opening bullet to drop the product name and stage
+label (both already in the resume's section header, so repeating them wasted the line) and wrote a dated
+warning never to reintroduce them. The canonical file was updated. **The experience-bank copy was not.**
+For eleven days the ALWAYS-READ file served the retired wording, and it kept reaching real drafts — the
+exact failure the canonical file itself had documented one revision earlier: *"the agent was faithfully
+copying approved wording that was itself wrong."* Discipline had already been tried and lost, because
+nothing ever compared the two copies.
+
+**The fix is structural, not procedural.** Bullet TEXT now has exactly one home: `04-experience-bank.md`,
+which is already in the always-read core batch, so the common case costs nothing extra. The
+`03*-canonical.md` files are declared **cold** — they carry evidence, product facts, maintained figures,
+guardrail rationale, attribution splits, confidentiality rules and correction history, and **no bullet
+text at all**. Each now opens with a banner saying so. The AI-forward bullet variant, the never-invert
+order rule, and the bullet-count-by-company-type routing moved into the bank alongside the bullets they
+govern.
+
+**The read trigger is now four concrete conditions**, none of them a judgment call: you are about to write
+a Suggested New bullet · no approved bullet covers the JD's ask · you need a specific fact the bank does
+not carry (a boundary, an attribution split, a maintained figure like the codebase-size table) ·
+maintenance/reconcile. Deep-context companions (`03b-*-north-star.md`) are excluded from generation runs
+entirely — they exist to seed cover-letter narrative and interview prep.
+
+**And it is now checkable.** New `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/check_canon_drift.py` compares
+normalized bullet text between the bank and every cold canonical file and fails on any sentence living in
+both. Verified against the real failure: seeded with the pre-7/20 wording in two files, it flags the pair
+and exits 1; against live canon it reports clean. Read-only, never edits.
+
+The general lesson, worth keeping: when the same content lives in two files and one of them is read far
+more often, the rarely-read copy is the one that gets corrected and the always-read copy is the one that
+ships. A warning comment in the correct file cannot fix that. Only removing the second copy can.
+
 ## 2026-08-07 — Six capture defects found by hand-checking a batch's comp/location, and the completeness gate that should have caught them
 
 The candidate read the full 08-07-26 ranking, went looking for the comp and location the pipeline said it couldn't find, and found several of them herself in a few minutes. That's the failure the completeness work was supposed to prevent: not "we missed a field" but "we told her the field wasn't there." Each miss traced to a different defect, and every one of them was silent — the capture looked complete.
