@@ -3,7 +3,7 @@ export const meta = {
   description: 'Draft (or revise-with-feedback) -> lint -> dual eval (fit + voice) -> finalize (surgical revise + .docx + link QA + compact scorecard), for one or more jobs.',
   whenToUse: 'Pass {jobs: ["path/to/job.txt", ...]} (or {job: "path"}). Optional {out: "explicit output folder"} when a job folder already exists. Optional {feedback: "the candidate\'s targeted feedback on an EXISTING letter"} switches Stage 1 from draft-from-scratch to REVISE-WITH-FEEDBACK: the writer revises the most recent letter in the job folder (or {baseline: "path/to/final-vN.md"}) to address the feedback, then the same eval + finalize loop runs and versions the result (never overwriting the original). Requires the cover-letter instances (run /cover-letter-intake first).',
   phases: [
-    { title: 'Draft', detail: 'writer agent, lint-gated' },
+    { title: 'Draft', detail: 'writer agent, lint-gated, draft confirmed on disk' },
     { title: 'Evaluate', detail: 'fit + voice scores, adversarial, self-pushback' },
     { title: 'Finalize', detail: 'surgical fixes + anti-smoothing lint + .docx + link QA + packet' },
     { title: 'Record', detail: 'mark Cover Letter? = Y in the batch rankings' },
@@ -36,6 +36,16 @@ function batchOf(p) {
 }
 
 const NO_WRAP = 'FORMATTING RULE for every file you write: never hard-wrap prose at a column width — one paragraph (or list item) = one line.'
+
+// Jobs dropped by the existence gate below. Collected here (not thrown away) so the run
+// reports WHICH job failed and why, instead of a bare count.
+const failures = []
+
+const EXISTS_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['exists', 'output'],
+  properties: { exists: { type: 'boolean' }, output: { type: 'string' } },
+}
 
 const DRAFT_SCHEMA = {
   type: 'object', additionalProperties: false,
@@ -137,6 +147,28 @@ Return (structured): job_folder, draft_path (the file you just wrote), company, 
     )
     if (!draft) throw new Error(`${FEEDBACK ? 'revise' : 'draft'} agent failed for ${jobPath}`)
     if (draft.lint_errors > 0) log(`WARNING: ${FEEDBACK ? 'revised draft' : 'draft'} for ${draft.company} returned with ${draft.lint_errors} lint errors`)
+
+    // ---- Existence gate (added 8/7/26) ----
+    // A draft agent whose job folder had vanished still returned a well-formed result:
+    // a plausible draft_path, lint_errors 0, word_count 619 — for a file it never wrote.
+    // The schema was satisfied by invented values, so Evaluate scored a letter that did not
+    // exist (5/5), Finalize "packaged" it, and Record marked "Cover Letter Drafted? = Yes"
+    // in the candidate's tracker. Never trust the agent's own report that it wrote a file;
+    // confirm on disk before anything downstream treats this job as real.
+    const check = await agent(
+      `Run EXACTLY this command from the project root and report its output verbatim:
+
+wc -c "${draft.draft_path}" 2>&1; echo "EXIT:$?"
+
+Return exists=true ONLY if that command printed a byte count for a real file AND EXIT:0. If it printed "No such file or directory" (or any error), exists=false. Do NOT create the file, do NOT investigate, do NOT try to fix anything — just report. output = the command's verbatim output.`,
+      { phase: 'Draft', model: 'haiku', effort: 'low', schema: EXISTS_SCHEMA, label: `verify:${draft.company}` }
+    )
+    if (!check || !check.exists) {
+      const reason = `${FEEDBACK ? 'Revise' : 'Draft'} agent reported writing "${draft.draft_path}", but no such file exists on disk. Nothing was drafted, linted, or evaluated for this job — most often the job folder was moved or deleted mid-run. Its rankings row was NOT marked.`
+      failures.push({ job: jobPath, company: draft.company, role: draft.role, folder: draft.job_folder, claimed_draft_path: draft.draft_path, reason, evidence: check ? check.output : 'verification agent returned nothing' })
+      log(`FAILED ${draft.company}: claimed draft "${draft.draft_path}" is not on disk — dropping this job (no scores, no tracker write).`)
+      throw new Error(`draft not on disk for ${draft.company}`)
+    }
     return { jobPath, draft }
   },
 
@@ -267,9 +299,14 @@ const table = [
   ...ok.map((L) => `| ${L.company || ''} | ${L.role || ''} | Y |`),
 ].join('\n')
 
+const failNote = failures.length
+  ? ` ⚠️ ${failures.length} job(s) produced NO letter and were dropped: ${failures.map((f) => `${f.company} — ${f.reason}`).join(' | ')} Nothing was written for these and their rankings rows were left untouched; re-run them once the job folder is back.`
+  : ''
+
 return {
   letters: ok,
   failed: jobList.length - ok.length,
+  failures,
   table,
-  note: `Prepared ${ok.length}/${jobList.length} cover letter(s). Open each "_JAIL Agent Work/coverletter_agent_output - …" packet first (Questions at top), then copy from the .docx into your letter template with a formatting-preserving paste (in Pages: never "Paste and Match Style"). The .docx is the agent's verbatim output — edit only in your own editor; submit as PDF. Each job's "Cover Letter?" column was also marked Y in its batch rankings where one exists. Copy/paste table for your tracker is in the "table" field.`,
+  note: `Prepared ${ok.length}/${jobList.length} cover letter(s).${failNote} Open each "_JAIL Agent Work/coverletter_agent_output - …" packet first (Questions at top), then copy from the .docx into your letter template with a formatting-preserving paste (in Pages: never "Paste and Match Style"). The .docx is the agent's verbatim output — edit only in your own editor; submit as PDF. Each job's "Cover Letter?" column was also marked Y in its batch rankings where one exists. Copy/paste table for your tracker is in the "table" field.`,
 }
