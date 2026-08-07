@@ -31,13 +31,18 @@ Fixed by collapsing to a single tailoring path: `run-batch`'s Tailor phase now d
 
 The tailoring recommendation (`application_resume_output`) named Selected-Writing / Projects picks by title only, so the candidate had to go look each link up by hand before using them. Fixed at the spec: `00-job_application_agent.md`'s Selected-Writing section now requires each recommended piece to be output as `- "Title" — <full URL> — why`, with the URL pulled verbatim from the writing index (the candidate's writing library / CONTENT-KEY, exposed at the writing-links path), never guessed; a piece with no URL in the index must be flagged, not silently dropped; and this applies to any piece embedded in a work-experience bullet too. The index already carries canonical URLs (markdown links per piece), so no index change was needed — only the output contract. Benefits every user. (A separate one-time backfill adds URLs to the already-generated tailored `.md` files.)
 
-## 2026-08-06 — A "living" number goes stale by getting bigger
+## 2026-08-06 — Two ways a resume undersells a real number
 
-A résumé bullet described hardening a codebase of a given size. The claim was true; the number was roughly a third of the real figure, because it had been copied forward from an older résumé while the product kept growing. The candidate caught it herself only because she happened to measure.
+A resume bullet carried a codebase size about a third of the real figure, copied forward from an older resume while the product kept growing. Separately, a cover letter used a lower count for a past-role metric even though the evidence library recorded the higher one — because the library itself blessed the lower value as an "acceptable space-tight shorthand," and the tailoring packet then chose it while naming the true figure out loud in its own reasoning.
 
-Most metrics are frozen the day the work ended — a past role's revenue figure is what it was. But some describe something still being built (codebase size, users, shipped features, months of operation), and those move in one direction only. Copying one forward silently understates the candidate, and **understatement is invisible**: an overstatement gets caught because a reader flinches, while a too-small number reads as perfectly reasonable and nobody sees the figure that should have been there.
+Both are silent failures. An overstatement gets caught because a reader flinches; a too-small number reads as perfectly reasonable and nobody sees the figure that should have been there.
 
-Added to `00-job_application_agent.md` → "Protect Concrete Proof": treat a living number as a lookup, not a constant. Re-read it from the project's canonical file, check the measurement's date, and if it is stale and load-bearing for the role, say so in the review packet rather than shipping the old figure. With no fresh measurement, prefer a scale-free phrasing over a number you cannot stand behind — it never goes stale and never undersells.
+The first instinct — make the agent re-verify metrics during tailoring — was wrong, and the candidate said so: it taxes every run to catch a rare case. The burden belongs in the evidence library, not the hot path. Two cheap rules in `00-job_application_agent.md` → "Protect Concrete Proof" instead:
+
+- **When a reused base and the evidence library disagree on a number, the library wins** — free, since the library is already being read, and explicitly *not* a mandate to re-check every metric. It applies only when both values are visible and differ. (Same principle as Selected Writing: reusing a base is a decision about the chassis, not its content.)
+- **Never round a metric down or write a "shorthand" version of it.** Space pressure is solved by cutting words, never by shrinking a fact — and a shorthand blessed once for a tight resume line leaks into prose where there is no space constraint at all. If a figure is time-sensitive, the library says so itself.
+
+Also sharpened a ban that was being over-applied. A rule against a filler phrase ("…a product **with real users**" — a launched product is assumed to have them) was being read as a ban on the words appearing at all, which would have cut a clause doing real causal work ("hardened the codebase **as real users entered the product**" — that explains why and when). The test is now explicit: delete the clause and see whether the sentence loses information.
 
 ## 2026-08-06 — Back-fill complete, and two things only real folders could teach the migration
 
