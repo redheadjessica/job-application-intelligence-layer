@@ -683,7 +683,111 @@ def _fetch_ashby_by_jid(url: str, jid: str, timeout: int = 20) -> Optional[dict]
             if result:
                 result["source"] = "ashby-posting-api (custom-domain jid)"
             return result
+    # Domain guessing exhausted. The page itself names the org: Ashby's embed injects a
+    # script pointing at jobs.ashbyhq.com/<org>/. Guessing cannot cover slugs that don't
+    # match the brand — one-pass.com's board is "one-pass-solutions" — and on 8/7/26 that
+    # sent two real postings (One Pass, AnswersNow) to the thin pile with their structured
+    # compensation tiers unread. Read the slug instead of guessing it.
+    org = _ashby_org_from_embed(url, timeout=timeout)
+    if org:
+        try:
+            jobs = _ashby_board(org, timeout=timeout)
+        except Exception:
+            return None
+        job = next((j for j in jobs if str(j.get("id", "")).lower() == job_uuid), None)
+        if job is not None:
+            result = _ashby_job_to_result(job, org)
+            if result:
+                result["source"] = "ashby-posting-api (embed-resolved org)"
+            return result
     return None
+
+
+# The org slug as the employer's own careers page declares it, e.g.
+# <script src="https://jobs.ashbyhq.com/one-pass-solutions/embed?version=2">.
+_ASHBY_EMBED_ORG_RE = re.compile(r"jobs\.ashbyhq\.com/([A-Za-z0-9%._-]+)/", re.I)
+
+
+def _ashby_org_from_embed(url: str, timeout: int = 20) -> Optional[str]:
+    """Resolve the Ashby org slug by reading the embed script on the employer's own
+    careers page. Authoritative where `_ashby_org_candidates` only guesses."""
+    html = ""
+    try:
+        resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=timeout)
+        resp.raise_for_status()
+        html = resp.text or ""
+    except Exception:
+        html = ""
+    org = _ashby_org_in_html(html)
+    if org:
+        return org
+    # Careers pages are routinely JS shells — one-pass.com returns a 919-byte skeleton to a
+    # plain GET, with the embed script written in by the client. Render once to read it.
+    return _ashby_org_in_html(_render_html(url, timeout=timeout,
+                                           wait_for="[src*='ashbyhq.com']") or "")
+
+
+# A browser the CALLER already owns. prep.py runs the whole batch inside one
+# `sync_playwright()` context, and Playwright's sync API cannot be re-entered from inside
+# that context — a nested `sync_playwright()` raises, which is why the embed lookup silently
+# returned None during the real run on 8/7/26 while working standalone. Prep registers its
+# browser here; standalone callers leave it unset and get their own short-lived one.
+_AMBIENT_BROWSER = None
+
+
+def set_ambient_browser(browser) -> None:
+    """Lend this module the caller's already-open Playwright browser (or None to clear)."""
+    global _AMBIENT_BROWSER
+    _AMBIENT_BROWSER = browser
+
+
+def _render_html(url: str, *, timeout: int = 20, wait_for: Optional[str] = None) -> Optional[str]:
+    """Rendered HTML for `url`, using the caller's browser when one was lent to us."""
+    def _read(browser) -> Optional[str]:
+        page = browser.new_page(user_agent=USER_AGENT)
+        try:
+            page.goto(url, timeout=timeout * 1000, wait_until="domcontentloaded")
+            if wait_for:
+                try:
+                    page.wait_for_selector(wait_for, timeout=8000)
+                except Exception:
+                    pass
+            return page.content() or ""
+        finally:
+            try:
+                page.close()
+            except Exception:
+                pass
+
+    if _AMBIENT_BROWSER is not None:
+        try:
+            return _read(_AMBIENT_BROWSER)
+        except Exception:
+            return None
+    # Lazy import: playwright is an optional dep, and prep_job_urls_playwright imports THIS
+    # module, so importing the package (not that module) keeps the dependency one-way.
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception:
+        return None
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            try:
+                return _read(browser)
+            finally:
+                browser.close()
+    except Exception:
+        return None
+
+
+def _ashby_org_in_html(html: str) -> Optional[str]:
+    m = _ASHBY_EMBED_ORG_RE.search(html or "")
+    if not m:
+        return None
+    org = unquote(m.group(1)).strip()
+    # "embed"/"api" are path segments on a board-root reference, not org slugs.
+    return org if org and org.lower() not in {"embed", "api"} else None
 
 
 # Ashby component `compensationType` values that are BASE SALARY. Everything else
@@ -1492,11 +1596,18 @@ def _gh_board_tokens_from_html(html_text: Optional[str]) -> list[str]:
 # `pinterestcareers.com` -> board `pinterest`, `stripe-jobs.com` -> `stripe`.
 _BRAND_SUFFIXES = ("careers", "career", "jobs", "job", "hiring", "talent",
                    "people", "hr", "recruiting", "work", "hq")
+# Product-name PREFIXES a company glues onto its own brand in a domain while its ATS board
+# keeps the bare brand: onepeloton.com -> board `peloton`, getanswersnow.com -> `answersnow`,
+# joinhandshake.com -> `handshake`. Without these, Peloton's posting fell through every
+# candidate token on 8/7/26 and landed in the thin pile. Wrong guesses are harmless here —
+# `recover_embedded_greenhouse` still requires a title match before accepting a guessed board.
+_BRAND_PREFIXES = ("one", "get", "join", "try", "my", "the", "go", "we", "hey", "use")
 
 
 def _brand_token_variants(label: str) -> list[str]:
     """A domain label plus plausible board-token variants: the label itself, a
-    de-hyphenated form, and the label with a trailing brand suffix stripped."""
+    de-hyphenated form, and the label with a leading product-name prefix or a
+    trailing brand suffix stripped."""
     out: list[str] = []
     for cand in (label, label.replace("-", "")):
         if cand and cand not in out:
@@ -1505,6 +1616,12 @@ def _brand_token_variants(label: str) -> list[str]:
         for base in (label, label.replace("-", "")):
             if base.endswith(suf) and len(base) > len(suf) + 2:
                 stripped = base[: -len(suf)].rstrip("-")
+                if stripped and stripped not in out:
+                    out.append(stripped)
+    for pre in _BRAND_PREFIXES:
+        for base in (label, label.replace("-", "")):
+            if base.startswith(pre) and len(base) > len(pre) + 3:
+                stripped = base[len(pre):].lstrip("-")
                 if stripped and stripped not in out:
                     out.append(stripped)
     return out

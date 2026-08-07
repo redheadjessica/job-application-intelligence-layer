@@ -4881,3 +4881,99 @@ def test_html_in_question_context_lines_is_stripped_and_unescaped():
                                       "working_location": "Remote"},
                                 questions=[q2], methods_tried=["ats"])
     assert "1. Describe your favorite launch. [Required]" in out2
+
+
+# --------------------------------------------------------------------------- #
+# Completeness/capture defects surfaced by the 08-07-26 batch (fixed 2026-08-07)
+# --------------------------------------------------------------------------- #
+def test_single_point_salary_is_found_not_capture_failed():
+    """Bain publishes ONE number, not a band. The range-only matcher reported
+    `capture_failed` ("Could Not Verify") on a posting that plainly stated pay."""
+    body = ("About the role\nWhat you'll do: lead product.\n"
+            "In New York and California, the good-faith, reasonable annualized "
+            "full-time salary range for this role is $197,300.")
+    found = pc._prose_compensation_all(body)
+    assert [c["value"] for c in found] == ["$197,300"]
+    fs = pc.assess_completeness({"title": "Lead PM", "source": "requests/html"}, body, [])
+    assert fs["compensation"] == pc.FOUND
+
+
+def test_single_point_salary_never_matches_non_pay_figures():
+    for body in ("We raised $50,000,000 in Series C and grew to 1,200 people.",
+                 "Our salary philosophy is transparent. We serve $2,400,000 customers."):
+        assert not any(c["value"] == "$50,000,000" for c in pc._prose_compensation_all(body))
+
+
+def test_dangling_pay_label_is_capture_failed_not_not_posted():
+    """Greenhouse-embedded employer pages render 'Salary Range:' server-side and inject
+    the numbers client-side. The bare label is proof pay WAS posted, so the field must be
+    retryable `capture_failed`, never benign `not_posted` (Flatiron, 8/7/26)."""
+    body = ("About the role\nWhat you'll do: lead product.\n"
+            "Job Compensation Range\nSalary Range:\nPreferred Primary Location: NY office\n")
+    assert pc._dangling_comp_label(body) is True
+    fs = pc.assess_completeness(
+        {"title": "PM", "structured_source": True, "working_location": "NYC"}, body, [])
+    assert fs["compensation"] == pc.CAPTURE_FAILED
+    assert "compensation" in pc.missing_hard_fields(fs)
+
+
+def test_pay_label_with_value_on_next_line_is_not_dangling():
+    assert pc._dangling_comp_label("Salary Range:\n$136,000.00 - $187,000.00\n") is False
+
+
+def test_boilerplate_only_capture_is_thin_not_usable():
+    """A capture holding only 'About <company>' / 'About the team' is the intro of a
+    posting whose body never rendered. One incidental 'responsible' must not certify it
+    as a whole posting (Stripe Startup Products, 8/7/26)."""
+    body = ("About Stripe\nStripe is a financial infrastructure platform for businesses. "
+            + ("Millions of companies use Stripe to accept payments. " * 8)
+            + "\nAbout the team\nEvery person on the team is responsible for the product. "
+            + ("We care about founders. " * 8))
+    status, reason = pc.classify(body)
+    assert status == pc.THIN
+    assert "boilerplate" in reason
+
+
+def test_real_posting_with_duties_stays_usable():
+    body = ("About the role\nWhat you'll do:\n- Own the roadmap\n- Run experiments\n"
+            "Requirements:\n- 5 years of product experience\n" + ("Detail line. " * 60))
+    assert pc.classify(body)[0] == pc.USABLE
+
+
+def test_numeric_company_falls_back_to_domain():
+    """careers.bain.com/jobs/FolderDetail?folderId=102756 yielded the company '102756'."""
+    co, ti = pc.normalize_capture_identity(
+        "102756", "Lead, Product Management &amp; Innovation",
+        url="https://careers.bain.com/jobs/FolderDetail?folderId=102756")
+    assert co == "Bain"
+    assert ti == "Lead, Product Management & Innovation"
+    assert pc.base_filename(co, ti) == "bain__lead-product-management-innovation.txt"
+
+
+def test_slugify_unescapes_entities_before_slugging():
+    assert "amp" not in pc.slugify("Product Management &amp; Innovation")
+
+
+def test_swapped_company_and_role_are_corrected_using_the_domain():
+    """careers.bain.com hands the scraper the ROLE for both company and title; the title
+    recovery then pulls the org name into the title slot, inverting the pair."""
+    u = "https://careers.bain.com/jobs/FolderDetail?folderId=102756"
+    co, ti = pc.normalize_capture_identity(
+        "Lead, Product Management & Innovation", "Bain & Company, Inc.", url=u)
+    assert co == "Bain & Company, Inc."
+    assert ti == "Lead, Product Management & Innovation"
+
+
+def test_swap_guard_leaves_a_correct_pair_alone():
+    u = "https://careers.bain.com/jobs/FolderDetail?folderId=102756"
+    assert pc.normalize_capture_identity("Bain & Company, Inc.", "Lead, PM", url=u) == (
+        "Bain & Company, Inc.", "Lead, PM")
+
+
+def test_swap_guard_does_not_fire_on_branding_titles():
+    """'Meta Careers' in the title slot is site branding — the company-as-role path owns
+    that case, and the swap guard must keep its hands off it."""
+    co, _ = pc.normalize_capture_identity(
+        "Product Manager, Central Product", "Meta Careers",
+        url="https://www.metacareers.com/jobs/123")
+    assert co != "Meta Careers"

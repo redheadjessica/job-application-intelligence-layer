@@ -287,14 +287,26 @@ def completeness_summary(records):
     attention = [rec for rec in (records or [])
                  if completeness_category(rec.get(H_DATACOMPLETE)) == "attention"
                  and (rec.get(H_STATUS) or "").strip() != NEEDS_REFETCH_STATUS]
+    # Rows where the EMPLOYER published nothing are excluded from the attention list above —
+    # correctly, since there is nothing to re-fetch. But leaving them unmentioned makes the
+    # banner read as "every other row was found", which is what made a batch with 8 comp-less
+    # jobs and a 2-job banner confusing (8/7/26). Report the benign count alongside.
+    benign = [rec for rec in (records or [])
+              if completeness_category(rec.get(H_DATACOMPLETE)) == "benign"
+              and (rec.get(H_STATUS) or "").strip() != NEEDS_REFETCH_STATUS]
+    benign_note = ""
+    if benign:
+        names = "; ".join(sorted({(rec.get(H_COMPANY) or "").strip() for rec in benign}))
+        benign_note = (f"  ℹ️ Not published by the employer ({len(benign)}) — captured correctly, "
+                       f"nothing to re-fetch: {names}")
     if not attention:
-        return "✓ Data completeness: all captures complete.", False
+        return ("✓ Data completeness: all captures complete." + benign_note).strip(), False
     parts = []
     for rec in attention:
         role = parse_title_link(rec.get(H_TITLE) or "")[0]
         flag = (rec.get(H_DATACOMPLETE) or "").lstrip("⚠ ").strip()
         parts.append(f"{(rec.get(H_COMPANY) or '').strip()} — {role} ({flag})")
-    return f"⚠️ Incomplete captures ({len(attention)}): " + "; ".join(parts), True
+    return (f"⚠️ Incomplete captures ({len(attention)}): " + "; ".join(parts) + benign_note), True
 
 
 def loc_color(workloc, cfg) -> str:

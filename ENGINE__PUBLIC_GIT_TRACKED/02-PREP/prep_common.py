@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import fcntl
 import hashlib
+import html as html_lib
 import json
 import os
 import re
@@ -88,6 +89,21 @@ _CONTENT_MARKERS = (
     "about the job", "you'll", "you will", "experience", "we're looking",
     "what we", "the role", "responsibilities",
 )
+# STRUCTURAL markers — the section headers a real job description always has. The markers
+# above are deliberately loose, which means a single incidental prose word can satisfy them:
+# Stripe's Startup Products capture (8/7/26) was a 1.4KB "About Stripe / About the team"
+# stub with no duties, no requirements and no location, and it passed the gate as USABLE
+# because the sentence "Every person on the team is responsible…" matched "responsib". It
+# was then scored as if it were a complete posting. A body must show either one structural
+# marker or several distinct loose ones before we call it a whole posting.
+_STRUCTURAL_CONTENT_MARKERS = (
+    "responsibilities", "requirements", "qualifications", "what you'll do",
+    "what you will do", "what you'll be doing", "who you are", "about you",
+    "what we're looking for", "what you bring", "your role", "in this role",
+    "day to day", "day-to-day", "skills and experience", "you'll need",
+)
+# Distinct loose markers that together stand in for one structural marker.
+_LOOSE_MARKER_QUORUM = 3
 
 
 # --------------------------------------------------------------------------- #
@@ -107,7 +123,10 @@ def _strip_wrapping_quotes(text: str) -> str:
 
 
 def slugify(text: str, max_len: int = 80) -> str:
-    text = (text or "").strip().lower()
+    # Unescape FIRST: a raw "&amp;" would otherwise slug to the literal word "amp"
+    # ("Product Management &amp; Innovation" -> "...-management-amp-innovation", seen on the
+    # Bain capture 8/7/26). Unescaped, "&" is punctuation and drops out cleanly.
+    text = html_lib.unescape((text or "").strip()).lower()
     text = re.sub(r"[^a-z0-9]+", "-", text)
     text = re.sub(r"-+", "-", text).strip("-")
     return text[:max_len] or "job"
@@ -512,8 +531,10 @@ def normalize_capture_identity(company: str | None, title: str | None, url: str 
     Idempotent: an already-clean pair passes through unchanged.
     """
     jsonld = jsonld if isinstance(jsonld, dict) else {}
-    raw_company = str(company or "").strip()
-    raw_title = str(title or "").strip()
+    # Entities are decoded once, here, so neither the filename nor the `Company:`/`Role:`
+    # header can carry a raw "&amp;" through to the human-facing capture.
+    raw_company = html_lib.unescape(str(company or "")).strip()
+    raw_title = html_lib.unescape(str(title or "")).strip()
     j_co = str(jsonld.get("hiring_organization") or "").strip()
     j_title = str(jsonld.get("title") or "").strip()
     if j_co:
@@ -525,6 +546,14 @@ def normalize_capture_identity(company: str | None, title: str | None, url: str 
     clean_company = _clean_company_wrappers(raw_company)
     domain_co = _company_from_domain(url)
 
+    # SWAPPED PAIR. Some pages hand the scraper the role where the employer belongs and
+    # vice versa — careers.bain.com produced Company="Lead, Product Management & Innovation"
+    # / Role="Bain & Company, Inc." and the file `lead-product-management-innovation__
+    # bain-company-inc.txt` (8/7/26). Both values look plausible in isolation, so the
+    # domain is the tie-breaker: it is an INDEPENDENT witness to the employer's name. Swap
+    # only when the domain name matches the title and does NOT match the company — positive
+    # evidence of inversion, never a coin flip.
+
     # On the EMPLOYER's own domain, their page's declared name beats a board-token guess:
     # a token title-cased into one word ("helpscout" -> "Helpscout") is a guess, and some
     # ATS APIs expose no organization name at all. Only overrides when the two names are
@@ -535,6 +564,12 @@ def normalize_capture_identity(company: str | None, title: str | None, url: str 
                 or _identity_key(declared) == _identity_key(domain_co or ""):
             clean_company = _clean_company_wrappers(declared) or clean_company
 
+    # A company name with no letters in it is an ID the scraper mistook for a name —
+    # careers.bain.com/jobs/FolderDetail?folderId=102756 produced the company "102756"
+    # and the file `102756__lead-product-management-amp-innovation.txt` on 8/7/26.
+    # A record number is never an employer; prefer any real derived name.
+    if clean_company and not re.search(r"[A-Za-z]", clean_company):
+        clean_company = wrapper_co or domain_co or ""
     if not clean_company or _CAREERY_RE.search(clean_company):
         clean_company = wrapper_co or domain_co or clean_company
     clean_title = _strip_trailing_company_echo(clean_title, clean_company)
@@ -548,6 +583,20 @@ def normalize_capture_identity(company: str | None, title: str | None, url: str 
                                    scan_body=_title_is_branding(clean_title))
         if recovered:
             clean_title = recovered
+
+    # SWAPPED PAIR — the employer's name ended up in the ROLE slot and the role in the
+    # COMPANY slot. careers.bain.com hands the scraper the role for BOTH values; the title
+    # recovery above then pulls "Bain & Company, Inc." off the page into the title, leaving
+    # the file `lead-product-management-innovation__bain-company-inc.txt` (8/7/26). Both
+    # values look plausible alone, so the domain is the tie-breaker: an INDEPENDENT witness
+    # to the employer's name. Swap only when it matches the title and not the company —
+    # positive evidence of inversion, never a coin flip. A career-y title ("Meta Careers")
+    # is site branding rather than a real employer name, and is excluded.
+    if domain_co and clean_title and clean_company and not _CAREERY_RE.search(clean_title):
+        dk = _identity_key(domain_co)
+        if dk and dk in _identity_key(clean_title) and dk not in _identity_key(clean_company):
+            clean_company, clean_title = clean_title, clean_company
+            wrapper_co = None
 
     # NEVER role-as-company. A company that is merely a SUBSTRING of a longer title is not
     # role-as-company: "Director, Product Management, ClassPass Consumer" legitimately names
@@ -704,6 +753,13 @@ def classify(body: str, *, is_ats: bool = False) -> tuple[str, str]:
         return THIN, (f"no job-posting content markers found (responsibilities/qualifications/"
                        f"about the role/etc.) despite {n} chars — likely boilerplate, theme "
                        f"config, or nav chrome rather than the actual posting text")
+    # Substance check: markers present, but is this the WHOLE posting or just its intro?
+    # See _STRUCTURAL_CONTENT_MARKERS — one incidental prose word must not certify a stub.
+    hits = sum(1 for m in _CONTENT_MARKERS if m in low)
+    if not any(m in low for m in _STRUCTURAL_CONTENT_MARKERS) and hits < _LOOSE_MARKER_QUORUM:
+        return THIN, (f"only company/team boilerplate captured ({n} chars): no duties, "
+                      f"requirements, or qualifications section — looks like the intro of a "
+                      f"posting whose body did not render, not the full posting")
     return USABLE, ""
 
 
@@ -769,6 +825,11 @@ _PAY_RANGE_RE = re.compile(
     rf"(?P<hi>{_AMT})",
     re.I,
 )
+# A SINGLE pay figure (no hi/lo), for employers who publish one number instead of a band.
+# Deliberately stricter than the range form: an explicit currency marker is REQUIRED (the
+# caller additionally demands a salary keyword nearby), because a lone unmarked number is
+# far too easy to confuse with a headcount, a year, or a funding total.
+_PAY_POINT_RE = re.compile(rf"(?:{_CUR})\s?(?:\d{{1,3}}(?:,\d{{3}})+(?:\.\d+)?|\d{{2,3}}(?:\.\d+)?\s?[kK])", re.I)
 # BASE-salary keywords only. "ote" and "total comp" were removed (2026-07-29): a
 # variable-pay figure is NOT base salary, and letting those keywords qualify a range meant
 # an OTE number could become the captured comp value and flow into the Comp Range envelope.
@@ -823,7 +884,59 @@ def _prose_compensation_all(body: str) -> list[dict]:
         seen.add(key)
         source_line = next((ln for ln in lines if value in ln), value)
         out.append({"value": value, "line": source_line})
+    # SINGLE-POINT pay. Not every employer posts a band: Bain publishes "the good-faith,
+    # reasonable annualized full-time salary range for this role is $197,300" — one number,
+    # no hi/lo. Before 2026-08-07 the range-only regex missed these entirely and the field
+    # was reported `capture_failed` ("Could Not Verify") on a posting that plainly stated
+    # pay. A lone amount counts only with an explicit currency marker AND a salary keyword
+    # in the preceding window, and only when no range already covers that span — so a
+    # headcount, a year, or a funding total can't be read as pay.
+    covered = [(m.start(), m.end()) for m in _PAY_RANGE_RE.finditer(text)]
+    for m in _PAY_POINT_RE.finditer(text):
+        if any(s <= m.start() < e for s, e in covered):
+            continue
+        window = low[max(0, m.start() - 90): m.start()]
+        if not any(k in window for k in _SALARY_KEYWORDS):
+            continue
+        # A lone figure introduced as TOTAL comp / OTE / base+bonus is not a base salary.
+        # It is handled by `_total_comp_figure_present` and reported as Additional
+        # Compensation; letting it match here would promote variable pay into the base band.
+        if _TOTAL_COMP_CONTEXT_RE.search(text[max(0, m.start() - 140): m.end() + 60]):
+            continue
+        value = re.sub(r"\s+", " ", m.group(0)).strip()
+        key = _norm_val(value)
+        if key in seen:
+            continue
+        seen.add(key)
+        source_line = next((ln for ln in lines if value in ln), value)
+        out.append({"value": value, "line": source_line})
     return out
+
+
+# A comp LABEL that introduces a figure which never arrived — "Salary Range:" followed by
+# nothing. Greenhouse-embedded employer pages (flatiron.com/careers/...) render the label
+# server-side and inject the numbers client-side, so a static scrape captures the label
+# alone. That dangling label is positive proof the employer DID post pay, so the field must
+# be `capture_failed` (retryable, and the retry renders the page) and never `not_posted` —
+# which is benign, unretried, and silently hid Flatiron's $136,000-$187,000 band on 8/7/26.
+_DANGLING_COMP_LABEL_RE = re.compile(
+    r"(?im)^\s*(?:base\s+)?(?:salary|compensation|pay)\s*(?:range|band)?\s*[:\-–]\s*$")
+
+
+def _dangling_comp_label(body: str) -> bool:
+    """True when the body carries a compensation label with no figure after it."""
+    if not body:
+        return False
+    lines = [ln.strip() for ln in (body or "").splitlines()]
+    for i, ln in enumerate(lines):
+        if not _DANGLING_COMP_LABEL_RE.match(ln):
+            continue
+        # The value may legitimately sit on the NEXT non-empty line; only a label with no
+        # money anywhere in the two lines that follow it counts as dangling.
+        tail = " ".join([l for l in lines[i + 1:i + 3] if l])
+        if not re.search(_CUR, tail) and not re.search(r"\d{2,3}\s?[kK]\b|\d{1,3},\d{3}", tail):
+            return True
+    return False
 
 
 def _prose_compensation(body: str) -> str | None:
@@ -1142,6 +1255,11 @@ def assess_completeness(meta: dict | None, body: str, questions: list | None) ->
     elif meta.get("comp_expected"):
         # A structured source expected comp but it came back empty -> capture failure.
         fs["compensation"] = CAPTURE_FAILED
+    elif _dangling_comp_label(body):
+        # The employer wrote a pay LABEL whose figure never made it into our capture. That
+        # outranks any structured source's silence: we have direct evidence pay was posted.
+        fs["compensation"] = CAPTURE_FAILED
+        fs["compensation_note"] = "pay label present with no figure captured (render the page)"
     elif _source_is_structured(meta):
         # A structured source was consulted and comp is genuinely absent (e.g.
         # Greenhouse pay_transparency with empty pay_input_ranges, Ashby

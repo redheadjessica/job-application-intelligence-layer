@@ -693,7 +693,16 @@ const incompleteRows = rows.filter((r) => r.content_verified !== false && comple
 const complSummary = incompleteRows.length
   ? `> ⚠️ **Incomplete captures (${incompleteRows.length}):** ${incompleteRows.map((r) => `${r.company} — ${r.title_and_link.split(' | ')[0]} (${(r._completeness || '').replace(/^⚠\s*/, '')})`).join('; ')}\n`
   : `> ✓ Data completeness: all captures complete.\n`
-const mdParts = [`# Job Rankings\n\n${rows.length} jobs scored, highest priority first.\n${complSummary}${qNote}`]
+// The "attention" line above deliberately EXCLUDES rows where the employer simply published no
+// comp/location — that's their omission, not a gap in our capture. But silence about those rows
+// reads as "everything else was found", which is why 8 comp-less jobs sitting under a banner
+// naming only 2 was confusing on 8/7/26. State the benign count too, and name the rows, so the
+// two categories are visibly different rather than one being invisible.
+const benignRows = rows.filter((r) => r.content_verified !== false && completenessCategory(r._completeness) === 'benign')
+const benignSummary = benignRows.length
+  ? `> ℹ️ **Not published by the employer (${benignRows.length}) — captured correctly, nothing to re-fetch:** ${benignRows.map((r) => `${r.company} (${(r._completeness || '').replace(/^⚠\s*/, '')})`).join('; ')}\n`
+  : ''
+const mdParts = [`# Job Rankings\n\n${rows.length} jobs scored, highest priority first.\n${complSummary}${benignSummary}${qNote}`]
 const fmtScore = (v) => v === null || v === undefined ? '—' : v
 // The resume-comparison line is OMITTED at vet time rather than printed as em-dashes: it is blank
 // for every job until that job is tailored, and 55 placeholder lines would be pure noise. The

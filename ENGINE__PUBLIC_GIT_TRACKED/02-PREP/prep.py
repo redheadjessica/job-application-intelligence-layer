@@ -32,6 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import ats_fetchers  # noqa: E402
 import prep_common  # noqa: E402
 import prep_job_urls as requests_engine  # noqa: E402
 
@@ -96,6 +97,10 @@ def run(batch_dir, input_file, *, force: bool = False, engine: str = "auto") -> 
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
+        # Lend the browser to the ATS layer: its recovery paths sometimes have to render a
+        # JS-shell careers page (e.g. reading the Ashby org slug out of an embed script),
+        # and Playwright's sync API cannot be re-entered from inside this context.
+        ats_fetchers.set_ambient_browser(browser)
         try:
             fetch_one, fallback, label, banner = build_fetchers(engine, browser)
             print(f"Found {len(urls)} URL(s). {banner}")
