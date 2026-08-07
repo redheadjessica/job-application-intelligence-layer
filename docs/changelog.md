@@ -31,6 +31,14 @@ Fixed by collapsing to a single tailoring path: `run-batch`'s Tailor phase now d
 
 The tailoring recommendation (`application_resume_output`) named Selected-Writing / Projects picks by title only, so the candidate had to go look each link up by hand before using them. Fixed at the spec: `00-job_application_agent.md`'s Selected-Writing section now requires each recommended piece to be output as `- "Title" — <full URL> — why`, with the URL pulled verbatim from the writing index (the candidate's writing library / CONTENT-KEY, exposed at the writing-links path), never guessed; a piece with no URL in the index must be flagged, not silently dropped; and this applies to any piece embedded in a work-experience bullet too. The index already carries canonical URLs (markdown links per piece), so no index change was needed — only the output contract. Benefits every user. (A separate one-time backfill adds URLs to the already-generated tailored `.md` files.)
 
+## 2026-08-06 — A "living" number goes stale by getting bigger
+
+A résumé bullet described hardening a codebase of a given size. The claim was true; the number was roughly a third of the real figure, because it had been copied forward from an older résumé while the product kept growing. The candidate caught it herself only because she happened to measure.
+
+Most metrics are frozen the day the work ended — a past role's revenue figure is what it was. But some describe something still being built (codebase size, users, shipped features, months of operation), and those move in one direction only. Copying one forward silently understates the candidate, and **understatement is invisible**: an overstatement gets caught because a reader flinches, while a too-small number reads as perfectly reasonable and nobody sees the figure that should have been there.
+
+Added to `00-job_application_agent.md` → "Protect Concrete Proof": treat a living number as a lookup, not a constant. Re-read it from the project's canonical file, check the measurement's date, and if it is stale and load-bearing for the role, say so in the review packet rather than shipping the old figure. With no fresh measurement, prefer a scale-free phrasing over a number you cannot stand behind — it never goes stale and never undersells.
+
 ## 2026-08-06 — Back-fill complete, and two things only real folders could teach the migration
 
 Ran the back-fill over both roots — the active review workspace and the submitted-applications archive. Re-runs plan zero moves; every legacy work/extraction directory is drained except deliberate exclusions.
