@@ -173,9 +173,14 @@ SCORE_BUCKETS = [
 FINAL_STRONG, FINAL_MAYBE, FINAL_WEAK, FINAL_SKIP = "88E888", "D9EAD3", "FCF3CE", "ECBFBF"
 
 GREEN, YELLOW, RED, GREY = "A9D08E", "FFE699", "F4A6A6", "D9D9D9"
+# A deliberately louder green than the ordinary "meets target" GREEN, reserved for bands
+# that reach the candidate's configured top-of-market threshold (comp.top_of_market_base
+# in jail.config.json — engine-side default deliberately absent). Should jump off the page.
+BRIGHT_GREEN = "00D95F"
 RATING_COLORS = {"preferred": "A9D08E", "ok": "FFE699", "stretch": "F4B183", "no": "F4A6A6", None: "D9D9D9"}
 COMP_LABEL_COLORS = {
     "Below floor": RED, "Meets/above target": GREEN, "Above floor": GREEN,
+    "Top of market": BRIGHT_GREEN,
     "Near target": YELLOW, "Unknown": GREY, "No comp prefs": GREY,
 }
 
@@ -207,7 +212,24 @@ SCORE_WIDTHS_BY_KEY = {"final": 13, "market": 30, "desire": 11, "style": 12, "pr
 # --------------------------------------------------------------------------- #
 # Config + label->color logic (pure — no openpyxl needed)
 # --------------------------------------------------------------------------- #
+def _default_config_path():
+    """The repo-root jail.config.json, if it exists.
+
+    Regenerating a rankings XLSX without --config used to silently run with NO candidate
+    preferences, which makes comp_fit_label return "No comp prefs" for every row and paints
+    the whole Comp Range column grey — indistinguishable from a real "we have no preferences"
+    answer. Found 2026-08-07 when a hand-regenerated tracker lost all its comp coloring.
+    """
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "jail.config.json"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def load_config(path) -> dict:
+    if not path:
+        path = _default_config_path()
     if not path:
         return {}
     try:
@@ -571,6 +593,7 @@ INSTRUCTIONS = [
     ("Posting recency is informational only — it does not feed scoring, ranking, or prioritization.", False),
     ("", False),
     ("Colors & the dropdown", True),
+    ("Comp Range and Comp Fit share one color: bright green = TOP OF MARKET (the band reaches your comp.top_of_market_base in jail.config.json); green = meets/above your target; yellow = near target; red = below your floor; grey = no band posted, or no comp preferences configured. If the whole Comp column is grey, your jail.config.json comp preferences are missing — run /intake.", False),
     ("Status, Lane, Lane Fit, Comp Fit, Comp Range and Data Completeness cells are color-coded. Working Location uses one fixed 4-color palette: green = remote genuinely available; yellow = acceptable home-metro office at exactly 1-3 days; orange = unknown location/cadence, >3 days, or open-ended minimums (\"3+ days\"); red = required in-person outside your home geography. In Google Sheets you can layer the native rounded \"chip\" dropdown on top if you prefer that look (that is a Sheets feature, not part of the file).", False),
     ("", False),
     ("AI detail columns", True),
@@ -907,7 +930,9 @@ def main(argv):
     parser = argparse.ArgumentParser(description="Build the job-search tracker .xlsx from a rankings CSV.")
     parser.add_argument("input_csv")
     parser.add_argument("output_xlsx", nargs="?", default=None)
-    parser.add_argument("--config", default=None, help="path to jail.config.json (candidate preferences)")
+    parser.add_argument("--config", default=None,
+                        help="path to jail.config.json (candidate preferences); "
+                             "defaults to the repo-root jail.config.json when present")
     parser.add_argument("--quarantined", type=int, default=0, help="count of prep-quarantined posts (note only)")
     args = parser.parse_args(argv[1:])
     out = args.output_xlsx or re.sub(r"\.csv$", ".xlsx", args.input_csv, flags=re.I)

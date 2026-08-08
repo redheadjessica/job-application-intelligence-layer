@@ -499,12 +499,21 @@ def normalize_comp_range(text, warn=_warn):
     return f"{lo}-{hi}"
 
 
+# The top-of-market threshold is CONFIG-ONLY (`comp.top_of_market_base`, whole thousands of
+# base salary). No default is hardcoded here on purpose: 03-VETTING/CLAUDE.md is explicit that
+# salary tiers are candidate data and belong in jail.config.json. Absent the key, the tier
+# simply doesn't exist and comp coloring behaves exactly as it did before. A posting whose band
+# REACHES the threshold gets its own label and its own bright fill so genuinely high-paying
+# roles don't blend into the ordinary "meets target" green. It tests the band's HIGH end on
+# purpose — the question is "could this role pay that?", and a midpoint test would leave the
+# tier almost always empty.
 def comp_fit_label(comp_range, cfg):
     """Candidate-relative Comp Fit label — the APPROVED midpoint rule (2026-07-29),
     replacing the old high-endpoint-only rule that painted a below-floor-midpoint
     band green. `Unknown` for ??/empty; `No comp prefs` when the config has neither
-    floor nor target; else: RED `Below floor` iff max < floor; GREEN
-    `Meets/above target` iff midpoint >= target; else YELLOW `Near target`.
+    floor nor target; else: RED `Below floor` iff max < floor; BRIGHT GREEN
+    `Top of market` iff max >= the top-of-market threshold; GREEN `Meets/above target`
+    iff midpoint >= target; else YELLOW `Near target`.
     (`Above floor` when only a floor is configured and it's met.)"""
     t = (comp_range or "").strip()
     m = re.fullmatch(r"(\d+)-(\d+)", t)
@@ -517,6 +526,9 @@ def comp_fit_label(comp_range, cfg):
     lo, hi = int(m.group(1)), int(m.group(2))
     if floor is not None and hi < floor:
         return "Below floor"
+    top = comp.get("top_of_market_base")
+    if top is not None and hi >= top:
+        return "Top of market"
     if target is not None:
         return "Meets/above target" if (lo + hi) / 2 >= target else "Near target"
     return "Above floor"
@@ -1372,7 +1384,7 @@ COMP_CONFLICT_FLAG = "⚠ comp conflicting"
 # naming the row. Values are never invented.
 # --------------------------------------------------------------------------- #
 COMP_FIT_VALUES = {"Below floor", "Near target", "Meets/above target", "Above floor",
-                   "Unknown", "No comp prefs"}
+                   "Top of market", "Unknown", "No comp prefs"}
 NEEDS_REFETCH_STATUS = "⚠️ NEEDS RE-FETCH — content not verified"
 _COMPLETENESS_PART_RE = re.compile(
     r"^(?:✓ complete|⚠ comp\+location not verified|⚠ comp not verified"
