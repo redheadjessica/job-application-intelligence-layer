@@ -11,6 +11,14 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-07 — Tailoring output restructured top-down (5 sections), and the writing-URL rule made format-independent
+
+Two spec changes to `00-job_application_agent.md`, both aimed at "the output file is exhausting to sift through."
+
+**Structure.** The `application_resume_output` file interleaved "here's what to do" with "here's my reasoning" across ~17 flat top-level sections, and the spec defined that order in *two places that disagreed* (the "Primary Output Format" list put diagnostics last; the "Output Expectations" list put Read Log *first*). Real files drifted section-to-section as a result. Both definitions were rewritten to one authoritative top-down structure: **1. Decisions Needed → 2. Résumé Build (Base / Work Experience / Summary / Skills / Selected Writing as `###` children, one `#### [Role]` per role) → 3. Application Questions → 4. Content Opportunity → 5. Analysis & Audit (reference)** — every diagnostic (Job Analysis, Gap Check, Strategic Evidence, Inferred Relevance, Hidden Story, Comparison Ledger, Final Risks, System Updates, Read Log) collapses under §5 so the candidate reads §1–4, acts, and only drops into §5 for the "why." Nesting is now explicit and consistent, which also kills the file-to-file drift. "Questions for the candidate" keeps its name as the content-discipline term but is titled "Decisions Needed" in the output. Validated first by reorganizing three existing files (Airbnb, Airtable, Figma) with a content-preserving script before touching the spec.
+
+**Writing URLs.** The rule already said "always include each piece's URL inline," but prescribed the bullet form `- "Title" — URL — why`. When the agent instead wrote Selected Writing as *prose* ("recommend swapping the third link for …") or a "replace A with B" instruction, it named pieces with no URLs and the rule read as not applying. Tightened to bind **regardless of form**: every piece the section names carries its URL inline, whether the section is a bulleted list, a prose recommendation, or a swap instruction. Existing older-batch files were deliberately NOT reprocessed (candidate's call — going-forward only; she'll backfill specific files if she wants).
+
 ## 2026-07-31 — One home per bullet, and a cold-file read rule that can't erode
 
 Same-day correction to the canonical-file read rule added earlier today. That fix was right about the

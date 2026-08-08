@@ -302,7 +302,7 @@ Use full article text when available; if content is unavailable, label the recom
 
 **Routing — match picks to the role's domain and seniority, and check the Selected-Writing combos table in `02-resume-index.md` if present before recommending a non-standard set.** Lead with the piece most closely aligned to the role's domain, keep the set from over-narrowing for broader roles, and use the documented combos as a starting point rather than deviating without checking the table.
 
-**⭐ ALWAYS include each recommended piece's URL, inline in the output (required).** The candidate should never have to go track a link down themselves. Recommend each piece as `- "Exact Title" — <full URL> — one-line why`, pulling the URL verbatim from the writing index (the candidate's writing library / CONTENT-KEY, exposed at the engine's writing-links path — in JAIL, `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/writing-links.md`). Every piece in that index carries its canonical URL; use it exactly, never guess or reconstruct a URL, and if a recommended piece has no URL in the index, say so explicitly rather than omitting it silently. This also applies to any piece embedded in a work-experience bullet (give its URL too). Recommending a writing piece by title alone is a defect — the URL travels with the pick, every time.
+**⭐ ALWAYS include each recommended piece's URL, inline in the output (required).** The candidate should never have to go track a link down themselves. Recommend each piece as `- "Exact Title" — <full URL> — one-line why`, pulling the URL verbatim from the writing index (the candidate's writing library / CONTENT-KEY, exposed at the engine's writing-links path — in JAIL, `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/writing-links.md`). Every piece in that index carries its canonical URL; use it exactly, never guess or reconstruct a URL, and if a recommended piece has no URL in the index, say so explicitly rather than omitting it silently. This also applies to any piece embedded in a work-experience bullet (give its URL too). Recommending a writing piece by title alone is a defect — the URL travels with the pick, every time. **This binds regardless of how the section is written.** The bullet form above is the default, but a prose recommendation ("recommend swapping X for Y…") or a "replace A with B" swap instruction is held to exactly the same rule: every piece the section NAMES carries its URL inline right beside the title (a swap names the incoming piece — give its URL). A named piece anywhere in the Selected Writing / Projects section without its URL next to it is the defect, whatever the surrounding prose. Real failure this prevents: the section was written as a prose "swap the third link for …" paragraph, named three pieces, and carried zero URLs because the URL rule was read as applying only to the bulleted form.
 
 **⭐ NEVER INHERIT THIS SECTION FROM THE BASE (required).** Selected Writing / Projects is **always re-evaluated against the current JD**, even — especially — when the chosen base is a previously-finalized resume for the same company, the same title, or a near-identical role. It is the section most likely to be silently stale, because a base carries the picks that were right for *whatever role that base was originally built for*, and those picks travel invisibly into every descendant resume. Reusing a base is a decision about the **chassis**, never about the links. "Use the base's section as-is" is a valid conclusion only after you have run the six-dimension evaluation above for **this** JD and it independently produced the same set — say so explicitly in that case ("re-evaluated against this JD; the base's existing set is still the strongest"). Silently listing Selected Writing / Projects among the untouched sections is a defect, not a shortcut.
 
@@ -450,26 +450,36 @@ The main actionable output must be written into **one markdown file** in the act
 
 where `[Company] - [Role]` is the active job folder's canonical `Company - Role` name, matched **verbatim** (the folder name comes from the shared canonicalizer — `.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py --application-name --company "<Company>" --role "<Role>"` — which handles all abbreviation: `Product Manager` → `PM`, `Sr` → `Senior`, `Vice President` → `VP`; never invent your own abbreviations). Example: folder `Acme - Senior PM, Growth` → `application_resume_output - Acme - Senior PM, Growth.md`.
 
-This file should contain the full actionable output for the run, in this order (**work-on-it sections at the top, explanatory/diagnostic sections at the bottom**, so the candidate can open the file and immediately start working. Not extremely rigid — merge or adapt sections when it genuinely reads better — but default to this order and always keep the paste-ready material in the top half and the Read Log/system notes last):
+This file should contain the full actionable output for the run, in the structure below. The governing principle is **top-down by what the candidate does**: they read section 1, do the résumé work in section 2, handle the application questions, and only drop into the reference material in section 5 if they want the "why." Keep the numbered `##` sections and their order, and keep the nesting (`###` children, `#### [Role]` per work-experience role) — the nesting is what makes the paste-ready material one contiguous block and keeps the diagnostics out of the way. Merge or adapt a subsection when it genuinely reads better, but never scatter diagnostics back up among the build sections, and always keep the Read Log last.
 
-**Top — what the candidate works from:**
-1. Questions for the candidate (always first)
-2. Resume Base Recommendation (which base file to start from + why)
-3. Work Experience Changes (per-role: notes first, then the paste-ready `- ` bullet block)
-4. Summary Options
-5. Skills Recommendation
-6. Selected Writing / Projects recommendation (if the candidate has a Voice/portfolio family)
-7. Application Question Drafts (ALWAYS present: it reads "None Found" when the job file's "APPLICATION QUESTIONS WORTH PREPARING" section holds no questions; see the section rules below)
-8. Content Opportunity (ONLY if the candidate opted in at intake — see Step 9.5; omit the section entirely for candidates who didn't)
+```
+## 1. Decisions Needed
+        The genuine gaps and questions to resolve before sending. This IS the "Questions for the
+        candidate" section — same content discipline (below); it is titled "Decisions Needed" in the
+        output. Always first, always present.
 
-**Bottom — context and diagnostics:**
-9. Job Analysis
-10. Gap Check
-11. Strategic Evidence Opportunities / Inferred Relevance Questions / Hidden Story Prompts
-12. Resume Comparison Ledger (the audit trail for the base-vs-improved scores — see Step 9.8)
-13. Final Risks / Notes
-14. Suggested System Updates
-15. Read Log (last)
+## 2. Résumé Build          — the paste-ready deliverable, one contiguous block
+        ### Base                         which base file to start from + why
+        ### Work Experience              one `#### [Role]` block per role: notes first, then the paste-ready `- ` bullets
+        ### Summary — pick one
+        ### Skills
+        ### Selected Writing / Projects  only if the candidate has a Voice/portfolio family; every named piece carries its URL inline (see the Selected Writing rules)
+
+## 3. Application Questions  ALWAYS present: reads "None Found" when the capture holds no questions (see the section rules below); per-question `### Q…` skeleton from question_drafts.py
+
+## 4. Content Opportunity    ONLY if the candidate opted in at intake (Step 9.5); omit the section entirely otherwise
+
+## 5. Analysis & Audit (reference)   — everything the candidate can skip; read only for the "why"
+        ### Job Analysis
+        ### Gap Check                    Already Approved / Suggested New / Needs Confirmation
+        ### Strategic Evidence
+        ### Inferred Relevance Questions
+        ### Hidden Story Prompts         omit if none
+        ### Résumé Comparison Ledger     the audit trail for the base-vs-improved scores — see Step 9.8
+        ### Final Risks / Notes
+        ### Suggested System Updates
+        ### Read Log                     last
+```
 
 ### "Application Question Drafts" — when and how (B11, 2026-07-30; replaces "Proposed Answers to Application Questions")
 
@@ -968,9 +978,9 @@ A small amount of unused space is acceptable. Do not add a marginal bullet simpl
 
 ## Output Format for Work Experience
 
-For each section, use this structure:
+The Work Experience block is `### Work Experience` under `## 2. Résumé Build`, so each role is a `####` child of it. For each role/section, use this structure:
 
-### [Section Name]
+#### [Section Name]
 
 Base Status:
 - No changes OR
@@ -1412,41 +1422,14 @@ For resume generation, write the full actionable output into:
 
 in the active job folder. Use the active job folder's canonical `Company - Role` name verbatim (e.g. folder `Acme - Senior PM, Growth` → `application_resume_output - Acme - Senior PM, Growth.md`) — the canonicalizer in `ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py` owns all title abbreviation; never abbreviate on your own.
 
-The output should use this structure:
+The order and nesting are defined once, in **Primary Output Format** above (§1 Decisions Needed → §2 Résumé Build → §3 Application Questions → §4 Content Opportunity → §5 Analysis & Audit). This section says what each part must CONTAIN, at its output heading level. Do not reorder the parts here — the top-down order and the `##`/`###`/`####` nesting are the whole point.
 
-## Read Log
-- active job folder
-- PDFs read, with file size in KB or MB
-- system files opened, with approximate line count
-- anchor resumes considered
-- chosen base
-- whether the resume base file was copied and renamed (and in what format)
+## 1. Decisions Needed
+The genuine gaps and questions to resolve before sending (this is the "Questions for the candidate" content — same content discipline defined under Primary Output Format).
 
-## Job Analysis
-- structured information extracted from the job description
-- inferred hiring priorities
-- what the company likely values most
+## 2. Résumé Build
 
-Keep this analytical and useful, but concise.
-
-## Gap Check
-Group the most important findings into:
-- **Already Approved**
-- **Suggested New**
-- **Needs Confirmation**
-
-Do not make this exhaustive. Focus on the highest-value items.
-
-## Strategic Evidence Opportunities
-From Step 2.5. The role's **underlying value signals** (prioritize the subtle ones) and the **adjacent evidence** in the candidate's background that maps to each — including cross-domain translations (e.g. a quality bar reading as "rigor" for one role and "reliability" for another). A few sharp mappings, not a keyword list. These are opportunities to confirm, not resume claims.
-
-## Inferred Relevance Questions
-A short list of questions designed to help the candidate **remember adjacent evidence they might not have thought to include** (not literal gap questions). Tie each to a value signal above.
-
-## Hidden Story Prompts
-1–3 prompts for stories that could **materially change the résumé strategy** (not small wording tweaks). Omit if none rise to that bar.
-
-## Resume Base Recommendation
+### Base
 - recommended primary base
 - runner-up option (if meaningful)
 - best page 2 variant
@@ -1455,32 +1438,55 @@ A short list of questions designed to help the candidate **remember adjacent evi
 - how current/recent core work (if any) is positioned for this role, and what was compressed or cut to make room
 - short rationale showing that the choice was made thoughtfully
 
-## Work Experience Changes
-Organize by section.
+### Work Experience
+Organize by role; one `#### [Role]` block per role. For each: show only changes; use REPLACE / ADD / REMOVE / MERGE formatting; include 1–3 concise sentences of section-level reasoning. Do not use tables. Do not waste space restating unchanged content unless necessary for clarity.
 
-For each section:
-- show only changes
-- use REPLACE / ADD / REMOVE / MERGE formatting
-- include 1 to 3 concise sentences of section-level reasoning
-
-Do not use tables. Do not waste space restating unchanged content unless necessary for clarity.
-
-## Summary Options
+### Summary — pick one
 - 3 options
 - clearly labeled by type (Prior / Adapted, New, Hybrid, etc.)
 - each option followed by 1 concise sentence of strategic reasoning
 
-## Skills Recommendation
+### Skills
 - one final skills line
-- a short notes subsection indicating:
-  - what came from canonical
-  - what is newly suggested
-  - what still needs confirmation (if anything)
+- a short notes subsection indicating: what came from canonical, what is newly suggested, what still needs confirmation (if anything)
 
-## Content Opportunity
+### Selected Writing / Projects
+Conditional — only if the candidate has a Voice/portfolio family. Every named piece carries its URL inline, in any form (see the Selected Writing rules). Never inherit from the base without re-evaluating against this JD.
+
+## 3. Application Questions
+ALWAYS present; reads "None Found" when the capture holds no questions. Per-question `### Q…` skeleton from `question_drafts.py`, appended verbatim and filled in.
+
+## 4. Content Opportunity
 **Only for high-priority roles, and only when one piece would materially help — otherwise OMIT this section entirely** (default). At most one recommendation, with: proposed title; why it helps for this specific role; which existing writing it builds from (if any); worth doing now vs. wait; effort (low / medium / high); risk. See Step 9.5.
 
-## Suggested System Updates
+## 5. Analysis & Audit (reference)
+
+### Job Analysis
+- structured information extracted from the job description
+- inferred hiring priorities
+- what the company likely values most
+
+Keep this analytical and useful, but concise.
+
+### Gap Check
+Group the most important findings into **Already Approved** / **Suggested New** / **Needs Confirmation**. Do not make this exhaustive. Focus on the highest-value items.
+
+### Strategic Evidence
+From Step 2.5. The role's **underlying value signals** (prioritize the subtle ones) and the **adjacent evidence** in the candidate's background that maps to each — including cross-domain translations (e.g. a quality bar reading as "rigor" for one role and "reliability" for another). A few sharp mappings, not a keyword list. These are opportunities to confirm, not resume claims.
+
+### Inferred Relevance Questions
+A short list of questions designed to help the candidate **remember adjacent evidence they might not have thought to include** (not literal gap questions). Tie each to a value signal above.
+
+### Hidden Story Prompts
+1–3 prompts for stories that could **materially change the résumé strategy** (not small wording tweaks). Omit if none rise to that bar.
+
+### Résumé Comparison Ledger
+The Step 9.8 audit trail for the base-vs-improved scores: hiring thesis; thesis-defining centrals with base and improved grades; which supporting requirements moved placement; any recommendation declined and why; the band each score landed in, with the central that set it named. A recommendation-time estimate, not durable learning.
+
+### Final Risks / Notes
+- anything the candidate should review carefully before applying
+
+### Suggested System Updates
 Optional suggestions for updating:
 - skills library
 - synonyms map
@@ -1491,8 +1497,13 @@ Optional suggestions for updating:
 
 Only include this when it would reduce future repetition.
 
-## Final Risks / Notes
-- anything the candidate should review carefully before applying
+### Read Log
+- active job folder
+- PDFs read, with file size in KB or MB
+- system files opened, with approximate line count
+- anchor resumes considered
+- chosen base
+- whether the resume base file was copied and renamed (and in what format)
 
 (No "Learning Ledger" / durable-learning section belongs in this file. Durable learning happens only in the separate post-submission reconcile pass over your submitted-applications archive — see the note at the end of Step 11.)
 
