@@ -11,6 +11,14 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-08 — Top-of-market is strictly greater than the threshold
+
+QA of the 08-07-26 tracker, before the candidate reviewed it, caught the tier painting a 140-250 band the same loud green as a 240-333 one. The ask was "roles that would pay MORE than $250K"; a band that merely touches the number doesn't, and that particular role's midpoint sat below the candidate's own $200K target — so the brightest signal in the sheet was overstating the weakest member of its tier.
+
+Changed `hi >= top` to `hi > top`. Seven rows keep the tier; the touching-the-line one drops back to Near target, which is what its midpoint always said it was.
+
+Small, but the general point is worth keeping: a threshold rule inherits the ambiguity of the sentence that specified it, and ">=" vs ">" is exactly where "more than" quietly becomes "at least." When a tier exists to make something jump off the page, an over-inclusive boundary costs more than an under-inclusive one — the whole value of the loud color is that it's rare.
+
 ## 2026-08-07 (later) — The comp column lost all its color, and the reason was a silent default
 
 The candidate opened her tracker and asked why Comp Range wasn't color-coded. It was being filled — every cell, solid grey. Comp Range inherits its color from Comp Fit, and Comp Fit was `No comp prefs` on nearly every row, which maps to grey.

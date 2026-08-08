@@ -526,8 +526,12 @@ def comp_fit_label(comp_range, cfg):
     lo, hi = int(m.group(1)), int(m.group(2))
     if floor is not None and hi < floor:
         return "Below floor"
+    # STRICTLY greater: the ask was "roles that would pay MORE than <threshold>". A band that
+    # merely touches the number (140-250 against a 250 threshold) does not, and painting it the
+    # same loud green as a 240-333 role overstates it — that band's midpoint was below the
+    # candidate's own target. Caught in QA 2026-08-08 before the tracker was reviewed.
     top = comp.get("top_of_market_base")
-    if top is not None and hi >= top:
+    if top is not None and hi > top:
         return "Top of market"
     if target is not None:
         return "Meets/above target" if (lo + hi) / 2 >= target else "Near target"
