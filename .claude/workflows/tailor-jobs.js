@@ -123,21 +123,62 @@ function nameCmdFor(p) {
     : `${NAME_CLI} --company '<Company from the job post>' --role '<Role/title from the job post>'`
 }
 
+// ---- Resolve the canonical folder name BEFORE tailoring (added 2026-08-08) ----
+// The tailoring prompt used to hand the agent a canonicalizer command and tell it to use the
+// printed string verbatim. Agents deviated anyway while busy with everything else in the run:
+// the same Headlight job produced "Headlight.health - …" on one run and "Headlight - …" on the
+// next, and Grindr produced "Grindr - …" then "Grindr LLC - …". The result is two folders for
+// one job, with that job's cover letter orphaned in the older one. Resolve the name in its own
+// tiny step so it is a FIXED INPUT to the tailoring run rather than something the agent derives
+// as a side task.
+const NAME_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['name'],
+  properties: { name: { type: 'string', description: 'the canonicalizer output, verbatim, nothing else' } },
+}
+async function canonicalFolderName(p) {
+  const roleGuess = p.title_and_link ? String(p.title_and_link).split(' | ')[0].trim() : ''
+  if (!p.company || !roleGuess) return null
+  const r = await agent(
+    `Run this command EXACTLY and return ONLY what it printed, verbatim, with no commentary:
+
+${NAME_CLI} --company ${shq(p.company)} --role ${shq(roleGuess)}`,
+    { phase: 'Tailor', model: 'haiku', schema: NAME_SCHEMA, label: `name:${p.company}` }
+  )
+  const n = r && typeof r.name === 'string' ? r.name.trim() : ''
+  return n || null
+}
+
+// Collected during the Tailor phase; merged into `warnings` below, which is not declared
+// until after the rankings writeback and would be in its temporal dead zone here.
+const folderDriftWarnings = []
+
 phase('Tailor')
 const tailorOne = async (p, i) => {
   const who = p.company || p.abs_path
   log(`Tailoring ${i + 1}/${picks.length}: ${who}`)
   const resumesDir = `__READY_TO_REVIEW__PRIVATE_GITIGNORED/${batchOf(p.abs_path)}/2 - Tailored Resumes`
+  const fixedName = await canonicalFolderName(p)
   const res = await agent(
     `Tailor a resume for ONE job, in autonomous mode.
 
 Job description file (read this exact file): ${p.abs_path}
 ${p.company ? `Company: ${p.company}\n` : ''}${p.title_and_link ? `Role/title: ${p.title_and_link}\n` : ''}
-Create the destination job folder INSIDE "${resumesDir}". The folder name must be EXACTLY the output
-of the shared canonicalizer — run this command FIRST and use its printed string verbatim (NO date —
-the parent batch folder is already dated; never invent your own abbreviations):
+Create the destination job folder INSIDE "${resumesDir}".
+${fixedName
+  ? `The folder name is ALREADY RESOLVED. Use it EXACTLY, character for character:
 
-${nameCmdFor(p)}
+    ${fixedName}
+
+Do NOT re-derive it, do not "correct" it, and do not re-run the canonicalizer — the name was
+resolved by the shared canonicalizer before this run started and is a fixed input. Deviating
+creates a SECOND folder for a job that already has one, which strands that job's earlier work
+(cover letters, prior drafts) in the folder you didn't use. If the name looks wrong to you, use
+it anyway and say so under Suggested System Updates.`
+  : `The folder name must be EXACTLY the output of the shared canonicalizer — run this command
+FIRST and use its printed string verbatim (NO date — the parent batch folder is already dated;
+never invent your own abbreviations):
+
+${nameCmdFor(p)}`}
 
 Use mkdir -p and quote paths since they contain spaces. Copy the job file in, and write the output
 file ("application_resume_output - <canonical name>.md") there using your spec's Primary Output
@@ -156,6 +197,18 @@ re-derive, don't ratify the old draft.`,
     { agentType: 'job-applier', model: 'sonnet', phase: 'Tailor', schema: CONFIRM_SCHEMA, label: who }
   )
   if (!res) return null
+  // A folder name that drifted from the resolved one means this job now has two folders and
+  // its earlier artifacts are stranded in the other. Report it loudly; never let it pass as
+  // a normal successful run.
+  if (fixedName) {
+    const made = String(res.job_folder || '').replace(/\/+$/, '').split('/').pop()
+    if (made && made !== fixedName) {
+      folderDriftWarnings.push(`⚠️ ${who}: folder name drifted from the canonical "${fixedName}" to "${made}". `
+        + `That job may now have TWO folders, with earlier work (cover letters, prior drafts) `
+        + `stranded in the other one.`)
+      log(`⚠️ ${who}: folder drift — expected "${fixedName}", got "${made}"`)
+    }
+  }
   const checked = await validateAndRepair(res, who)
   return { order: i + 1, ...p, ...res, contract_ok: checked.ok, contract_failures: checked.failures }
 }
@@ -246,14 +299,14 @@ const hasComparison = (t) => (
 // be invisible: the workflow reported success while the Tailored?/Cover Letter columns silently
 // stayed empty. Same failure class as a manifest wipe — surface it in the RESULT.
 const misrouted = tailored.filter((t) => batchOf(t.abs_path) === 'manual')
-const warnings = misrouted.length
+const warnings = folderDriftWarnings.concat(misrouted.length
   ? [`${misrouted.length} tailored job(s) could not be matched to a batch folder, so their `
     + `"Tailored? (Base Resume)" / "Cover Letter Drafted?" cells were NOT updated: `
     + misrouted.map((t) => jobFileOf(t.abs_path)).join(', ')
     + `. Their drafts are in __READY_TO_REVIEW__PRIVATE_GITIGNORED/manual/2 - Tailored Resumes/. `
     + `A batch folder must be named MM-DD-YY (optionally "MM-DD-YY - <label>") and the job file `
     + `must live under its "3 - Source Material/".`]
-  : []
+  : [])
 
 let recordSummary = null
 if (tailored.length) {

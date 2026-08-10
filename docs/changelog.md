@@ -11,6 +11,18 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-08 — The validation gate ran for real, and caught a naming defect it wasn't looking for
+
+Five jobs re-run through the repaired pipeline, launched by explicit script path so the current file executed. **5 of 5 passed the output-contract check** — verified independently, not taken from the run's own report — and the repair loop never had to fire, which says the agents now hit the contract unaided.
+
+But two of the five landed in NEW folders beside their existing ones: the same job produced `Headlight.health - …` on one run and `Headlight - …` on the next, and `Grindr - …` then `Grindr LLC - …`. Each job now had two folders, with its **cover letter stranded in the older one**.
+
+Cause: the tailoring prompt handed the agent a canonicalizer command and told it to use the printed string verbatim as the folder name. That is an instruction competing for attention with everything else in a long run, and agents deviated — in both directions, across runs, from the same inputs. Naming cannot depend on an agent choosing to obey mid-task.
+
+Fixed by making the name a **fixed input rather than a derived one**: a small dedicated step resolves the canonical name up front and the tailoring prompt receives the literal string with an explicit instruction not to re-derive or "correct" it, plus the consequence stated plainly (a second folder strands the job's earlier work). A post-run check compares the folder actually created against the resolved name and raises a loud warning on drift, so the next occurrence is reported rather than discovered by counting folders.
+
+The general shape, which keeps recurring in this repo: **a value an agent computes as a side task will drift; a value handed to it as an input will not.** The canonicalizer was always the single source of truth — it just wasn't being consulted the same way twice.
+
 ## 2026-08-08 — One base file per job folder, because silence gets filled
 
 The candidate noticed a PDF sitting in a job folder and asked whether copying it was an approved part of the process. It wasn't — and checking the whole batch turned up two distinct shapes of the same problem: **4 of 35 folders** held both a `.pages` and a `.pdf` of the same résumé, and **3 held a PDF with no editable source at all**, leaving nothing to tailor from.
