@@ -1264,6 +1264,10 @@ Why this is absolute: the candidate pastes the **entire block** into the résum�
 
 The line is therefore never "the base's, minus some." It is the best set of skills for this job, chosen from everything the candidate can truthfully claim.
 
+**⭐ TARGET 14-18 ITEMS. Fill the line.** This is a paste-whole deliverable on a space-constrained page, and an under-filled line wastes the single densest keyword surface on the résumé. Do not stop at "enough to cover the JD" — cover the JD's named requirements in its own vocabulary FIRST, then keep going with the candidate's genuine breadth terms until the line is full. Twelve or thirteen items reads thin: reviewing a regenerated batch, the candidate called one 13-item line "too short by 1" and another "too short by 3 to 5." Below 14 the output-contract check fails the draft outright.
+
+The only reason to come in short is that the candidate cannot truthfully claim more — which, for anyone with a full career behind them, essentially never happens. Breadth terms that apply regardless of role are legitimate line-fillers; inventing a skill is not.
+
 Output:
 - one final skills line
 - in one clean paragraph / line

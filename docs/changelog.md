@@ -11,6 +11,18 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-08 — The skills check was measuring the wrong line
+
+Reviewing the regenerated batch, the candidate called one skills line "too short by 1" and another "too short by 3 to 5" — on drafts the output-contract check had passed. Investigating turned up a bug in the checker itself, not just a low threshold.
+
+`skills_item_count` took "the longest comma-rich line in the section," which happily measured a notes bullet (`- Intentionally omitted: the psychology cluster, the growth cluster, …`) or a bolded lead-in paragraph instead of the skills line. It reported a real 13-item line as having 5, and elsewhere reported 4 where the truth was 14. **A checker that measures the wrong line is worse than no checker** — it produces confident numbers about something it never looked at, which is the same failure as the QA pass that greenlit 35 files by testing for a section name the retired structure also contained.
+
+Now it skips notes bullets, headings, tables, bolded lead-ins and `Label:`-style lines, and rejects anything with sentence punctuation, because a skills line is a list and not prose.
+
+**Floor raised from the candidate's judgment rather than a guess.** Her submitted history runs 12-18 items, median 13 — so 13 is the observed middle, not the target. Since she called 13 short on review, the contract floor is now 14, and the spec asks for 14-18 with an explicit instruction to *fill the line*: cover the JD's named requirements in its own vocabulary first, then keep going with genuine breadth terms. An under-filled skills line wastes the densest keyword surface on a space-constrained page, and the candidate pastes the block whole, so it has to be complete on its own.
+
+Verified against the five freshly regenerated drafts: the new floor flags exactly the two she called short and passes the three she didn't.
+
 ## 2026-08-08 — The validation gate ran for real, and caught a naming defect it wasn't looking for
 
 Five jobs re-run through the repaired pipeline, launched by explicit script path so the current file executed. **5 of 5 passed the output-contract check** — verified independently, not taken from the run's own report — and the repair loop never had to fire, which says the agents now hit the contract unaided.

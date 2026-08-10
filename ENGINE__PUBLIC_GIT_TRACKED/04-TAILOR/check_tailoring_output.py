@@ -50,7 +50,35 @@ RETIRED_HEADINGS = (
 # piece carries its link, not that the link lives on a particular domain.
 URL_RE = re.compile(r"https?://[^\s)\]>]+")
 
-MIN_SKILLS_ITEMS = 8
+# The skills line is the deliverable the candidate pastes whole, so it must be complete on its
+# own. Floor set from the candidate's own judgment, not invented: reviewing a regenerated batch
+# she called a 13-item line "too short by 1" and another 13-item line "too short by 3 to 5".
+# Submitted résumés run 12-18 items with a median of 13. So 13 is the observed middle, not the
+# target — 14 is the minimum that survives review, and the spec asks for 14-18.
+MIN_SKILLS_ITEMS = 14
+
+
+def skills_item_count(section_body: str) -> int:
+    """Items on the actual skills LINE — not on a prose notes line that happens to contain commas.
+
+    The first version took "the longest comma-rich line in the section", which cheerfully
+    measured `- Intentionally omitted: the psychology/behavior-change cluster …` and reported
+    a 13-item skills line as having 5. A checker that measures the wrong line is worse than no
+    checker: it reports confident numbers about something it never looked at."""
+    best = 0
+    for raw in (section_body or "").splitlines():
+        s = raw.strip()
+        if not s or s.startswith(("#", "-", "*", ">", "|")):
+            continue          # notes bullets, headings, tables
+        if s.startswith("**") or re.match(r"^[A-Z][^,]{0,40}:\s", s):
+            continue          # a bolded lead-in or a "Notes:"-style label, not the line
+        if s.count(",") < 3:
+            continue
+        # A real skills line is a list, not prose: sentence-ending periods disqualify it.
+        if re.search(r"\.\s+[A-Z]", s) or s.endswith("."):
+            continue
+        best = max(best, len([x for x in s.split(",") if x.strip()]))
+    return best
 
 
 def find_spec(explicit: str | None) -> Path:
@@ -246,8 +274,7 @@ def check(md_text: str, spec_text: str) -> list[dict]:
     if sk is None:
         fail("missing-skills", "no Skills section")
     else:
-        best = max((len([x for x in l.split(",") if x.strip()])
-                    for l in sk.splitlines() if l.count(",") >= 3), default=0)
+        best = skills_item_count(sk)
         if best < MIN_SKILLS_ITEMS:
             fail("skills-too-thin", f"skills line has {best} items (minimum {MIN_SKILLS_ITEMS})")
 

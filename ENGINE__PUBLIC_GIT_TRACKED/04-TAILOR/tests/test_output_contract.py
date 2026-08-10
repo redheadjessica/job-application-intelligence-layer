@@ -131,7 +131,7 @@ Notes: swapped the funnel bullet.
 ### Summary — pick one
 Option A: ...
 ### Skills
-Product Strategy, Acquisition & Onboarding, Activation, Subscription Monetization, Experimentation, Data-Informed Decisions, Cross-Functional Leadership, Roadmap Prioritization, Growth
+Product Strategy, Acquisition & Onboarding, Activation, Subscription Monetization, Experimentation, Data-Informed Decisions, Cross-Functional Leadership, Roadmap Prioritization, Growth, User Research, Product Analytics, Stakeholder Management, Technical Tradeoffs, Systems Thinking
 ### Selected Writing / Projects
 - "A Piece About Onboarding" — https://example.com/a-piece — matches the JD's activation thesis
 
@@ -249,3 +249,37 @@ def test_a_cover_letter_is_not_a_base_artifact(tmp_path):
         "Cover-Letter-Draft - Acme - Senior PM.docx",
         "Someone-CoverLetter - Acme - Senior PM.pdf",
         "acme__senior-product-manager.txt") == []
+
+
+def test_skills_count_reads_the_line_not_the_notes():
+    """The first version took "the longest comma-rich line in the section" and cheerfully
+    measured a notes bullet, reporting a 13-item skills line as having 5. A checker that
+    measures the wrong line is worse than none: it reports confident numbers about
+    something it never looked at."""
+    body = """
+Product Strategy, Product Discovery, Healthcare Products, CRM & Workflow Products, Complex Workflow Design, Operational Product Management, Hands-On AI Product Building, Stakeholder Management, Cross-Functional Leadership, Agile & Lean Practices, Roadmap Prioritization, Data-Informed Decision Making, Product Analytics, Technical Tradeoffs
+
+Notes:
+- Intentionally omitted: the psychology cluster, the growth cluster, the retention cluster, and several other long comma-laden phrases that are prose, not a skills line.
+"""
+    assert cto.skills_item_count(body) == 14
+
+
+def test_a_bolded_lead_in_paragraph_is_not_the_skills_line():
+    body = """
+**One targeted swap, driven by the JD's ask:** drop **"B2B SaaS"**, add **"AI Product Building"**, keeping length, with commas, commas, commas.
+
+Alpha, Beta, Gamma, Delta, Epsilon, Zeta, Eta, Theta, Iota, Kappa, Lambda, Mu, Nu, Xi
+"""
+    assert cto.skills_item_count(body) == 14
+
+
+def test_thin_skills_line_fails_at_the_reviewed_floor():
+    """13 items was called "too short" by the candidate on review; 14 is the floor."""
+    # Locate the fixture's skills line rather than restating it — a second copy of that
+    # string here would be one more thing to drift, which is the bug this file guards.
+    line = re.search(r"(?m)^Product Strategy,.*$", GOOD).group(0)
+    thirteen = ", ".join(f"Skill {i}" for i in range(13))
+    fourteen = ", ".join(f"Skill {i}" for i in range(14))
+    assert "skills-too-thin" in {f["rule"] for f in _check(GOOD.replace(line, thirteen))}
+    assert "skills-too-thin" not in {f["rule"] for f in _check(GOOD.replace(line, fourteen))}
