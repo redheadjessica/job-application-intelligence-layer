@@ -11,6 +11,27 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-08 (later) — Acceptance test passed, and a stale-script trap found in the workflow launcher
+
+Re-ran one job end to end against the repaired contract. Measured against the defective version of the same job and against a known-good pre-regression file from two days earlier:
+
+| ingredient | before | after | known-good |
+|---|---|---|---|
+| writing URLs | 0 | 3 | 3 |
+| skills items | 10 | 16 | 13 |
+| Selected Writing section | absent | present | present |
+| Read Log | absent | present | present |
+| paste-ready `- ` bullets | 13 | 40 | 22 |
+| `*(Driver: …)*` annotation lines | 11 | 0 | 0 |
+
+The base ledger did the thing it was built for: the run evaluated all 21 registered bases with a one-line verdict each, and **chose the base that the previous run never mentioned at all** — the one whose index entry registered it for go-to-market-heavy, product-and-marketing roles. It also stated page-1 chassis and page-2 source separately for the first time, and pulled a piece of community-launch evidence out of the experience bank that had never appeared in any prior résumé. Selected Writing explicitly recorded "re-evaluated against this JD rather than inherited," and skills recorded a full swap rather than a trim. Those are the anti-inheritance rules working, visibly, in the artifact.
+
+**But the in-pipeline validation did not run, and the reason is worth recording.** Launching a workflow by NAME used a snapshot of the workflow script taken earlier in the session, not the file on disk — so the freshly-added validate-and-repair step and the compliance reporting were both absent from the run, while the repo file contained them. The output was correct anyway (subagents read the spec and agent files fresh from disk, and those were fixed), and a manual run of the checker passed. But the run reported success without ever executing the check that would have caught failure.
+
+This is the same bug class as everything else in this thread — a stale copy of a definition executing instead of the current one — now sitting in the launcher rather than in a prompt. The mitigation is to launch by explicit script path, which reads the file, rather than by name. Worth remembering generally: "I edited the file" and "the thing that ran contains my edit" are different claims, and on this stack they can diverge silently.
+
+**Containment.** 33 of the 35 drafts from the defective batch now carry a `⚠️ DO NOT USE — regenerate this draft.md` marker listing that file's specific contract failures, and their rankings rows are prefixed `⚠️ REGENERATE —` so a defective draft cannot read as finished work in the tracker. Two drafts are clean. Baseline against the new contract across the old batch: 1 of 35 passed, which is the honest measure of what had shipped.
+
 ## 2026-08-08 — The tailoring output contract now has one definition, and a machine that reads it
 
 A 35-résumé batch shipped with 32 files carrying no writing links, 27 missing Selected Writing entirely, 31 built to the retired output structure, 3 with no skills section, and bullets that had to be run through a separate tool before they could be pasted into a résumé. The candidate found all of it by reading files.
