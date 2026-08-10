@@ -11,6 +11,18 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-08 — One folder per job, enforced by identity instead of by name
+
+Third and final round of the folder-splitting problem, and the first fix that addresses what actually matters.
+
+Rounds one and two both chased the same wrong target: make the folder NAME correct. First by telling the agent to run the canonicalizer and use its output; then by resolving the name up front and passing it as a literal; then by looking the company and title up from the rankings when the caller omitted them. Each version was an improvement, and each one still produced duplicate folders — because the canonical string is recomputed from the rankings' Company and Title, while the folders on disk were created from earlier, different readings of the same posting. "Mochi Health - PM" and "Mochi Health - Senior PM" are both defensible canonicalizations; they are not the same folder.
+
+**The invariant is ONE FOLDER PER JOB, which is not the same claim as "the folder is named what the canonicalizer says today."** Chasing the second broke the first three times in one day, each time stranding a job's cover letter and prior drafts in the folder the run didn't use.
+
+Now an existing folder wins over any computed name. Before tailoring, the workflow looks for the subfolder already containing this job's capture `.txt` — identity, which never drifts — and reuses it verbatim. The canonicalizer runs only when no folder exists yet, which is the case it was always right for.
+
+Final state of the batch: **34 of 34 drafts pass the output contract, no job has more than one folder, and no `⚠️ DO NOT USE` markers remain.** Every draft carries writing links with URLs, paste-ready bullets, a 14+ item skills line built from canon, a base ledger with a verdict on every registered base, and a Read Log. The repair loop never fired across the whole batch — agents met the contract unaided once the spec and the overlays finally said the same thing.
+
 ## 2026-08-08 — A guard that only fires when the caller passes extra fields is not a guard
 
 Regenerated the batch's remaining defective drafts, 29 jobs in parallel. Most of it worked: the run reported 27 of 27 passing, and an independent sweep put the whole folder set at 32 of 34 passing against the contract.

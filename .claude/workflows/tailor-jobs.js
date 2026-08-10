@@ -171,7 +171,37 @@ If the file does not exist, return an empty rows array.`,
   return identityByJobFile
 }
 
+// ⭐ AN EXISTING FOLDER FOR THIS JOB WINS OVER ANY NAME WE WOULD COMPUTE.
+// The invariant that matters is ONE FOLDER PER JOB, not "the folder is named what the
+// canonicalizer says today". Those are different, and chasing the second broke the first
+// three times on 08-08-26: the canonical string is recomputed from the rankings' Company and
+// Title, historical folders were created from different readings of the same posting, and every
+// mismatch produced a SECOND folder that stranded the job's cover letter and prior drafts.
+// Identity is the job capture .txt sitting inside the folder — that never drifts.
+const EXISTING_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['folder'],
+  properties: { folder: { type: 'string', description: 'existing folder NAME only (no path), or "" if none' } },
+}
+async function existingFolderFor(p) {
+  const dir = `__READY_TO_REVIEW__PRIVATE_GITIGNORED/${batchOf(p.abs_path)}/2 - Tailored Resumes`
+  const jobFile = String(p.abs_path).split('/').pop()
+  const r = await agent(
+    `In "${dir}", find the ONE existing subfolder that already contains a file named exactly
+${JSON.stringify(jobFile)}. Return just that folder's NAME (not a path). If no subfolder contains
+it, return "". Do not create anything.
+
+    ls ${JSON.stringify(dir)}
+
+then check the candidates. Report only what you actually find.`,
+    { phase: 'Tailor', model: 'haiku', schema: EXISTING_SCHEMA, label: `existing:${jobFile.slice(0, 28)}` }
+  )
+  const f = r && typeof r.folder === 'string' ? r.folder.trim().replace(/^\/+|\/+$/g, '') : ''
+  return f || null
+}
+
 async function canonicalFolderName(p) {
+  const existing = await existingFolderFor(p)
+  if (existing) return existing
   let company = p.company
   let roleGuess = p.title_and_link ? String(p.title_and_link).split(' | ')[0].trim() : ''
   if (!company || !roleGuess) {
