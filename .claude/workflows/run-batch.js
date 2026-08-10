@@ -106,5 +106,5 @@ return {
   table: tj && tj.table,
   warnings: tj && tj.warnings,
   record_summary: tj && tj.record_summary,
-  note: `${(tj && tj.warnings && tj.warnings.length) ? '⚠️ ' + tj.warnings.join(' ') + '\n\n' : ''}Prepared ${tailored.length} resume draft(s). Everything is in "${REVIEW_ROOT}" — open "1 - Rankings", then each folder in "2 - Tailored Resumes" (start with the "Questions for the candidate" section). Each tailored job's chosen base and its resume-comparison block (Base/Improved Resume Score, delta, Why It Improves) were written back into "1 - Rankings/". Copy/paste table for your tracker is in the "table" field.`,
+  note: `${(tj && tj.warnings && tj.warnings.length) ? '⚠️ ' + tj.warnings.join(' ') + '\n\n' : ''}Prepared ${tailored.length} resume draft(s). Everything is in "${REVIEW_ROOT}" — open "1 - Rankings", then each folder in "2 - Tailored Resumes" (start with the "1. Decisions Needed" section). Each tailored job's chosen base and its resume-comparison block (Base/Improved Resume Score, delta, Why It Improves) were written back into "1 - Rankings/". Copy/paste table for your tracker is in the "table" field.`,
 }

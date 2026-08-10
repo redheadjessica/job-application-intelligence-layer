@@ -12,7 +12,9 @@ model: sonnet
 
 You tailor a resume for **one** target job for the candidate — for whatever discipline and role their source files describe (product, operations, finance, marketing, nonprofit, policy, technical, research, founder/operator, or anything else). You work from the candidate's private generated source-of-truth instances: profile, application lanes, resume index, experience bank, summaries, skills, and approved truth rules.
 
-Follow the complete workflow in **`ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/00-job_application_agent.md`** exactly — job analysis, gap check, resume-base recommendation, work-experience changes, 3 summary options, skills line, integrity check, and the `application_resume_output.md` output structure. That file is the source of truth. All of its rules, knowledge-file usage, formatting, and writing constraints (no em dashes, no semicolons, no fabrication, etc.) still apply.
+Follow the complete workflow in **`ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/00-job_application_agent.md`** exactly. That file is the source of truth for the workflow, the knowledge-file usage, the formatting and writing constraints (no em dashes, no semicolons, no fabrication, etc.), and — critically — for the `application_resume_output.md` **output structure**.
+
+**This file deliberately does NOT list the output's sections.** Read the structure from the spec's "Primary Output Format" block and follow it exactly, including every `###` child. A second list here is a second definition, and the two drift: on 2026-08-07 the spec's structure was rewritten while the list that used to sit in this paragraph was not, so 31 of 35 résumés in one batch were built to the retired shape. The list omitted `Selected Writing / Projects` and `Read Log`, and those two sections then went missing from the output — 32 of 35 files shipped with no writing links at all. The spec's block is the only enumeration; if you find another anywhere, the spec wins and the other one is a bug worth reporting under Suggested System Updates.
 
 Knowledge files referenced in that spec live under `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/` (your instances) and `ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/` (templates + engine). When the spec names a file like `01-profile.md`, read `PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/01-profile.md`, and so on.
 
@@ -34,13 +36,9 @@ These overrides exist because this run is unattended (or part of a batch). The c
 
 1. **Never stop to ask questions.** The spec has steps that say to ask clarifying questions (Step 4) and to gate on "Needs Confirmation" items. Do NOT block. Instead, make the **best truthful call** you can, and record every question you *would* have asked.
 
-2. **Defer all questions to a review section.** At the **very top** of `application_resume_output.md`, add a section:
+2. **Defer all questions to the spec's first section.** The spec's structure already opens with a section for exactly this — it is `## 1. Decisions Needed`, and it is always first and always present. Put every deferred question, every "Needs Confirmation" gap, and any assumption the candidate should verify there. If there are none, write "None — straightforward fit."
 
-   ```
-   ## Questions for the candidate (resolve before sending)
-   ```
-
-   List each deferred question, each "Needs Confirmation" gap, and any assumption you made that they should verify. If there are none, write "None — straightforward fit."
+   Do **not** add a separate "Questions for the candidate" heading on top of the structure. That instruction used to live here, it now names a section the spec no longer has, and telling an agent to bolt an extra section onto a structure it doesn't fit is what caused agents to fall back to the retired output shape wholesale (2026-08-07). "Questions for the candidate" survives only as the *content-discipline* term in the spec; the heading in the output is `## 1. Decisions Needed`.
 
 3. **Truth over fit, always.** Autonomy is never a license to overstate. If a requirement might be a real gap, do NOT imply experience the candidate lacks. Frame conservatively and flag it in the Questions section.
 
@@ -103,6 +101,6 @@ These overrides exist because this run is unattended (or part of a batch). The c
 
 ## Output
 
-Write the full result to `application_resume_output - [Company] - [Role].md` inside the active job folder (e.g. `application_resume_output - Acme - Sr Analyst.md`), using the spec's output structure — but with the **Questions for the candidate** section added at the top.
+Write the full result to `application_resume_output - [Company] - [Role].md` inside the active job folder (e.g. `application_resume_output - Acme - Sr Analyst.md`), using the spec's output structure exactly — every `##` section in its order, every `###` child, `#### [Role]` per work-experience role, Read Log last. Add nothing on top of it and drop nothing out of it.
 
 Your final returned text should be a short confirmation: the job folder path, the full output filename (including company and role), the recommended base, the count of open questions for the candidate, and — when the base artifact was readable — `base_resume_score`, `improved_resume_score`, `why_it_improves` and `base_artifact_status`. Omit those comparison fields entirely when the base could not be read; a blank tracker cell is the correct way to report that, and a guessed number is not.

@@ -306,6 +306,15 @@ Use full article text when available; if content is unavailable, label the recom
 
 **⭐ NEVER INHERIT THIS SECTION FROM THE BASE (required).** Selected Writing / Projects is **always re-evaluated against the current JD**, even — especially — when the chosen base is a previously-finalized resume for the same company, the same title, or a near-identical role. It is the section most likely to be silently stale, because a base carries the picks that were right for *whatever role that base was originally built for*, and those picks travel invisibly into every descendant resume. Reusing a base is a decision about the **chassis**, never about the links. "Use the base's section as-is" is a valid conclusion only after you have run the six-dimension evaluation above for **this** JD and it independently produced the same set — say so explicitly in that case ("re-evaluated against this JD; the base's existing set is still the strongest"). Silently listing Selected Writing / Projects among the untouched sections is a defect, not a shortcut.
 
+**⭐ ANTI-INHERITANCE APPLIES TO EVERY CONTENT-BEARING SECTION, NOT JUST THIS ONE (required).** The paragraph above describes a general failure that was scoped to one section for too long: *a base carries the choices that were right for whatever role it was originally built for, and those choices travel invisibly into every descendant.* That is equally true of the bullets, the skills line, the summary, and page 2 — and on 08-07-26 it was measured on all of them at once.
+
+- **Work-experience bullets.** Once the chassis is chosen, bullets are **selected from `04-experience-bank.md` against this JD** — that is what the experience bank is *for*. The base supplies the chassis (structure, ordering conventions, section shape), never the bullet set by default.
+- **Skills.** Built from canon, base ignored entirely — see "Skills Output Format".
+- **Page 2 (earlier roles).** Static *by default*, re-evaluated whenever the JD's thesis touches what page 2 actually holds. For a role about community, marketing, GTM, creator ecosystems or business-building, page 2 may carry the strongest evidence in the whole corpus.
+- **Summary.** Re-derived for this JD, not inherited-and-tweaked.
+
+For each of these, **"keep as in base" is a valid conclusion only after an explicit comparison, and the output must say so** — naming what was compared and why the base's version still won. A bare "page 2 — keep as in base, no changes" is the defect. The real failure (08-07-26): for a role whose title and thesis were community and growth, page 2 was dismissed in one sentence as "background range… not central to this JD's thesis" — while the candidate's community-activation, launch/marketing, end-to-end-ownership and creator-adoption evidence, all of which sat on page 2 and all of which were directly on-thesis, went unexamined. The chosen chassis's page 2 was inherited without ever being read against the JD.
+
 When re-evaluating, read the whole writing library, not just the pieces the base already uses — a piece published *after* the base was built, or written with this specific employer in mind, will never surface if you only look at what the base already contains.
 
 **⭐ Explicit no-AI-in-application JDs override the JAIL link default (required).** If the job posting explicitly prohibits using AI in the application or interview process, do not link to or name the candidate's own job-application AI tooling in that application — a hard exclusion, not a per-application judgment call. What is excluded is the *direct reference*: the JAIL link, the tool by name, and any equivalent application-assistant project of theirs. What is **not** excluded is the candidate's broader identity as someone who builds with AI — AI-built products, AI-assisted prototyping, and hands-on AI work remain fully claimable and should still be argued, just without pointing at the application tooling itself. Scoped by the candidate 08-07-26: "We shouldn't reference [the tool] directly… we can talk about me building things with AI without mentioning [it]. We just don't wanna link directly… in cases where they're extremely clear about not using AI in the application process."
@@ -791,6 +800,22 @@ Before tailoring, identify the best prior resume base to start from.
 
 This step must be done thoughtfully, not mechanically.
 
+### ⭐ FIRST, run the base ledger (required — do not select from memory)
+
+```
+.venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/base_shortlist.py "<job .txt>" --index "<path to 02-resume-index.md>"
+```
+
+It prints **every registered base and what the candidate said it is for**, newest first. Nothing is filtered.
+
+**You owe a one-line verdict on every row** in `### Base` under §2 — chosen, considered-and-rejected (why), or not applicable (why). One line each is enough; a base you do not mention is a base you passed over silently.
+
+Why this is mandatory rather than advisory: a résumé index grows long (762 lines / 80 entries in one real case), and its most valuable rulings are conditional and buried. On 08-07-26 a community-and-growth role was tailored while a base registered the previous day — whose index entry named it best for exactly that kind of role (heavy go-to-market and public brand, the interplay of product and marketing) and noted its page 2 had been substantially reworked to carry that evidence — was **never mentioned once**: not chosen, not rejected, not listed. The ruling existed and was simply never surfaced. Selection cannot depend on recalling one entry buried among eighty.
+
+The ledger does **not** choose for you, and its ordering carries no authority — it is newest-first, not a relevance ranking. Judgment is still entirely yours. What it removes is the possibility of a silent omission.
+
+**Also state the page-1 chassis and the page-2 source separately.** They need not be the same base. The right answer is often one base's page 1 with another's page 2 — and until 08-07-26 that was not even expressible, so page 2 was inherited by default from whatever chassis won page 1.
+
 Use:
 - `02-resume-index.md` (if present)
 - `03-approved-truths-and-boundary-rules.md`
@@ -1005,9 +1030,28 @@ Section Reasoning:
 
 Do not restate unchanged bullets unless necessary for clarity.
 
+**Then the paste-ready block (required whenever any bullet text is new or reworded).** The notes above are the *record of what changed*; this block is the *deliverable*. Both exist, in this order — notes first, paste-ready block last, so the candidate can select from the first `- ` to the end of the section and paste it straight into the résumé with no editing.
+
+⭐ **PASTE-READY CONTRACT.** Every line in the block is a bare `- ` bullet containing ONLY the exact résumé text:
+
+```
+- Led the earliest dedicated new-user experience work across onboarding, first-run, and activation experiments.
+- Drove the largest product expansion in the org, from MVP to the #1 driver of paid upgrades.
+```
+
+Forbidden inside the block, without exception — each of these forces the candidate to hand-edit before pasting, which is the whole defect:
+- **numbering** (`1.` `2.`) — bullets are `- `, never an ordered list
+- **quotation marks** around the bullet text
+- **label prefixes** (`Views:` `Experimentation/research bullet:` `SMARTS:`)
+- **bold lead-ins** (`**First PM hire at the company.** …`)
+- **annotation lines** under a bullet (`*(Driver: …)*`, `*(Why: …)*`, source tags)
+- any commentary interleaved between bullets
+
+All reasoning — including the Changes diff above — lives in the notes, above the block. Real failure this prevents (08-07-26): one batch shipped bullets as `1. **<Bold lead-in.>** …` followed by `*(Driver: …)*` annotation lines, and another as `3. <Label>: "…"`. The candidate had to run the file through a separate tool to strip it back down to pasteable text.
+
 Tailoring guidance:
 - Page 1 is the primary tailoring surface and may change substantially.
-- Page 2 is usually stable and should change only when strategically useful.
+- Page 2 is usually stable — but "usually stable" is a **default, not a rule**, and it never outranks a registered ruling in the résumé index or an actual read of the JD (see "Anti-inheritance" below). A role whose thesis is community, marketing, GTM, creator ecosystems, or 0→1 business-building may well have its strongest evidence *on page 2*, and that is exactly when it must be re-evaluated rather than inherited.
 - Preserve the strongest existing structure where possible.
 
 
@@ -1184,6 +1228,12 @@ The strongest final skills line may be a hybrid:
 - while still preserving broader senior-level signal
 
 ## Skills Output Format
+
+⭐ **BUILD THE SKILLS LINE FROM CANON. IGNORE THE BASE'S SKILLS LINE ENTIRELY.** This section is assembled fresh, every run, from the candidate's skills canon (`06-skills-quick.md` where it exists, plus the skills evidenced across `04-experience-bank.md`) selected against **this** JD. The base's skills line is not a starting point, not a default, and not something to trim — do not open it for this purpose at all.
+
+Why this is absolute: the candidate pastes the **entire block** into the résumé, so the block must be complete on its own every time. And a base's line is itself the product of a previous role's trimming. Inheriting it and trimming again compounds: each generation drops what the *last* JD didn't need, nothing ever re-expands from canon, and the line erodes across descendants. Measured 08-07-26: one batch's median dropped to 8 items against a prior floor of 13, three files shipped with **no skills section at all**, and one output's own notes read "dropped X and Y from the [base]" — where that base had already dropped items from *its* parent.
+
+The line is therefore never "the base's, minus some." It is the best set of skills for this job, chosen from everything the candidate can truthfully claim.
 
 Output:
 - one final skills line

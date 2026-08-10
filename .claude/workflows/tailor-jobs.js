@@ -140,8 +140,9 @@ the parent batch folder is already dated; never invent your own abbreviations):
 ${nameCmdFor(p)}
 
 Use mkdir -p and quote paths since they contain spaces. Copy the job file in, and write the output
-file ("application_resume_output - <canonical name>.md") there per your spec, with the "Questions
-for the candidate" section at the top. Do not ask questions — defer them to that section.
+file ("application_resume_output - <canonical name>.md") there using your spec's Primary Output
+Format EXACTLY — every numbered section in order, every ### child, Read Log last. Do not ask
+questions — defer them to "## 1. Decisions Needed", which is that structure's first section.
 In your structured return, "company" and "role" are the canonical values: role = the part of the
 canonicalizer output after "<Company> - ".
 
@@ -154,7 +155,63 @@ file. The finished .md must reflect every current credential, confirmed gap, and
 re-derive, don't ratify the old draft.`,
     { agentType: 'job-applier', model: 'sonnet', phase: 'Tailor', schema: CONFIRM_SCHEMA, label: who }
   )
-  return res ? { order: i + 1, ...p, ...res } : null
+  if (!res) return null
+  const checked = await validateAndRepair(res, who)
+  return { order: i + 1, ...p, ...res, contract_ok: checked.ok, contract_failures: checked.failures }
+}
+
+// ---- Output-contract validation (added 2026-08-08) ----
+// A 35-résumé batch shipped with 32 files carrying no writing links, 27 missing Selected Writing,
+// 31 built to a retired structure and 3 with no skills section — every one a machine-checkable
+// presence-and-shape defect, every one reaching the candidate because the only check was a human
+// reading files. Nobody reads 35 files. The checker parses its expectations from the spec, so it
+// cannot drift from what the agent was told to produce.
+const VALIDATOR = 'ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/check_tailoring_output.py'
+const CHECK_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['ok', 'failures'],
+  properties: {
+    ok: { type: 'boolean', description: 'true when the validator exited 0' },
+    failures: { type: 'array', items: { type: 'string' }, description: 'one line per reported issue' },
+  },
+}
+async function runValidator(outputFile, label) {
+  return await agent(
+    `Run this command EXACTLY and report what it printed. Do not edit any file.
+
+.venv/bin/python3 ${VALIDATOR} ${JSON.stringify(outputFile)}
+
+Return ok=true only if it printed a line starting with "PASS". Otherwise ok=false and put each
+"[rule] detail" line into failures, verbatim.`,
+    { phase: 'Tailor', model: 'haiku', schema: CHECK_SCHEMA, label: `check:${label}` }
+  )
+}
+async function validateAndRepair(res, label) {
+  const out = res.output_file
+  if (!out) return { ok: false, failures: ['agent returned no output_file path'] }
+  let v = await runValidator(out, label)
+  if (v && v.ok) return { ok: true, failures: [] }
+  const first = (v && v.failures) || ['validator did not report']
+  log(`⚠️ ${label}: output-contract check failed — ${first.length} issue(s), repairing once`)
+  // ONE repair pass, with the failures handed back. Cheaper than losing the run, and it
+  // fixes exactly the shape defects the checker names rather than regenerating judgment.
+  await agent(
+    `Your tailoring output FAILED its output-contract check. Fix the file IN PLACE — do not
+rewrite the analysis or change any judgment, only repair the structure/format the checker names.
+
+File: ${out}
+Spec: ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/00-job_application_agent.md (Primary Output Format)
+
+Failures:
+${first.map((f) => `- ${f}`).join('\n')}
+
+Then re-run the checker and confirm it prints PASS:
+.venv/bin/python3 ${VALIDATOR} ${JSON.stringify(out)}`,
+    { agentType: 'job-applier', model: 'sonnet', phase: 'Tailor', label: `repair:${label}` }
+  )
+  v = await runValidator(out, label)
+  const ok = !!(v && v.ok)
+  if (!ok) log(`❌ ${label}: STILL failing the output contract after repair — needs a human look`)
+  return { ok, failures: ok ? [] : ((v && v.failures) || first) }
 }
 
 let tailored
@@ -255,12 +312,24 @@ const table = [
   ...tableRows.map((r) => `| ${r.company} | ${r.role} | ${r.base} |`),
 ].join('\n')
 
+// COMPLIANCE, NOT COMPLETION. "35 tailored" was true and useless on 08-07-26 while 32 of those
+// 35 had no writing links. A count of files produced says nothing about whether they are correct;
+// the headline number must be the one that would have caught it.
+const passed = tailored.filter((t) => t.contract_ok).length
+const failedContract = tailored.filter((t) => !t.contract_ok)
+  .map((t) => `${t.company || t.job_folder}: ${(t.contract_failures || []).join(' | ')}`)
+if (failedContract.length) {
+  warnings.push(`⚠️ ${failedContract.length} of ${tailored.length} draft(s) FAILED the output-contract check even after a repair pass — do not treat these as finished.`)
+}
+log(`Output contract: ${passed}/${tailored.length} passed`)
+
 return {
   tailored,
   table,
+  contract: { passed, total: tailored.length, failed: failedContract },
   // Loud, never silent: a writeback that found no home is reported in the result itself,
   // not left for the user to discover as empty tracker cells weeks later.
   warnings,
   record_summary: recordSummary,
-  note: `${warnings.length ? '⚠️ ' + warnings.join(' ') + '\n\n' : ''}Prepared ${tailored.length} resume draft(s) in __READY_TO_REVIEW__PRIVATE_GITIGNORED/. Open each job folder's "application_resume_output - [Company] - [Role].md", starting with the "Questions for the candidate" section. Each job's chosen base was also written back into its batch's "Tailored? (Base Resume)" column where a rankings file exists for it. Copy/paste table for your tracker is in the "table" field (no Cover Letter column — tailor-jobs never generates letters; run the cover-letter workflow separately if you want one, which adds its own paste table for that column).`,
+  note: `${warnings.length ? '⚠️ ' + warnings.join(' ') + '\n\n' : ''}Prepared ${tailored.length} resume draft(s), ${passed} of ${tailored.length} passing the output-contract check, in __READY_TO_REVIEW__PRIVATE_GITIGNORED/. Open each job folder's "application_resume_output - [Company] - [Role].md", starting with the "1. Decisions Needed" section. Each job's chosen base was also written back into its batch's "Tailored? (Base Resume)" column where a rankings file exists for it. Copy/paste table for your tracker is in the "table" field (no Cover Letter column — tailor-jobs never generates letters; run the cover-letter workflow separately if you want one, which adds its own paste table for that column).`,
 }
