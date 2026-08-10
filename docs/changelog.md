@@ -11,6 +11,20 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-08 — Skills guidance landed; and banning the PDF copy broke scoring for one run
+
+Re-ran the two drafts the candidate called thin. Both passed, with skills lines at exactly the sizes she asked for: one 13→16 (she wanted 3-5 more), the other 13→14 (she wanted 1). **The repair loop never fired** — the spec's "fill the line, target 14-18" guidance was enough on its own, which is the better outcome but means that code path is still unexercised in production.
+
+**A side effect worth recording.** One run came back `no-readable-pdf` and dropped all four résumé-comparison cells — for a base whose exact-name resume-only PDF was sitting in its own folder the entire time. Running `resume_artifacts.py` against the index path returned `status: ok` and the correct file immediately.
+
+The likely cause is the change made earlier the same day. Agents had been copying the base's PDF into the job folder and scoring it there; that copy is now banned (it produced an artifact carrying the job's name and the base's content). The ban was right, but it removed a mechanism without making the replacement explicit enough — the spec said the PDF "is read in place" without saying, in the scoring step itself, that the resolver must be pointed at the **base's** path in the résumé library rather than at the job folder. So an agent looked where the file used to be, found nothing, and honestly reported nothing.
+
+Now stated in the scoring step directly, with the requirement that `no-readable-pdf` may only be reported after actually running the resolver against the index path and seeing that status returned — quoting the resolver's output, so a wrong "missing" claim is visible rather than silently costing four cells.
+
+General lesson, and the third variant of it today: **removing a bad mechanism leaves a hole where the behavior used to be.** Banning the workaround is only half the fix; the other half is making the sanctioned path explicit at the exact step that needed the workaround. Otherwise the agent doesn't fall back to the correct behavior — it falls back to reporting failure.
+
+Also observed, not yet addressed: the same job selected a different base across two runs from identical inputs (one run chose one chassis, the next chose another, with different comparison deltas). Base choice is judgment rather than contract, and the ledger now makes the reasoning visible, but the run-to-run variance is worth watching.
+
 ## 2026-08-08 — The skills check was measuring the wrong line
 
 Reviewing the regenerated batch, the candidate called one skills line "too short by 1" and another "too short by 3 to 5" — on drafts the output-contract check had passed. Investigating turned up a bug in the checker itself, not just a low threshold.
