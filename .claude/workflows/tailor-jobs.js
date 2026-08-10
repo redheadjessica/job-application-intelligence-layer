@@ -135,13 +135,58 @@ const NAME_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['name'],
   properties: { name: { type: 'string', description: 'the canonicalizer output, verbatim, nothing else' } },
 }
+// Job file -> {company, title} from the batch rankings, so a bare-path invocation gets the same
+// canonical naming as one that passes rankings rows. Without this the name resolution silently
+// degrades to "agent derives it", which is exactly the behavior it was added to replace: on
+// 08-08-26 a 29-job run passed plain path strings, every pick had `company` undefined, and two
+// jobs landed in second folders again ("Bain & Company, Inc. - …" beside "Bain & Company - …").
+// A guard that only works when the caller happens to pass extra fields is not a guard.
+const IDENTITY_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['rows'],
+  properties: {
+    rows: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false, required: ['job_file', 'company', 'title'],
+        properties: { job_file: { type: 'string' }, company: { type: 'string' }, title: { type: 'string' } },
+      },
+    },
+  },
+}
+let identityByJobFile = null
+async function loadIdentities(batch) {
+  if (identityByJobFile) return identityByJobFile
+  identityByJobFile = {}
+  const r = await agent(
+    `Read the rankings CSV for batch ${batch} at
+"__READY_TO_REVIEW__PRIVATE_GITIGNORED/${batch}/1 - Rankings/${batch}-rankings.csv"
+and return one row per job: job_file (the "Job File" column), company (the "Company" column), and
+title (the "Job Post Title + Link" column with any markdown link stripped, text only).
+If the file does not exist, return an empty rows array.`,
+    { phase: 'Tailor', model: 'haiku', schema: IDENTITY_SCHEMA, label: 'load job identities' }
+  )
+  for (const row of ((r && r.rows) || [])) {
+    if (row.job_file) identityByJobFile[row.job_file] = row
+  }
+  return identityByJobFile
+}
+
 async function canonicalFolderName(p) {
-  const roleGuess = p.title_and_link ? String(p.title_and_link).split(' | ')[0].trim() : ''
-  if (!p.company || !roleGuess) return null
+  let company = p.company
+  let roleGuess = p.title_and_link ? String(p.title_and_link).split(' | ')[0].trim() : ''
+  if (!company || !roleGuess) {
+    const map = await loadIdentities(batchOf(p.abs_path))
+    const hit = map[String(p.abs_path).split('/').pop()]
+    if (hit) {
+      company = company || hit.company
+      roleGuess = roleGuess || String(hit.title || '').split(' | ')[0].trim()
+    }
+  }
+  if (!company || !roleGuess) return null
   const r = await agent(
     `Run this command EXACTLY and return ONLY what it printed, verbatim, with no commentary:
 
-${NAME_CLI} --company ${shq(p.company)} --role ${shq(roleGuess)}`,
+${NAME_CLI} --company ${shq(company)} --role ${shq(roleGuess)}`,
     { phase: 'Tailor', model: 'haiku', schema: NAME_SCHEMA, label: `name:${p.company}` }
   )
   const n = r && typeof r.name === 'string' ? r.name.trim() : ''

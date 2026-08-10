@@ -11,6 +11,20 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-08 — A guard that only fires when the caller passes extra fields is not a guard
+
+Regenerated the batch's remaining defective drafts, 29 jobs in parallel. Most of it worked: the run reported 27 of 27 passing, and an independent sweep put the whole folder set at 32 of 34 passing against the contract.
+
+Two jobs landed in SECOND folders again, though — "Bain & Company, Inc. - …" beside the existing "Bain & Company - …", and "HealthStream - …" beside "HealthStream Inc - …" — which is exactly what the morning's fixed-name change was supposed to end.
+
+**The fix had a hole: it only worked when the caller passed rankings rows.** `canonicalFolderName` needed `company` and `title_and_link` on each pick, and a caller passing plain path strings (the ordinary way to invoke this workflow) produces picks with neither. It returned null, name resolution silently degraded to "the agent derives it," and the drift check that would have flagged the result was skipped along with it — so the run reported zero warnings while creating two duplicate folders.
+
+That is the same shape as the original regression: a mechanism that appears to be in force, is not, and fails silently rather than loudly. Now the workflow resolves each job's company and title **from the batch rankings** when the caller didn't supply them, so bare-path invocations get identical naming to rankings-driven ones.
+
+**Also recorded, because it was self-inflicted and instructive.** The 29 paths were typed by hand into the invocation instead of passing the generated list that had just been computed — which dropped one job entirely and misspelled another into a path that doesn't exist. Three commits earlier the spec gained the line *"a value an agent computes as a side task will drift; a value handed to it as an input will not."* The same applies to values a person retypes instead of passing. The generated list existed; it simply wasn't used.
+
+Cleanup: both duplicate pairs consolidated into their tracker-canonical folders with superseded drafts archived under `_JAIL Agent Work/superseded/` rather than deleted; a stale base PDF that tripped `duplicate-base-artifact` archived the same way; and the `⚠️ DO NOT USE` markers cleared automatically wherever the regenerated draft passes.
+
 ## 2026-08-08 — Skills guidance landed; and banning the PDF copy broke scoring for one run
 
 Re-ran the two drafts the candidate called thin. Both passed, with skills lines at exactly the sizes she asked for: one 13→16 (she wanted 3-5 more), the other 13→14 (she wanted 1). **The repair loop never fired** — the spec's "fill the line, target 14-18" guidance was enough on its own, which is the better outcome but means that code path is still unexercised in production.
