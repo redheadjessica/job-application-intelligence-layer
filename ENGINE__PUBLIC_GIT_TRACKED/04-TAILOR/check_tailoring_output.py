@@ -128,6 +128,42 @@ def _section_body(text: str, heading_pred) -> str | None:
     return None
 
 
+RESUME_EXTS = (".pages", ".docx", ".pdf", ".doc", ".rtf", ".odt")
+
+
+def check_job_folder(folder: Path) -> list[dict]:
+    """Folder-level rules — the ones that cannot be seen from the .md alone.
+
+    Exactly ONE base résumé artifact belongs in a job folder. On 08-07-26 four folders got
+    both a `.pages` and a `.pdf` of the same résumé, and three got a PDF with no editable
+    source — agents copying the PDF so they could score it, which was never necessary
+    (the comparison pass reads the base's PDF in place, from the base's own folder)."""
+    fails: list[dict] = []
+    if not folder.is_dir():
+        return fails
+    # Résumé artifacts only: cover letters and the job capture are not base copies.
+    arts = [p for p in sorted(folder.iterdir())
+            if p.suffix.lower() in RESUME_EXTS
+            and "resume" in p.name.lower()
+            and "coverletter" not in p.name.lower().replace("-", "").replace(" ", "")
+            and "cover-letter" not in p.name.lower()]
+    stems: dict[str, list[Path]] = {}
+    for p in arts:
+        stems.setdefault(re.sub(r"\s+", " ", p.stem).strip().lower(), []).append(p)
+    for stem, group in stems.items():
+        if len(group) > 1:
+            names = ", ".join(p.name for p in group)
+            fails.append({"rule": "duplicate-base-artifact",
+                          "detail": f"the same résumé copied in more than one format: {names}. "
+                                    f"Copy exactly one base file, in its native format."})
+    if arts and all(p.suffix.lower() == ".pdf" for p in arts):
+        fails.append({"rule": "no-editable-base",
+                      "detail": f"only a PDF was copied ({arts[0].name}) — if the base has an "
+                                f"editable source (.pages/.docx), that is what belongs here; "
+                                f"a PDF leaves nothing to tailor from."})
+    return fails
+
+
 def check(md_text: str, spec_text: str) -> list[dict]:
     fails: list[dict] = []
     def fail(rule, detail):
@@ -243,6 +279,7 @@ def main(argv):
     spec = find_spec(args.spec)
     fails = check(md.read_text(encoding="utf-8", errors="replace"),
                   spec.read_text(encoding="utf-8", errors="replace"))
+    fails += check_job_folder(md.parent)
     if args.json:
         print(json.dumps({"file": str(md), "pass": not fails, "failures": fails}, indent=1))
     else:

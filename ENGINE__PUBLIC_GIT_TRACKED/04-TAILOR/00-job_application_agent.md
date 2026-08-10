@@ -51,7 +51,7 @@ The current goal is to make the resume workflow work end-to-end:
 - diagnose fit
 - detect and clarify gaps first
 - recommend the best base thoughtfully
-- copy the selected resume base file into the new folder and rename it (in its native format)
+- copy the selected resume base file into the new folder and rename it (in its native format) — **exactly one file, see the rule below**
 - refine only what needs to change
 - preserve strong supporting content unless a real tradeoff exists
 - determine the strongest anchor-role presentation format
@@ -799,6 +799,35 @@ At the end of the process for each resume, we'll attempt to update the knowledge
 Before tailoring, identify the best prior resume base to start from.
 
 This step must be done thoughtfully, not mechanically.
+
+### ⭐ COPY EXACTLY ONE BASE FILE, IN ITS NATIVE FORMAT (required)
+
+The job folder gets **one** résumé artifact: the chosen base, copied and renamed to
+`<candidate name>-Resume - <Company> - <Role>.<original extension>`. `.pages` stays `.pages`.
+`.docx` stays `.docx`. A base that is genuinely a PDF stays a PDF.
+
+**Never copy a second representation of the same résumé**, and never substitute one for the
+other. Specifically:
+
+- **Do not copy a `.pdf` companion alongside a `.pages` base.** Two files that are the same
+  résumé in different formats leave the candidate unable to tell which is authoritative, and
+  the `.pdf` lands under the *job's* name while containing the *base's* content — which is
+  exactly the shape of an artifact that later gets mistaken for the submitted résumé, or
+  silently overwritten when the real export arrives.
+- **Do not copy the `.pdf` INSTEAD of the `.pages`.** That leaves the candidate with no
+  editable source and nothing to tailor from.
+
+**You never need to copy a PDF in order to score it.** The résumé-comparison pass reads the
+base's PDF **in place, from the base's own folder** — `resume_artifacts.py` resolves it by
+exact stem match in the `.pages` file's parent directory. Copying it into the job folder buys
+nothing and creates an ambiguous artifact.
+
+Real failure this prevents (08-07-26): of 35 job folders, four received both a `.pages` and a
+`.pdf`, and three received a PDF with no editable source at all. One run's own notes explained
+the motive — "the exact-name resume-only PDF copied into this folder" — i.e. agents were
+copying the PDF so they could score it. The spec said "copy the base file … in its native
+format" and said nothing about a second file, and four agents independently filled that
+silence differently. Unspecified behavior does not stay unspecified; it gets invented.
 
 ### ⭐ FIRST, run the base ledger (required — do not select from memory)
 

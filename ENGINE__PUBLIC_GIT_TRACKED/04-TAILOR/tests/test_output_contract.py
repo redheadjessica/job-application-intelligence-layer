@@ -208,3 +208,44 @@ def test_conditional_section_absence_is_not_a_failure():
     section entirely otherwise". Flagging its absence would be the checker inventing a rule
     the spec does not have — and a checker that flags valid output trains people to ignore it."""
     assert "missing-section" not in {f["rule"] for f in _check(GOOD)}
+
+
+# --------------------------------------------------------------------------- #
+# Job-folder rules: exactly one base résumé artifact, in its native format.
+# On 08-07-26, 4 of 35 folders received both a .pages and a .pdf of the same
+# résumé and 3 received a PDF with no editable source — agents copying the PDF
+# so they could score it, which was never needed (the comparison pass reads the
+# base's PDF in place, from the base's own folder).
+# --------------------------------------------------------------------------- #
+def _folder(tmp_path, *names):
+    for n in names:
+        (tmp_path / n).write_text("x")
+    return cto.check_job_folder(tmp_path)
+
+
+def test_one_native_base_copy_is_clean(tmp_path):
+    assert _folder(tmp_path, "Someone-Resume - Acme - Senior PM.pages") == []
+
+
+def test_same_resume_in_two_formats_is_flagged(tmp_path):
+    rules = {f["rule"] for f in _folder(
+        tmp_path,
+        "Someone-Resume - Acme - Senior PM.pages",
+        "Someone-Resume - Acme - Senior PM.pdf")}
+    assert "duplicate-base-artifact" in rules
+
+
+def test_pdf_only_leaves_nothing_to_tailor_from(tmp_path):
+    rules = {f["rule"] for f in _folder(tmp_path, "Someone-Resume - Acme - Senior PM.pdf")}
+    assert "no-editable-base" in rules
+
+
+def test_a_cover_letter_is_not_a_base_artifact(tmp_path):
+    """The folder legitimately holds a cover letter and the job capture; neither is a
+    second copy of the résumé, and flagging them would train people to ignore the check."""
+    assert _folder(
+        tmp_path,
+        "Someone-Resume - Acme - Senior PM.pages",
+        "Cover-Letter-Draft - Acme - Senior PM.docx",
+        "Someone-CoverLetter - Acme - Senior PM.pdf",
+        "acme__senior-product-manager.txt") == []

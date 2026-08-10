@@ -11,6 +11,18 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-08 — One base file per job folder, because silence gets filled
+
+The candidate noticed a PDF sitting in a job folder and asked whether copying it was an approved part of the process. It wasn't — and checking the whole batch turned up two distinct shapes of the same problem: **4 of 35 folders** held both a `.pages` and a `.pdf` of the same résumé, and **3 held a PDF with no editable source at all**, leaving nothing to tailor from.
+
+The motive was visible in one run's own notes: "the exact-name resume-only PDF copied into this folder." Agents were copying the PDF **so they could score it** — which was never necessary. `resume_artifacts.find_resume_pdf` resolves the base's PDF **in place, in the base's own folder**, by exact stem match. Copying it into the job folder bought nothing and produced an artifact carrying the *job's* name and the *base's* content: exactly the file that later gets mistaken for the submitted résumé, or silently overwritten when the real export lands.
+
+The spec said "copy the selected resume base file into the new folder and rename it (in its native format)" — one line, singular, and silent about a second file. Four agents filled that silence four different ways. That is the lesson worth keeping: **unspecified behavior does not stay unspecified.** When a step has an obvious-but-unstated adjacent action (here: "I need a readable PDF"), agents will invent a way to get it, and they will not invent the same way.
+
+Now explicit in the spec — exactly one artifact, native format, never a second representation, never the PDF instead of the editable source, and a plain statement that scoring never requires a copy — and enforced by two new folder-level checks in `check_tailoring_output.py` (`duplicate-base-artifact`, `no-editable-base`) with tests. Verified against the real batch: it flags all 7 affected folders and none of the clean ones, and correctly ignores cover letters and the job capture, which legitimately share the folder.
+
+Existing folders were left alone at the candidate's direction; the point was to stop it recurring, not to tidy up behind it.
+
 ## 2026-08-08 (later) — Acceptance test passed, and a stale-script trap found in the workflow launcher
 
 Re-ran one job end to end against the repaired contract. Measured against the defective version of the same job and against a known-good pre-regression file from two days earlier:
