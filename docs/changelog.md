@@ -295,6 +295,20 @@ The first instinct — make the agent re-verify metrics during tailoring — was
 
 Also sharpened a ban that was being over-applied. A rule against a filler phrase ("…a product **with real users**" — a launched product is assumed to have them) was being read as a ban on the words appearing at all, which would have cut a clause doing real causal work ("hardened the codebase **as real users entered the product**" — that explains why and when). The test is now explicit: delete the clause and see whether the sentence loses information.
 
+## 2026-08-07 — Folder conformance: the audit was measuring the wrong things
+
+A folder-shape audit reported 117 of 133 archived application folders as deviating. Almost none were. The conformance definition had three scoping errors, and the resulting number was worse than useless — it buried four real defects under a hundred false ones.
+
+**The shape had no stated scope.** It described what a job folder looks like without saying which folders it governs. The archive holds several distinct populations: agent-produced folders from the current pipeline, resume-only folders where no cover letter was ever run, folders predating the cover-letter agent entirely, and directories that are not applications at all. Only the first is obliged to conform; the audit measured all of them.
+
+**It counted an optional manual step as pipeline output.** Splitting the exported PDF into résumé-only and cover-letter-only files is something the candidate does by hand, and often shouldn't: many application forms have a single upload field, so the correct artifact is the 3-page bundle with the letter as page 3 and no standalone cover-letter PDF at all. That accounted for ~90 of the reported deviations. The engine spec now says plainly never to flag or backfill a missing cover-letter PDF, and that the real evidence a letter was sent is the reconcile extraction, not a file on disk.
+
+**And the migration's safest property guaranteed the shape was never reached.** It leaves unrecognized files exactly where they are — the rule that protects hand-named variants like `final-v2-proposal.md`. But it also means anything the rules don't classify sits in the work-directory root looking like mess. The fix is not a looser rule; it is knowing what the file is. A reference PDF found loose in one folder turned out to be a snapshot of the résumé chassis that tailoring was built from, so it belonged in the Resume Tailoring lane — a judgment no glob would have made correctly.
+
+Also removed 45 empty legacy directories the migration had drained but deliberately never deleted (it refuses to delete anything, under any flag). Only genuinely empty ones; the two still holding hand-named files were left alone.
+
+**The missing piece is a verifier.** There is a migrator and no conformance check, so drift is invisible until someone eyeballs a hundred directories. That is the next thing to build, and it needs the scoping above to be worth anything.
+
 ## 2026-08-06 — Back-fill complete, and two things only real folders could teach the migration
 
 Ran the back-fill over both roots — the active review workspace and the submitted-applications archive. Re-runs plan zero moves; every legacy work/extraction directory is drained except deliberate exclusions.

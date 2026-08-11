@@ -2250,3 +2250,61 @@ def test_the_deliverable_cover_letter_name_is_unchanged_by_the_draft_addition():
     """The submitted PDF keeps its candidate prefix — only the .docx draft lost one."""
     assert (norm_contracts.canonical_cover_letter_filename("Jordan Lee", "Acme", "Senior PM", ".pdf")
             == "Jordan Lee-Cover-Letter - Acme - Senior PM.pdf")
+
+
+# --------------------------------------------------------------------------- #
+# Company display name — the employer's own predominant self-reference.
+# Every case below is a real ruling the candidate made on 2026-08-10 reviewing a
+# batch whose names came from ATS slugs and legal-entity fields.
+# --------------------------------------------------------------------------- #
+def test_legal_suffixes_are_always_stripped():
+    assert norm_contracts.strip_legal_suffix("Grindr LLC") == "Grindr"
+    assert norm_contracts.strip_legal_suffix("Teladoc Health, Inc.") == "Teladoc Health"
+    assert norm_contracts.strip_legal_suffix("Acme Corp.") == "Acme"
+    assert norm_contracts.strip_legal_suffix("Plain Name") == "Plain Name"
+
+
+def test_slug_derived_names_yield_to_the_posting():
+    """"Chambercardio" appears once (the ATS slug); "Chamber" appears six times."""
+    body = ("At Chamber, we're rebuilding cardiology. Chamber's platform. "
+            "Working with Chamber. Chamber builds. Chamber offices. Chamber teams. Chambercardio")
+    assert norm_contracts.company_display_name("Chambercardio", body) == "Chamber"
+
+
+def test_dotted_and_prefixed_slugs():
+    assert norm_contracts.company_display_name(
+        "Headlight.health", "Headlight clinicians. Headlight care. Join Headlight.") == "Headlight"
+    assert norm_contracts.company_display_name(
+        "Tryprofound", "Profound builds agents. Profound customers. Profound scale.") == "Profound"
+
+
+def test_the_shorter_name_wins_when_it_dominates():
+    body = " ".join(["Bain works."] * 9) + " Bain & Company is a firm. Bain & Company."
+    assert norm_contracts.company_display_name("Bain & Company, Inc.", body) == "Bain"
+
+
+def test_the_longer_name_wins_when_it_is_still_well_used():
+    """Frequency alone would name one employer differently across two postings — the exact
+    inconsistency the rule exists to remove. 14 vs 21 keeps the specific name."""
+    body = " ".join(["Teladoc Health cares."] * 14) + " " + " ".join(["Teladoc ships."] * 21)
+    assert norm_contracts.company_display_name("Teladoc Health, Inc.", body) == "Teladoc Health"
+
+
+def test_a_parent_company_annotation_is_kept_but_a_slug_echo_is_dropped():
+    keep = norm_contracts.company_display_name(
+        "Pike13 (Jonas Software / Constellation Software)", "Pike13 " * 7)
+    assert keep == "Pike13 (Jonas Software / Constellation Software)"
+    drop = norm_contracts.company_display_name("Profound (Tryprofound)", "Profound " * 4)
+    assert drop == "Profound"
+
+
+def test_a_name_is_never_invented_from_the_posting():
+    """Only spellings DERIVED from the captured name may win, so an unrelated capitalised
+    word in the body can never become the company."""
+    body = "Salesforce Salesforce Salesforce Salesforce Salesforce"
+    assert norm_contracts.company_display_name("Acme Inc.", body) == "Acme"
+
+
+def test_no_body_still_strips_the_suffix():
+    assert norm_contracts.company_display_name("Grindr LLC", "") == "Grindr"
+    assert norm_contracts.company_display_name("", "") == ""

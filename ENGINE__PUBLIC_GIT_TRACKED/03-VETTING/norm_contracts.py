@@ -96,6 +96,119 @@ def _warn(msg):
 
 
 # --------------------------------------------------------------------------- #
+# Company display name — what the employer calls ITSELF
+# --------------------------------------------------------------------------- #
+# Company names arrive from an ATS board slug or a legal-entity field, and neither is what
+# the company calls itself. That produced "Chambercardio" for a company whose posting says
+# "Chamber" six times and never "Chambercardio"; "Headlight.health" for "Headlight";
+# "Listenlabs" for "Listen"; "Tryprofound" for "Profound"; plus "Grindr LLC" and
+# "Teladoc Health, Inc." with legal suffixes attached. Because the name flows from the
+# capture header into the rankings and then into folder names, one bad reading desynchronized
+# all three — and the wrong name then travels into cover letters, where addressing a company
+# by a name it never uses about itself is conspicuous.
+#
+# The fix reads the posting: among spellings DERIVED FROM the captured name (never invented),
+# pick the one the employer actually uses standalone. Deriving-only is the safety property —
+# this can shorten or de-suffix a name, never replace it with an unrelated one.
+_LEGAL_SUFFIX_RE = (r"(?:,?\s*(?:inc|llc|l\.l\.c|ltd|limited|corp|corporation|co|plc|pbc"
+                    r"|gmbh|s\.a|b\.v|pty|ag|nv|sas|sarl)\.?)+\s*$")
+# Product-name prefixes companies bolt onto a domain/slug: tryprofound -> Profound.
+_SLUG_PREFIXES = ("try", "get", "join", "use", "hey", "my", "go")
+
+
+def strip_legal_suffix(name: str) -> str:
+    """`Grindr LLC` -> `Grindr`; `Teladoc Health, Inc.` -> `Teladoc Health`. Applied
+    repeatedly so `Foo Ltd, Inc.` fully unwinds."""
+    s = re.sub(r"\s+", " ", str(name or "").strip())
+    prev = None
+    while prev != s:
+        prev = s
+        s = re.sub(_LEGAL_SUFFIX_RE, "", s, flags=re.I).strip(" ,.-")
+    return s
+
+
+def _name_candidates(core: str) -> list:
+    """Spellings derived from the captured name, longest-first-ish. Never invents a name."""
+    out: list = []
+
+    def add(x):
+        x = (x or "").strip(" ,.-–—&/|")
+        if x and x not in out:
+            out.append(x)
+
+    add(core)
+    for sep in (" & ", ",", " / ", "/", ".", " - ", " | "):
+        if sep in core:
+            add(core.split(sep)[0])
+    for v in list(out):                       # Zoom Communications -> Zoom
+        parts = v.split()
+        for n in range(len(parts) - 1, 0, -1):
+            add(" ".join(parts[:n]))
+    for v in list(out):                       # Tryprofound -> Profound
+        low = v.lower()
+        for p in _SLUG_PREFIXES:
+            if low.startswith(p) and len(v) > len(p) + 3:
+                add(v[len(p):].capitalize())
+    for v in list(out):                       # Chambercardio -> Chamber
+        if " " not in v:
+            for n in range(len(v) - 1, 3, -1):
+                add(v[:n])
+    return out
+
+
+def _standalone_uses(body: str, name: str) -> int:
+    """How often the posting uses this exact name AS the company — the token not followed by
+    another capitalised name-word, so `Teladoc` scores 0 in a posting that only ever writes
+    `Teladoc Health`, and not followed by a lowercase TLD, so `Headlight` doesn't score on
+    `Headlight.health`. Capitalisation is required, which is what keeps ordinary words out:
+    verified on real postings, every standalone `Chamber` was the company rather than a heart
+    chamber, and every `Listen` was the company rather than the verb."""
+    if not name:
+        return 0
+    return len(re.findall(rf"\b{re.escape(name)}\b(?!\s*[A-Z][a-z])(?!\.[a-z])", body or ""))
+
+
+def company_display_name(captured: str, body: str) -> str:
+    """The spelling the employer uses about itself, derived from `captured`.
+
+    A trailing parenthetical is kept when it carries real information (a parent company —
+    `Pike13 (Jonas Software / Constellation Software)`) and dropped when it merely echoes the
+    slug (`Profound (Tryprofound)`).
+
+    With no posting text, or no candidate the posting actually uses, this still strips legal
+    suffixes — the one correction that needs no evidence.
+    """
+    raw = re.sub(r"\s+", " ", str(captured or "").strip())
+    if not raw:
+        return raw
+    annot, core = "", raw
+    m = re.match(r"^(.*?)\s*\(([^)]*)\)\s*$", raw)
+    if m:
+        core, inner = m.group(1).strip(), m.group(2).strip()
+        squash = lambda s: re.sub(r"[^a-z0-9]", "", s.lower())          # noqa: E731
+        echoes = squash(inner) in squash(core) or squash(core) in squash(inner)
+        annot = "" if echoes else f" ({inner})"
+    core = strip_legal_suffix(core)
+    scored = [(c, _standalone_uses(body, c)) for c in _name_candidates(core)]
+    scored = [(c, n) for c, n in scored if n > 0]
+    if not scored:
+        return core + annot
+    best_n = max(n for _, n in scored)
+    best = max((c for c, n in scored if n == best_n), key=len)
+    # PREFER THE MORE SPECIFIC NAME unless the shorter one dominates decisively. Frequency
+    # alone is not enough: two postings from one employer can rank the same two spellings
+    # differently, which would put two names for one company in a single tracker — the exact
+    # inconsistency this whole rule exists to remove. Threshold calibrated against the
+    # candidate's own rulings: Teladoc Health (14) vs Teladoc (21) = 67% -> keep "Teladoc
+    # Health", which is how they now refer to themselves publicly. Bain & Company (2) vs
+    # Bain (9) = 22% -> "Bain". Listen Labs (2) vs Listen (4) = 50% -> "Listen".
+    for cand, n in scored:
+        if len(cand) > len(best) and cand.lower().startswith(best.lower()) and n > best_n * 0.5:
+            best, best_n = cand, n
+    return best + annot
+
+
+# --------------------------------------------------------------------------- #
 # Working Location
 # --------------------------------------------------------------------------- #
 # A cadence is "N days" (exact), "N-M days" (a range the employer stated — preserved

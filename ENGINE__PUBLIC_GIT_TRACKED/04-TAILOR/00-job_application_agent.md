@@ -646,6 +646,8 @@ Infer the company and role from the job file, create the `[Company] - [Role]` ou
 
 The generated `.docx` is named `Cover-Letter-Draft - [Company - Role].docx` and carries **no** candidate-name prefix — it is a copy-paste source for the candidate's own template, not the artifact they submit (that is the exported PDF, which keeps its prefix).
 
+**⭐ A missing split cover-letter PDF is NOT a defect (candidate ruling, 2026-08-07).** Many application forms have only ONE upload field. When that happens the candidate submits the 3-page bundle — résumé pages 1–2, cover letter page 3 — and never exports a standalone `<Name>-CoverLetter - X.pdf`. So a folder holding the `.pages`, a résumé PDF, and a `Cover-Letter-Draft … .docx` but no separate cover-letter PDF is **complete and correct**. Never flag it, never "fix" it, and never generate the missing PDF after the fact. The same goes for a missing `FULL.pdf`: splitting is an optional manual step, not a pipeline output. The reliable evidence that a letter was actually sent is `Reconcile Agent/submitted-coverletter.txt`, not the presence of a PDF.
+
 **Never compose these paths, and never `ls` to guess which shape a folder uses.** Folders exist in several earlier shapes — flat inside `_JAIL Agent Work/` (2026-08-04), a legacy `_cl_work/`, sidecars at the folder root, and reconcile's pre-lane top-level `_extracted/`. Ask instead:
 
 ```
