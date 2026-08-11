@@ -11,6 +11,16 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-08 — The cover-letter workflow got the same identity fix, before it could split a folder
+
+Regenerated five cover letters against the corrected résumés. All five came back fit 4/5, voice 4/5, link QA clean, written as v2 with the originals left byte-for-byte intact.
+
+The part worth recording is what happened *before* the run. The cover-letter workflow resolved its destination the same way the résumé side used to — run the canonicalizer on the company and role it reads out of the job post, then use that string as the folder name. Checking the five target jobs against the folders that already existed showed one would have drifted outright (`Teladoc Health, Inc. - …` against the existing `Teladoc Health - …`), creating a sixth duplicate and stranding that job's freshly regenerated résumé. The other four only *looked* safe: the canonicalizer agrees when fed the tracker's Company value, but the agent derives company from the posting, and that is precisely how `Grindr` and `Grindr LLC` diverged earlier the same day.
+
+So the identity rule was ported across before running: find the folder already holding this job's capture `.txt` and use it verbatim; fall back to the canonicalizer only when the job has no folder yet. Result: five letters, zero new folders.
+
+Two things this reinforces. First, **a fix applied to one workflow is not applied to the system** — the résumé path had been hardened three times while the cover-letter path kept the original defect, and nothing surfaced that because the two only collide when a job has both artifacts. Second, checking cheaply beforehand was worth more than the fix itself: comparing computed names against folders on disk took one command and turned an invisible-until-later folder split into a five-minute edit.
+
 ## 2026-08-08 — One folder per job, enforced by identity instead of by name
 
 Third and final round of the folder-splitting problem, and the first fix that addresses what actually matters.

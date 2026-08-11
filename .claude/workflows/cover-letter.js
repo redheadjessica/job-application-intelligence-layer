@@ -22,6 +22,30 @@ if (!jobList || jobList.length === 0) {
   throw new Error('Pass {jobs: ["path/to/job.txt", ...]} or {job: "path/to/job.txt"}.')
 }
 const outOverride = (A && typeof A === 'object' && A.out) ? A.out : null
+
+// Find the job folder that ALREADY holds this job's capture .txt — identity, not name.
+// Returns a full path, or null when this job has no folder yet (the ordinary first-letter case,
+// where the canonicalizer is the right answer).
+const EXISTING_FOLDER_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['folder'],
+  properties: { folder: { type: 'string', description: 'folder NAME only (no path), or "" if none' } },
+}
+async function existingFolderFor(jobPath) {
+  const dir = `__READY_TO_REVIEW__PRIVATE_GITIGNORED/${batchOf(jobPath)}/2 - Tailored Resumes`
+  const jobFile = String(jobPath).split('/').pop()
+  const r = await agent(
+    `In "${dir}", find the ONE existing subfolder that already contains a file named exactly
+${JSON.stringify(jobFile)}. Return just that folder's NAME (not a path). If none contains it,
+return "". Do not create anything.
+
+    ls ${JSON.stringify(dir)}
+
+then check the candidates. Report only what you actually find.`,
+    { model: 'haiku', schema: EXISTING_FOLDER_SCHEMA, label: `existing:${jobFile.slice(0, 28)}` }
+  )
+  const f = r && typeof r.folder === 'string' ? r.folder.trim().replace(/^\/+|\/+$/g, '') : ''
+  return f ? `${dir}/${f}` : null
+}
 // REVISE-WITH-FEEDBACK mode: when the candidate gives targeted feedback on an existing letter,
 // Stage 1 revises the latest letter instead of drafting from scratch. Everything downstream is unchanged.
 const FEEDBACK = (A && typeof A === 'object' && typeof A.feedback === 'string' && A.feedback.trim()) ? A.feedback.trim() : null
@@ -97,9 +121,16 @@ const results = await pipeline(
 
   // ---- Stage 1: Draft (or Revise-with-feedback) ----
   async (jobPath) => {
-    const destParent = outOverride || `__READY_TO_REVIEW__PRIVATE_GITIGNORED/${batchOf(jobPath)}/2 - Tailored Resumes`
-    const locationInstr = outOverride
-      ? `use this existing folder directly: "${outOverride}"`
+    // ⭐ An EXISTING folder for this job wins over any name we would compute. The canonical
+    // string is derived from whatever company/role reading the agent makes of the job post, and
+    // those readings drift between runs ("Grindr" vs "Grindr LLC", "Teladoc Health" vs "Teladoc
+    // Health, Inc."). On 08-08-26 that produced duplicate folders three separate times on the
+    // resume side, each one stranding the job's earlier work — including its cover letter. The
+    // job capture .txt inside the folder is stable identity; the folder NAME is not.
+    const resolved = outOverride || await existingFolderFor(jobPath)
+    const destParent = resolved || `__READY_TO_REVIEW__PRIVATE_GITIGNORED/${batchOf(jobPath)}/2 - Tailored Resumes`
+    const locationInstr = resolved
+      ? `use this existing folder directly, exactly as written, and do NOT re-derive or "correct" its name: "${resolved}"`
       : `find or create the job folder inside "${destParent}". The folder name is the canonical "Company - Role" string — obtain it by running the shared canonicalizer FIRST with the company and role from the job post, and use its printed output verbatim (no date; never invent your own abbreviations):
 
 PY=".venv/bin/python3"; [ -x "$PY" ] || PY="python3"; "$PY" ENGINE__PUBLIC_GIT_TRACKED/03-VETTING/norm_contracts.py --application-name --company '<Company>' --role '<Role/title>'
@@ -229,8 +260,9 @@ Steps, in order:
 
    (It takes no candidate name: this .docx is a copy-paste source for the candidate's own template,
    not the artifact they submit — that is the exported PDF, which keeps its candidate prefix.) Use its printed string verbatim as <docx-name>, then run: .venv/bin/python3 ENGINE__PUBLIC_GIT_TRACKED/04-TAILOR/cover-letter/make_cover_letter_docx.py "<final-md>" -o "${draft.job_folder}/<docx-name>"  — inserting the " - v2" suffix before the extension if versioning per the rule above.
-3. Link QA: for each link, curl -sIL -o /dev/null -w "%{http_code}" --max-time 10 "<url>". 200/30x = pass; Medium/LinkedIn 403/999 bot-blocks = verify the URL character-for-character against PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/writing-links.md and mark "matches writing-links". Anything else = flag.
-4. Write the COMPACT review packet to <packet> ("coverletter_agent_output - ${draft.company} - ${draft.role}.md" inside the --write-dir directory, plus the " - v2" suffix if versioning) — target ~35 lines, do NOT include the letter text (reconcile reads final.md directly). Exactly these sections:
+3. ⭐ VERB-DRIFT CHECK (do this before link QA). For every sentence that traces to a canon bullet, compare YOUR verb against the verb in 04-experience-bank.md or the relevant 03*-canonical.md. The failure mode is silent and repeated: the letter reaches for a stronger verb than the evidence supports — "drove" where canon says "partnered with," "implemented" where canon says the company "ran on" it, "led" where canon says "contributed to." Each one is individually plausible and collectively an overclaim an interviewer can puncture in one question. Canon's verb wins. If a stronger verb is genuinely warranted, do NOT quietly use it — keep canon's verb and raise the upgrade as a question in the packet. Also check ownership scope the same way: "for X" vs "at X", "my team" vs "a team I worked with." Report in the packet: "verb-drift check: N sentences traced, M corrected" (say "none found" if clean).
+4. Link QA: for each link, curl -sIL -o /dev/null -w "%{http_code}" --max-time 10 "<url>". 200/30x = pass; Medium/LinkedIn 403/999 bot-blocks = verify the URL character-for-character against PRIVATE__YOUR_FILES_GITIGNORED/04-TAILOR__YOUR_PRIVATE_INFO/cover-letter/writing-links.md and mark "matches writing-links". Anything else = flag.
+5. Write the COMPACT review packet to <packet> ("coverletter_agent_output - ${draft.company} - ${draft.role}.md" inside the --write-dir directory, plus the " - v2" suffix if versioning) — target ~35 lines, do NOT include the letter text (reconcile reads final.md directly). Exactly these sections:
    # Cover Letter — ${draft.company} — ${draft.role}
    ## Questions for you (resolve before sending)   <- open questions + the writer's declined-fix disagreements + link-QA flags; "None" if empty
    ## Scorecard   <- 3-4 lines: "Fit ${evaluation.fit_score}/5 · Voice ${evaluation.voice_score}/5 (adversarial eval) — N must-fix, all resolved, preservation lint clean"; the one-line GOLD-exemplar comparison; any lint warnings left standing
