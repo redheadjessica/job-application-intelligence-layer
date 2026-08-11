@@ -11,6 +11,20 @@ Run `python3 scripts/doc_synthesis.py` to consolidate them into readable threads
 <!-- changelog-processed-through: bd576955caf6495566fc88fcf9b7b5aadb8d10c8 -->
 ---
 
+## 2026-08-10 — Companies are now called what they call themselves
+
+Company names were coming from ATS board slugs and legal-entity fields, so a tracker row read `Chambercardio` for a company whose posting says "Chamber" six times and never once says "Chambercardio"; `Headlight.health` for "Headlight"; `Listenlabs` for "Listen"; `Tryprofound` for "Profound"; plus `Grindr LLC` and `Teladoc Health, Inc.` carrying legal suffixes. Worse, the name is derived independently in three places — the capture filename, the rankings Company column, and the tailored folder — so the three drifted apart and lists of jobs passed between them stopped lining up. And the wrong name travels into cover letters, where addressing a company by a name it never uses about itself is conspicuous.
+
+**New `company_display_name` in `norm_contracts`, applied at the single capture-identity choke point** so filename, header, rankings and folder all inherit one answer. It reads the posting and picks, among spellings **derived from** the captured name, the one the employer actually uses standalone — never inventing a name, so it can only shorten or de-suffix.
+
+Two details make it work. **Standalone counting** requires the name not be followed by another capitalised word, so `Teladoc` scores zero in a posting that only ever writes `Teladoc Health`, and `Headlight` doesn't score on `Headlight.health`. And **the more specific name wins unless the shorter one dominates decisively** (>50% of its count), because frequency alone ranked the same two spellings differently across one employer's two postings — which would have put two names for one company in a single tracker, the exact inconsistency the rule exists to remove.
+
+Calibrated against the candidate's own rulings, all of which it reproduces: Chamber, Headlight, Profound, Bain (9 standalone vs 2 for "Bain & Company"), Listen, Grindr, HealthStream, Zoom, Spark, One Pass, and **Teladoc Health** (14 vs 21 for bare "Teladoc" — kept because it clears the specificity threshold and matches how they refer to themselves publicly). A trailing parenthetical is kept when it names a real parent (`Pike13 (Jonas Software / Constellation Software)`) and dropped when it merely echoes the slug (`Profound (Tryprofound)`).
+
+Verified the counts are not fooled by ordinary English before trusting them: every standalone "Chamber" in that posting is the company rather than a heart chamber, and every "Listen" is the company rather than the verb — capitalisation plus the not-followed-by-a-name-word rule does that work.
+
+Batch backfilled: 14 jobs renamed across capture file, capture header, rankings row and folder together. The dry run caught a collision first — renaming the Lever-sourced Headlight capture would have clobbered a LinkedIn duplicate that already held the target filename — so the duplicate row was removed (its capture moved aside, not deleted) before any rename ran. Pike13's capture was still carrying its Workday slug and was corrected too. Final state: **41 rows, 34 drafts still passing the output contract, zero sync mismatches across all four surfaces, no legal suffixes anywhere.**
+
 ## 2026-08-08 — The cover-letter workflow got the same identity fix, before it could split a folder
 
 Regenerated five cover letters against the corrected résumés. All five came back fit 4/5, voice 4/5, link QA clean, written as v2 with the originals left byte-for-byte intact.

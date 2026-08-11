@@ -21,6 +21,14 @@ import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from html import unescape as html_unescape
+
+# The company display-name rule lives with the other output contracts in norm_contracts —
+# ONE definition, imported here rather than restated, so prep and the rankings can never
+# disagree about what a company is called.
+import sys as _sys
+import os as _os
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "03-VETTING"))
+from norm_contracts import company_display_name  # noqa: E402
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 from zoneinfo import ZoneInfo
@@ -3567,6 +3575,13 @@ def process_urls(urls: list[str], source_dir, fetch_one, *, force: bool = False,
         company, title = normalize_capture_identity(
             company, title, url=url, jsonld=meta.get("jsonld_identity"),
             html=meta.get("raw_html"), body=body, declared_name=declared)
+        # ⭐ Last: replace an ATS-slug or legal-entity name with what the employer calls
+        # ITSELF in this posting. Applied HERE, at the single identity choke point, so the
+        # corrected name flows into the capture header, the capture FILENAME, the rankings
+        # Company column and the tailored folder name together — those three had drifted
+        # apart precisely because each derived a name separately. Derives only from the
+        # captured name, so it can shorten or de-suffix but never invent.
+        company = company_display_name(company, body) or company
         meta["company"], meta["title"] = company, title
         # The title status was assessed against the RAW scraped title; re-derive it from
         # the canonical one so a branding-only title that could not be recovered shows up
