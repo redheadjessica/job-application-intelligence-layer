@@ -29,5 +29,8 @@
       "other_onsite": null
     }
   },
-  "lanes": []
+  "lanes": [],
+  "resume": {
+    "min_skills_items": null
+  }
 }

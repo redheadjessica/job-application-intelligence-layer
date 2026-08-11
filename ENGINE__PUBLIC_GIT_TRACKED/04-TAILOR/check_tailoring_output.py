@@ -51,11 +51,31 @@ RETIRED_HEADINGS = (
 URL_RE = re.compile(r"https?://[^\s)\]>]+")
 
 # The skills line is the deliverable the candidate pastes whole, so it must be complete on its
-# own. Floor set from the candidate's own judgment, not invented: reviewing a regenerated batch
-# she called a 13-item line "too short by 1" and another 13-item line "too short by 3 to 5".
-# Submitted résumés run 12-18 items with a median of 13. So 13 is the observed middle, not the
-# target — 14 is the minimum that survives review, and the spec asks for 14-18.
-MIN_SKILLS_ITEMS = 14
+# own. But how full "full" is depends on the candidate's résumé layout and term lengths, so the
+# floor is CANDIDATE DATA, not an engine constant — the same reason the comp thresholds live in
+# jail.config.json rather than in norm_contracts. Default 12 is a generic "not threadbare" floor;
+# one candidate calibrated hers to 14 after calling a 13-item line "too short by 1" on review.
+# Override with `resume.min_skills_items` in jail.config.json.
+DEFAULT_MIN_SKILLS_ITEMS = 12
+
+
+def _configured_min_skills() -> int:
+    """`resume.min_skills_items` from the repo-root jail.config.json, else the default."""
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        cfg = parent / "jail.config.json"
+        if cfg.is_file():
+            try:
+                v = (json.loads(cfg.read_text(encoding="utf-8")).get("resume") or {}).get("min_skills_items")
+                if isinstance(v, int) and v > 0:
+                    return v
+            except Exception:
+                pass
+            break
+    return DEFAULT_MIN_SKILLS_ITEMS
+
+
+MIN_SKILLS_ITEMS = _configured_min_skills()
 
 
 def skills_item_count(section_body: str) -> int:
